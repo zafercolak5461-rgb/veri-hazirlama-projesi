@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veri Hazırlama Projesi</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#10182B; --panel:#16213D; --panel2:#1C2944; --line:#2A3A5C;
+    --text:#FFFFFF; --dim:#8FA3C9; --dim2:#5D7299;
+    --accent:#E8A53D; --accent-soft:rgba(232,165,61,0.16);
+    --ok:#5DD6A0; --ok-soft:rgba(93,214,160,0.14);
+    --danger:#e85d5d; --danger-soft:rgba(232,93,93,0.16);
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI', Arial, sans-serif; }
+  a{ color:var(--accent); }
+
+  .app{ display:flex; min-height:100vh; }
+
+  /* ===== Sol dikey menü ===== */
+  .sidebar{ width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; }
+  .sidebar-header{ padding:20px 18px; border-bottom:1px solid var(--line); }
+  .sidebar-header h1{ margin:0; font-size:15px; font-weight:700; letter-spacing:0.3px; }
+  .sidebar-header .sub{ margin:4px 0 0; font-size:11px; color:var(--dim); }
+  .nav{ flex:1; padding:14px 10px; }
+  .nav-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; color:var(--dim); font-size:13.5px; cursor:pointer; margin-bottom:2px; border:1px solid transparent; }
+  .nav-item:hover{ background:var(--panel2); color:var(--text); }
+  .nav-item.active{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .nav-item.disabled{ opacity:0.4; cursor:default; }
+  .nav-item.disabled:hover{ background:none; color:var(--dim); }
+  .nav-icon{ width:18px; text-align:center; }
+  .sidebar-footer{ padding:14px 18px; border-top:1px solid var(--line); font-size:11px; color:var(--dim2); }
+
+  /* ===== Sağ içerik ===== */
+  .main{ flex:1; min-width:0; padding:26px 32px; }
+  .page-title{ font-size:20px; font-weight:700; margin:0 0 4px; }
+  .page-sub{ color:var(--dim); font-size:13px; margin:0 0 22px; line-height:1.6; }
+
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:18px; }
+  .card h2{ font-size:15px; margin:0 0 12px; }
+  .card .hint{ color:var(--dim); font-size:12.5px; margin-bottom:14px; line-height:1.6; }
+
+  .btn{ background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:9px 16px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .btn:hover{ border-color:var(--accent); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn:disabled:hover{ border-color:var(--line); }
+  .btn.primary{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .btn.ok{ background:var(--ok-soft); color:var(--ok); border-color:var(--ok); font-weight:600; }
+  .btn.danger{ background:var(--danger-soft); color:var(--danger); border-color:var(--danger); }
+
+  select, input[type=text]{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; }
+
+  .status{ margin-top:10px; font-size:13px; white-space:pre-wrap; }
+  .status.ok{ color:var(--ok); }
+  .status.err{ color:var(--danger); }
+  .status.warn{ color:var(--accent); }
+
+  .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+  table.prev{ border-collapse:collapse; width:100%; font-size:12px; margin-top:14px; }
+  table.prev th, table.prev td{ border:1px solid var(--line); padding:5px 8px; white-space:nowrap; }
+  table.prev th{ background:var(--panel2); color:var(--accent); position:sticky; top:0; }
+  table.prev td.changed{ background:rgba(232,165,61,0.08); }
+  table.prev td.warn-cell{ color:var(--danger); font-weight:600; }
+  .prev-wrap{ max-height:460px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+
+  .signin-gate{ display:flex; align-items:center; justify-content:center; min-height:60vh; flex-direction:column; gap:16px; }
+  .empty{ color:var(--dim2); font-style:italic; padding:20px; text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>VERİ HAZIRLAMA PROJESİ</h1>
+      <div class="sub">ALO-144 Osmaniye</div>
+    </div>
+    <div class="nav" id="navList">
+      <div class="nav-item active" data-page="vardiya"><span class="nav-icon">📅</span> Vardiya / Puantaj</div>
+      <div class="nav-item disabled" title="Yakında"><span class="nav-icon">➕</span> (yeni alan — yakında)</div>
+    </div>
+    <div class="sidebar-footer" id="sidebarFooter">Oturum açılmadı</div>
+  </div>
+
+  <div class="main">
+
+    <!-- Giriş yapılmadan önce -->
+    <div id="signinGate" class="signin-gate">
+      <div style="font-size:15px; color:var(--dim);">Devam etmek için Google hesabınla giriş yap.</div>
+      <button class="btn primary" id="signinBtn" style="padding:12px 24px; font-size:14px;">🔐 Google ile Giriş Yap</button>
+      <div id="signinStatus" class="status"></div>
+    </div>
+
+    <!-- ===== Vardiya / Puantaj sayfası ===== -->
+    <div id="page-vardiya" style="display:none;">
+      <div class="page-title">Vardiya / Puantaj</div>
+      <div class="page-sub">
+        VARDİYA sayfasındaki ham vardiya verisini (saat aralığı / durum metni), Parametre sözlüğüyle standart koda çevirir,
+        Sicil'e göre Puantaj Referans şablonuna işler ve kategori (R, Yİ, HT...) sayımlarını hesaplar.
+        Hiçbir şey Sheets'e yazılmadan önce burada <b>önizlersin</b>, onaylarsan yazılır.
+      </div>
+
+      <div class="card">
+        <h2>1. Ay Seç ve Hesapla</h2>
+        <div class="hint">VARDİYA sayfasındaki (Sheet ID: <code>1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ</code>) hangi AY-YIL sekmesi işlenecek?</div>
+        <div class="row">
+          <select id="ayYilSelect"><option value="">Sekmeler yükleniyor…</option></select>
+          <button class="btn" id="refreshTabsBtn">↻ Sekmeleri Yenile</button>
+          <button class="btn primary" id="computeBtn">▶ Hesapla (Önizle)</button>
+        </div>
+        <div id="computeStatus" class="status"></div>
+      </div>
+
+      <div class="card" id="previewCard" style="display:none;">
+        <h2>2. Önizleme</h2>
+        <div class="hint">Turuncu vurgulu hücreler değişen/yeni yazılacak değerler. Kırmızı hücreler uyarı içerir (fareyle üzerine gelince açıklama görünür).</div>
+        <div id="warningsBox" class="status warn"></div>
+        <div class="prev-wrap"><table class="prev" id="prevTable"></table></div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn ok" id="writeBtn">✓ Onayla ve Sheets'e Yaz</button>
+        </div>
+        <div id="writeStatus" class="status"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// ===== SABİTLER =====
+// ============================================================================
+const CLIENT_ID = '334728137950-afbqqtqobh5us03roshseevqh43a4853.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const FIXED_SUPER_ADMIN_EMAIL = 'zafercolak5461@gmail.com';
+
+const VARDIYA_SHEET_ID = '1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ';
+const PUANTAJ_SHEET_ID = '1YvcmSZZlyplOGvcQgiOponjszkZJGdnbxVCmYfQxiCA';
+const PUANTAJ_REFERANS_TAB = 'Sayfa1';
+const PARAMETRE_TAB = 'Sayfa2';
+
+// Puantaj Referans'taki bu kategori sütunları basit EĞERSAY ile DOLDURULMAZ — ayrı bir
+// hesap mantığı gerektirir (yol/yemek ücreti gibi). Şimdilik atlanır, boş bırakılır.
+const SKIP_CATEGORY_CODES = new Set(['YOL GÜN SAYISI', 'YOL ÜCRETİ', 'YEMEK GÜN SAYISI', 'YEMEK ÜCRETİ']);
+
+// ============================================================================
+// ===== HESAPLAMA MOTORU (saf JS — ağ bağlantısı yok, tamamen test edilebilir) =====
+// Girdi: Sheets API'nin values.get ile döndürdüğü ham 2B diziler (satır x hücre).
+// ============================================================================
+
+function normalizeKey(v){
+  if (v === undefined || v === null) return '';
+  if (typeof v === 'number') return String(v);
+  return String(v).trim();
+}
+
+// Parametre sekmesi (Eski Değer | Yeni Değer) satırlarından bir arama haritası kurar.
+// Aynı anahtar birden fazla kez geçerse İLK görüleni kullanır (Sheets'teki sıraya sadık kalır).
+function buildParamMap(paramRows){
+  const map = new Map();
+  for (const row of paramRows){
+    const key = normalizeKey(row[0]);
+    if (key === '') continue;
+    if (!map.has(key)) map.set(key, row[1]);
+  }
+  return map;
+}
+
+// Bir ham vardiya hücresini sözlükte arar; bulursa çevirir, BULAMAZSA OLDUĞU GİBİ BIRAKIR.
+// (Bu, orijinal VBA makronun "dict.Exists(val)" mantığının birebir karşılığıdır — örn. "HT"
+// zaten sözlükte bir anahtar değil, hedefin kendisi, o yüzden dokunulmaz.)
+function convertCellValue(raw, paramMap){
+  if (raw === undefined || raw === null || raw === '') return raw;
+  const key = normalizeKey(raw);
+  return paramMap.has(key) ? paramMap.get(key) : raw;
+}
+
+// VARDİYA sekmesini Sicil'e göre indeksler. Başlık satırında "GG.AA.YYYY" formatında
+// görünen her sütunu bir "gün" sütunu olarak tanır.
+function indexVardiya(vardiyaRows){
+  if (!vardiyaRows.length) throw new Error('VARDİYA sekmesi boş görünüyor.');
+  const header = vardiyaRows[0];
+  const sicilCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'SİCİL' || normalizeKey(h).toUpperCase() === 'SICIL');
+  if (sicilCol === -1) throw new Error('VARDİYA sekmesinde "Sicil" başlığı bulunamadı.');
+  const dayCols = [];
+  for (let c = 0; c < header.length; c++){
+    const h = normalizeKey(header[c]);
+    const m = h.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) dayCols.push({ col: c, day: parseInt(m[1], 10), label: h });
+  }
+  if (!dayCols.length) throw new Error('VARDİYA sekmesinde "GG.AA.YYYY" formatında gün başlığı bulunamadı.');
+  const bySicil = new Map();
+  for (let r = 1; r < vardiyaRows.length; r++){
+    const row = vardiyaRows[r];
+    const sicil = normalizeKey(row[sicilCol]);
+    if (sicil === '') continue;
+    bySicil.set(sicil, row);
+  }
+  return { header, sicilCol, dayCols, bySicil };
+}
+
+// Puantaj Referans sekmesini indeksler: Sicil sütununu, 1-31 arası gün-numarası
+// sütunlarını, ve geri kalan (kategori kodu) sütunlarını ayırt eder.
+function indexPuantajReferans(refRows){
+  if (!refRows.length) throw new Error('Puantaj Referans sekmesi boş görünüyor.');
+  const header = refRows[0];
+  const sicilCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'SİCİL' || normalizeKey(h).toUpperCase() === 'SICIL');
+  if (sicilCol === -1) throw new Error('Puantaj Referans sekmesinde "SİCİL" başlığı bulunamadı.');
+  const dayNumCols = [];
+  const categoryCols = [];
+  for (let c = sicilCol + 1; c < header.length; c++){
+    const raw = header[c];
+    const n = Number(raw);
+    if (raw !== '' && raw !== null && raw !== undefined && Number.isInteger(n) && n >= 1 && n <= 31){
+      dayNumCols.push({ col: c, day: n });
+    } else if (normalizeKey(raw) !== '' && dayNumCols.length > 0){
+      // Gün-numarası bloğu (1-31) başlamadan önce gelen metin başlıkları (UNVAN gibi)
+      // kategori sütunu SAYILMAZ — sadece gün bloğundan SONRAKİ metin başlıkları
+      // (R, Yİ, HT...) gerçek kategori kodlarıdır.
+      categoryCols.push({ col: c, code: normalizeKey(raw) });
+    }
+  }
+  return { header, sicilCol, dayNumCols, categoryCols, dataRows: refRows.slice(1) };
+}
+
+// Ana hesaplama: VARDİYA + Parametre + Puantaj Referans -> her satır için { col: yeniDeğer }
+// güncellemeleri ve uyarı listesi üretir. AĞA HİÇ ÇIKMAZ, sadece bellekteki diziler üzerinde çalışır.
+function computePuantaj(vardiyaRows, paramRows, refRows){
+  const paramMap = buildParamMap(paramRows.slice(1));
+  const vIdx = indexVardiya(vardiyaRows);
+  const rIdx = indexPuantajReferans(refRows);
+
+  const results = [];
+  const warnings = [];
+
+  rIdx.dataRows.forEach((row, i) => {
+    const sicil = normalizeKey(row[rIdx.sicilCol]);
+    if (sicil === '') return;
+    const vRow = vIdx.bySicil.get(sicil);
+    const updates = {};
+    const convertedByDay = {};
+
+    if (!vRow){
+      warnings.push(`Sicil ${sicil} (satır ${i + 2}): VARDİYA sayfasında bulunamadı, günler boş bırakıldı.`);
+    } else {
+      rIdx.dayNumCols.forEach(dc => {
+        const vDay = vIdx.dayCols.find(d => d.day === dc.day);
+        if (!vDay){
+          warnings.push(`Gün ${dc.day}: VARDİYA sayfasında karşılığı bulunamadı.`);
+          return;
+        }
+        const converted = convertCellValue(vRow[vDay.col], paramMap);
+        updates[dc.col] = converted;
+        convertedByDay[dc.day] = converted;
+      });
+    }
+
+    rIdx.categoryCols.forEach(cc => {
+      if (SKIP_CATEGORY_CODES.has(cc.code)) return;
+      const count = Object.values(convertedByDay).filter(v => normalizeKey(v).toUpperCase() === cc.code.toUpperCase()).length;
+      updates[cc.col] = count;
+    });
+
+    results.push({ rowIndex: i, sicil, updates });
+  });
+
+  return { rIdx, results, warnings };
+}
+
+// Sütun numarasını (0-index) A1 harf gösterimine çevirir (Sheets API range yazımı için).
+function colNumToA1(n){
+  let s = '';
+  n = n + 1;
+  while (n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// computePuantaj sonucunu, Sheets API values:batchUpdate'in beklediği
+// { range, values } listesine çevirir. Her güncellenen HÜCRE tek hücrelik bir range olur —
+// basit ve hataya en dayanıklı yöntem (satır bazlı toplu range yerine).
+function buildBatchUpdatePayload(computeResult, sheetTabName){
+  const data = [];
+  computeResult.results.forEach(r => {
+    const sheetRow = r.rowIndex + 2; // 1-index + başlık satırı
+    Object.entries(r.updates).forEach(([col, value]) => {
+      const a1 = `'${sheetTabName}'!${colNumToA1(parseInt(col, 10))}${sheetRow}`;
+      data.push({ range: a1, values: [[value === undefined ? '' : value]] });
+    });
+  });
+  return data;
+}
+
+// ============================================================================
+// ===== GOOGLE SHEETS API (ağ katmanı) =====
+// ============================================================================
+
+let accessToken = null;
+let tokenClient = null;
+
+async function authFetch(url, options){
+  options = options || {};
+  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + accessToken });
+  const res = await fetch(url, Object.assign({}, options, { headers }));
+  if (!res.ok){
+    const bodyText = await res.text();
+    throw new Error(`Sheets API hatası (${res.status}): ${bodyText.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+async function getSheetTabNames(spreadsheetId){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`;
+  const data = await authFetch(url);
+  return (data.sheets || []).map(s => s.properties.title);
+}
+
+async function getSheetValues(spreadsheetId, range){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`;
+  const data = await authFetch(url);
+  return data.values || [];
+}
+
+async function batchUpdateValues(spreadsheetId, valueRanges){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`;
+  return authFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: valueRanges }),
+  });
+}
+
+// ============================================================================
+// ===== OAuth / Giriş =====
+// ============================================================================
+
+function initGis(){
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error){
+        document.getElementById('signinStatus').textContent = '✗ Giriş başarısız: ' + resp.error;
+        document.getElementById('signinStatus').className = 'status err';
+        return;
+      }
+      accessToken = resp.access_token;
+      onSignedIn();
+    },
+  });
+}
+
+function onSignedIn(){
+  document.getElementById('signinGate').style.display = 'none';
+  document.getElementById('page-vardiya').style.display = 'block';
+  document.getElementById('sidebarFooter').textContent = 'Oturum açık';
+  loadAyYilTabs();
+}
+
+document.getElementById('signinBtn').addEventListener('click', () => {
+  if (!tokenClient){
+    document.getElementById('signinStatus').textContent = '✗ Google giriş servisi henüz yüklenmedi, birkaç saniye sonra tekrar dene.';
+    document.getElementById('signinStatus').className = 'status err';
+    return;
+  }
+  tokenClient.requestAccessToken({ prompt: '' });
+});
+
+window.addEventListener('load', () => {
+  // google.accounts script'i async yüklendiği için hazır olana kadar kısa aralıklarla dene.
+  const tryInit = () => {
+    if (window.google && google.accounts && google.accounts.oauth2){ initGis(); }
+    else setTimeout(tryInit, 200);
+  };
+  tryInit();
+});
+
+// ============================================================================
+// ===== Vardiya sayfası — UI mantığı =====
+// ============================================================================
+
+async function loadAyYilTabs(){
+  const sel = document.getElementById('ayYilSelect');
+  sel.innerHTML = '<option value="">Yükleniyor…</option>';
+  try {
+    const tabs = await getSheetTabNames(VARDIYA_SHEET_ID);
+    if (!tabs.length){ sel.innerHTML = '<option value="">Sekme bulunamadı</option>'; return; }
+    sel.innerHTML = tabs.map(t => `<option value="${t}">${t}</option>`).join('');
+  } catch (err){
+    sel.innerHTML = '<option value="">Hata — Yenile\'ye bas</option>';
+    document.getElementById('computeStatus').textContent = '✗ ' + err.message;
+    document.getElementById('computeStatus').className = 'status err';
+  }
+}
+
+document.getElementById('refreshTabsBtn').addEventListener('click', loadAyYilTabs);
+
+let lastComputeResult = null;
+let lastSelectedTab = null;
+
+document.getElementById('computeBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('computeStatus');
+  const tab = document.getElementById('ayYilSelect').value;
+  if (!tab){ statusEl.textContent = '✗ Önce bir AY-YIL sekmesi seç.'; statusEl.className = 'status err'; return; }
+  statusEl.textContent = 'Veriler okunuyor…';
+  statusEl.className = 'status';
+  document.getElementById('previewCard').style.display = 'none';
+  try {
+    const [vardiyaRows, paramRows, refRows] = await Promise.all([
+      getSheetValues(VARDIYA_SHEET_ID, `'${tab}'!A1:AN1000`),
+      getSheetValues(PUANTAJ_SHEET_ID, `'${PARAMETRE_TAB}'!A1:B200`),
+      getSheetValues(PUANTAJ_SHEET_ID, `'${PUANTAJ_REFERANS_TAB}'!A1:BF1000`),
+    ]);
+    const result = computePuantaj(vardiyaRows, paramRows, refRows);
+    lastComputeResult = result;
+    lastSelectedTab = tab;
+    renderPreview(result);
+    statusEl.textContent = `✓ Hesaplandı (${result.results.length} personel). Aşağıda önizleyip onaylayabilirsin.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+
+function renderPreview(result){
+  const { rIdx, results, warnings } = result;
+  document.getElementById('previewCard').style.display = 'block';
+  const warnBox = document.getElementById('warningsBox');
+  warnBox.textContent = warnings.length ? ('⚠ ' + warnings.length + ' uyarı:\n' + warnings.slice(0, 20).join('\n') + (warnings.length > 20 ? `\n… (+${warnings.length - 20} tane daha)` : '')) : '';
+
+  const cols = [{ col: rIdx.sicilCol, label: 'Sicil' }]
+    .concat(rIdx.dayNumCols.map(d => ({ col: d.col, label: String(d.day) })))
+    .concat(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => ({ col: c.col, label: c.code })));
+
+  let html = '<thead><tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  results.forEach(r => {
+    const origRow = rIdx.dataRows[r.rowIndex];
+    html += '<tr>';
+    cols.forEach(c => {
+      if (c.col === rIdx.sicilCol){
+        html += `<td>${origRow[rIdx.sicilCol] || ''}</td>`;
+      } else if (Object.prototype.hasOwnProperty.call(r.updates, c.col)){
+        html += `<td class="changed">${r.updates[c.col] === undefined ? '' : r.updates[c.col]}</td>`;
+      } else {
+        html += `<td></td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('prevTable').innerHTML = html;
+}
+
+document.getElementById('writeBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('writeStatus');
+  if (!lastComputeResult){ return; }
+  if (!confirm(`${lastComputeResult.results.length} personelin verisi "${PUANTAJ_REFERANS_TAB}" sekmesine YAZILACAK. Emin misin?`)) return;
+  statusEl.textContent = 'Yazılıyor…';
+  statusEl.className = 'status';
+  try {
+    const payload = buildBatchUpdatePayload(lastComputeResult, PUANTAJ_REFERANS_TAB);
+    if (!payload.length){ statusEl.textContent = '✗ Yazılacak hücre yok.'; statusEl.className = 'status err'; return; }
+    // Sheets API tek istekte çok fazla range kabul eder ama güvenli olmak için 500'lük parçalara bölüyoruz.
+    const CHUNK = 500;
+    for (let i = 0; i < payload.length; i += CHUNK){
+      await batchUpdateValues(PUANTAJ_SHEET_ID, payload.slice(i, i + CHUNK));
+    }
+    statusEl.textContent = `✓ ${payload.length} hücre yazıldı.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+</script>
+</body>
+</html>

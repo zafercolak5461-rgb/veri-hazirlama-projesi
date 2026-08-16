@@ -209,6 +209,8 @@ function indexPuantajReferans(refRows){
   const header = refRows[0];
   const sicilCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'SİCİL' || normalizeKey(h).toUpperCase() === 'SICIL');
   if (sicilCol === -1) throw new Error('Puantaj Referans sekmesinde "SİCİL" başlığı bulunamadı.');
+  const adiSoyadiCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'ADI SOYADI');
+  const unvanCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'UNVAN');
   const dayNumCols = [];
   const categoryCols = [];
   for (let c = sicilCol + 1; c < header.length; c++){
@@ -223,7 +225,7 @@ function indexPuantajReferans(refRows){
       categoryCols.push({ col: c, code: normalizeKey(raw) });
     }
   }
-  return { header, sicilCol, dayNumCols, categoryCols, dataRows: refRows.slice(1) };
+  return { header, sicilCol, adiSoyadiCol, unvanCol, dayNumCols, categoryCols, dataRows: refRows.slice(1) };
 }
 
 // Ana hesaplama: VARDİYA + Parametre + Puantaj Referans -> her satır için { col: yeniDeğer }
@@ -435,18 +437,22 @@ function renderPreview(result){
   const warnBox = document.getElementById('warningsBox');
   warnBox.textContent = warnings.length ? ('⚠ ' + warnings.length + ' uyarı:\n' + warnings.slice(0, 20).join('\n') + (warnings.length > 20 ? `\n… (+${warnings.length - 20} tane daha)` : '')) : '';
 
-  const cols = [{ col: rIdx.sicilCol, label: 'Sicil' }]
-    .concat(rIdx.dayNumCols.map(d => ({ col: d.col, label: String(d.day) })))
+  // Sicil + ADI SOYADI + UNVAN salt-okunur bilgi sütunları (gerçek Sheets'e bunlar yazılmaz,
+  // sadece kontrol kolaylığı için gösterilir).
+  const infoCols = [{ col: rIdx.sicilCol, label: 'Sicil' }];
+  if (rIdx.adiSoyadiCol !== -1) infoCols.push({ col: rIdx.adiSoyadiCol, label: 'Adı Soyadı' });
+  if (rIdx.unvanCol !== -1) infoCols.push({ col: rIdx.unvanCol, label: 'Unvan' });
+
+  const writeCols = rIdx.dayNumCols.map(d => ({ col: d.col, label: String(d.day) }))
     .concat(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => ({ col: c.col, label: c.code })));
 
-  let html = '<thead><tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<thead><tr>' + infoCols.map(c => `<th>${c.label}</th>`).join('') + writeCols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
   results.forEach(r => {
     const origRow = rIdx.dataRows[r.rowIndex];
     html += '<tr>';
-    cols.forEach(c => {
-      if (c.col === rIdx.sicilCol){
-        html += `<td>${origRow[rIdx.sicilCol] || ''}</td>`;
-      } else if (Object.prototype.hasOwnProperty.call(r.updates, c.col)){
+    infoCols.forEach(c => { html += `<td>${origRow[c.col] || ''}</td>`; });
+    writeCols.forEach(c => {
+      if (Object.prototype.hasOwnProperty.call(r.updates, c.col)){
         html += `<td class="changed">${r.updates[c.col] === undefined ? '' : r.updates[c.col]}</td>`;
       } else {
         html += `<td></td>`;

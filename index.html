@@ -421,13 +421,19 @@ const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit'
 let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, oncelik }]
 let condRuleIdSeq = 1;
 
+const GROUP_ALL_DAYS = '__ALL_DAYS__';
+const GROUP_ALL_CATEGORIES = '__ALL_CATEGORIES__';
+
 function renderCondFormatTable(){
   const wrap = document.getElementById('condFormatTable');
   const cols = [{label:'Metrik (sütun başlığı)'},{label:'Operatör'},{label:'Değer1'},{label:'Değer2'},{label:'Renk'},{label:'Öncelik'},{label:''}];
   const head = '<tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
   const availableLabels = lastComputeResult ? lastComputeResult.rIdx.header.map(h => normalizeKey(h)).filter(l => l !== '') : [];
   const rows = kosulluBicimlendirme.map(rule => {
-    const metrikOpts = ['<option value="">Seç…</option>'].concat(availableLabels.map(l => `<option value="${l}" ${rule.metrik===l?'selected':''}>${l}</option>`)).join('');
+    const groupOpts = `<option value="${GROUP_ALL_DAYS}" ${rule.metrik===GROUP_ALL_DAYS?'selected':''}>🗓 Tüm Gün Sütunları</option>` +
+                       `<option value="${GROUP_ALL_CATEGORIES}" ${rule.metrik===GROUP_ALL_CATEGORIES?'selected':''}>📊 Tüm Kategori Sütunları</option>`;
+    const metrikOpts = '<option value="">Seç…</option>' + groupOpts + '<optgroup label="Tek sütun">' +
+      availableLabels.map(l => `<option value="${l}" ${rule.metrik===l?'selected':''}>${l}</option>`).join('') + '</optgroup>';
     const opOpts = COND_OPERATORS.map(op => `<option value="${op}" ${rule.operator===op?'selected':''}>${op}</option>`).join('');
     return `<tr>
       <td><select data-cf-id="${rule.id}" data-cf-field="metrik">${metrikOpts}</select></td>
@@ -509,9 +515,16 @@ function ruleMatches(rule, rawValue){
 
 // Bir sütun etiketi + hücre değeri için, eşleşen kurallardan en yüksek ÖNCELİKLİ
 // (küçük sayı = önce) olanın rengini döndürür — hem canlı önizlemede hem export'ta
-// AYNI kuralı, aynı önceliklendirmeyle kullanmak için.
-function getCondColorForCell(label, value){
-  const matches = kosulluBicimlendirme.filter(r => r.metrik === label && ruleMatches(r, value));
+// AYNI kuralı, aynı önceliklendirmeyle kullanmak için. Kural "Tüm Gün Sütunları" veya
+// "Tüm Kategori Sütunları" gibi bir GRUBU hedefliyorsa, o gruba ait her sütun için de eşleşir
+// — 30+ gün sütununa aynı kuralı teker teker eklemek zorunda kalmamak için.
+function getCondColorForCell(label, value, colInfo){
+  const matches = kosulluBicimlendirme.filter(r => {
+    if (r.metrik === label) return ruleMatches(r, value);
+    if (r.metrik === GROUP_ALL_DAYS && colInfo && colInfo.isDay) return ruleMatches(r, value);
+    if (r.metrik === GROUP_ALL_CATEGORIES && colInfo && colInfo.isCategory) return ruleMatches(r, value);
+    return false;
+  });
   if (!matches.length) return null;
   matches.sort((a, b) => (a.oncelik || 1) - (b.oncelik || 1));
   return matches[0].renk;
@@ -534,18 +547,36 @@ function applyKosulluBicimlendirme(ws, rIdx, rowCount){
   if (!rowCount) return;
   kosulluBicimlendirme.forEach(rule => {
     if (!rule.metrik || rule.deger1 === '' || rule.deger1 === undefined) return;
-    const col = findColByLabel(rIdx, rule.metrik);
-    if (col === null) return;
-    const colLetter = colNumToA1(col);
-    const ref = `${colLetter}2:${colLetter}${rowCount + 1}`;
+
+    let ref, topLeftCellRef;
+    if (rule.metrik === GROUP_ALL_DAYS){
+      if (!rIdx.dayNumCols.length) return;
+      const firstLetter = colNumToA1(rIdx.dayNumCols[0].col);
+      const lastLetter = colNumToA1(rIdx.dayNumCols[rIdx.dayNumCols.length - 1].col);
+      ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
+      topLeftCellRef = `${firstLetter}2`;
+    } else if (rule.metrik === GROUP_ALL_CATEGORIES){
+      const cats = rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code));
+      if (!cats.length) return;
+      const firstLetter = colNumToA1(cats[0].col);
+      const lastLetter = colNumToA1(cats[cats.length - 1].col);
+      ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
+      topLeftCellRef = `${firstLetter}2`;
+    } else {
+      const col = findColByLabel(rIdx, rule.metrik);
+      if (col === null) return;
+      const colLetter = colNumToA1(col);
+      ref = `${colLetter}2:${colLetter}${rowCount + 1}`;
+      topLeftCellRef = `${colLetter}2`;
+    }
+
     const argb = hexToArgb(rule.renk) || 'FFFFFF00';
     const style = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb } } };
     const priority = rule.oncelik || 1;
 
     if (rule.operator === 'İçerdiği Metin'){
-      const cellRef = `${colLetter}2`;
       ws.addConditionalFormatting({
-        ref, rules: [{ type: 'containsText', operator: 'containsText', text: rule.deger1, formulae: [`NOT(ISERROR(SEARCH("${rule.deger1}",${cellRef})))`], style, priority }],
+        ref, rules: [{ type: 'containsText', operator: 'containsText', text: rule.deger1, formulae: [`NOT(ISERROR(SEARCH("${rule.deger1}",${topLeftCellRef})))`], style, priority }],
       });
       return;
     }
@@ -708,6 +739,8 @@ function renderPreview(result){
   // mantıkla (formatStateToCss / getCondColorForCell) CANLI uygulanır — "Excel'e Aktar"
   // ile üretilecek dosyada göreceğin görünüm, bu tabloda ANINDA görünür.
   const writeColSet = new Map();
+  const dayColSet = new Set(rIdx.dayNumCols.map(d => d.col));
+  const categoryColSet = new Set(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => c.col));
   rIdx.dayNumCols.forEach(d => writeColSet.set(d.col, true));
   rIdx.categoryCols.forEach(c => { if (!SKIP_CATEGORY_CODES.has(c.code)) writeColSet.set(c.col, true); });
 
@@ -722,7 +755,8 @@ function renderPreview(result){
     allCols.forEach(c => {
       const isComputed = writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col);
       const val = isComputed ? r.updates[c.col] : origRow[c.col];
-      const condColor = getCondColorForCell(c.label, val);
+      const colInfo = { isDay: dayColSet.has(c.col), isCategory: categoryColSet.has(c.col) };
+      const condColor = getCondColorForCell(c.label, val, colInfo);
       let style = veriCss;
       if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
       const cls = isComputed && !condColor ? ' class="changed"' : '';

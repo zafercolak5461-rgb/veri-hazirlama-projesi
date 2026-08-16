@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Veri Hazırlama Projesi</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
   :root{
     --bg:#10182B; --panel:#16213D; --panel2:#1C2944; --line:#2A3A5C;
@@ -51,6 +52,8 @@
   .btn.danger{ background:var(--danger-soft); color:var(--danger); border-color:var(--danger); }
 
   select, input[type=text]{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; }
+  input[type=color]{ width:38px; height:30px; padding:0; border:1px solid var(--line); border-radius:6px; }
+  input[type=number]{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; width:80px; }
 
   .status{ margin-top:10px; font-size:13px; white-space:pre-wrap; }
   .status.ok{ color:var(--ok); }
@@ -123,6 +126,27 @@
           <button class="btn ok" id="writeBtn">✓ Onayla ve Sheets'e Yaz</button>
         </div>
         <div id="writeStatus" class="status"></div>
+      </div>
+
+      <div class="card" id="outputCard" style="display:none;">
+        <h2>3. Biçimlendirme, Şablon ve Excel'e Aktar</h2>
+        <div class="hint">Aşağıdaki biçimlendirme, "Excel'e Aktar" ile üretilecek .xlsx dosyasına uygulanır. Sheets'e yazma bundan ETKİLENMEZ (Sheets kendi biçimini korur).</div>
+
+        <div class="row" style="margin-bottom:14px;">
+          <select id="templateSelect"><option value="">Şablon seç…</option></select>
+          <button class="btn" id="loadTemplateSheetBtn">📂 Yükle</button>
+          <input type="text" id="templateNameInput" placeholder="Yeni şablon adı">
+          <button class="btn" id="saveTemplateSheetBtn">💾 Bu Ayarlarla Kaydet</button>
+          <button class="btn" id="refreshTemplatesBtn">↻ Şablonları Yenile</button>
+        </div>
+        <div id="templateStatus" class="status"></div>
+
+        <table class="prev" id="formatTable" style="margin-top:14px;"></table>
+
+        <div class="row" style="margin-top:16px;">
+          <button class="btn primary" id="exportExcelBtn">⬇ Excel'e Aktar (.xlsx)</button>
+        </div>
+        <div id="exportStatus" class="status"></div>
       </div>
     </div>
 
@@ -300,6 +324,87 @@ function buildBatchUpdatePayload(computeResult, sheetTabName){
 }
 
 // ============================================================================
+// ===== BİÇİMLENDİRME (excel-pratik-dashboard.html'den birebir taşındı) =====
+// Sadece "Excel'e Aktar" ile üretilen .xlsx'e uygulanır — Sheets'e yazma bundan etkilenmez.
+// ============================================================================
+
+const FORMAT_TARGETS = [
+  { key: 'baslik', label: 'Başlık Satırı' },
+  { key: 'veri', label: 'Veri Satırları' },
+];
+const FORMAT_COLS = [
+  { key: 'uygula', label: 'Uygula', type: 'bool' },
+  { key: 'kalin', label: 'Kalın', type: 'bool' },
+  { key: 'yaziRengi', label: 'Yazı Rengi', type: 'color' },
+  { key: 'argPlan', label: 'Arka Plan', type: 'color' },
+  { key: 'hizalama', label: 'Hizalama', type: 'select', options: [['', '-'], ['left', 'Sol'], ['center', 'Orta'], ['right', 'Sağ']] },
+  { key: 'kenarlik', label: 'Kenarlık', type: 'bool' },
+  { key: 'sayiFormat', label: 'Sayı Formatı', type: 'text', placeholder: '#,##0.00' },
+  { key: 'kaydir', label: 'Kaydır', type: 'bool' },
+  { key: 'yaziBoyutu', label: 'Yazı Boyutu', type: 'number' },
+];
+let formatState = {
+  baslik: { uygula: true, kalin: true, yaziRengi: '#ffffff', argPlan: '#1e2761', hizalama: 'center', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
+  veri:   { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: 'left', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
+};
+
+function renderFormatTable(){
+  const wrap = document.getElementById('formatTable');
+  const head = '<tr><th>Hedef</th>' + FORMAT_COLS.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+  const rows = FORMAT_TARGETS.map(t => {
+    const st = formatState[t.key];
+    const cells = FORMAT_COLS.map(c => {
+      const val = st[c.key];
+      if (c.type === 'bool') return `<td style="text-align:center;"><input type="checkbox" data-target="${t.key}" data-field="${c.key}" ${val ? 'checked' : ''}></td>`;
+      if (c.type === 'color') return `<td><input type="color" data-target="${t.key}" data-field="${c.key}" value="${val || '#ffffff'}"></td>`;
+      if (c.type === 'select'){
+        const opts = c.options.map(([v, tr]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${tr}</option>`).join('');
+        return `<td><select data-target="${t.key}" data-field="${c.key}">${opts}</select></td>`;
+      }
+      if (c.type === 'number') return `<td><input type="number" data-target="${t.key}" data-field="${c.key}" value="${val != null ? val : ''}"></td>`;
+      return `<td><input type="text" data-target="${t.key}" data-field="${c.key}" value="${val || ''}" placeholder="${c.placeholder || ''}"></td>`;
+    }).join('');
+    return `<tr><td style="font-weight:600;">${t.label}</td>${cells}</tr>`;
+  }).join('');
+  wrap.innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
+}
+
+document.getElementById('formatTable').addEventListener('change', (e) => {
+  const el = e.target;
+  const target = el.getAttribute('data-target');
+  const field = el.getAttribute('data-field');
+  if (!target || !field) return;
+  let val;
+  if (el.type === 'checkbox') val = el.checked;
+  else if (el.type === 'number') val = el.value === '' ? null : parseFloat(el.value);
+  else val = el.value;
+  formatState[target][field] = val;
+});
+
+function hexToArgb(hex){
+  const h = String(hex || '').replace('#', '');
+  if (!/^[0-9A-Fa-f]{6}$/.test(h)) return null;
+  return 'FF' + h.toUpperCase();
+}
+function applyCellStyle(cell, st){
+  if (!st.uygula) return;
+  cell.font = { bold: !!st.kalin, size: st.yaziBoyutu || undefined, color: st.yaziRengi ? { argb: hexToArgb(st.yaziRengi) } : undefined };
+  if (st.argPlan){
+    const argb = hexToArgb(st.argPlan);
+    if (argb) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+  }
+  const alignment = {};
+  if (st.hizalama){ alignment.horizontal = st.hizalama; alignment.vertical = 'middle'; }
+  if (st.kaydir) alignment.wrapText = true;
+  if (Object.keys(alignment).length) cell.alignment = alignment;
+  if (st.kenarlik){
+    const side = { style: 'thin', color: { argb: 'FF000000' } };
+    cell.border = { top: side, left: side, bottom: side, right: side };
+  }
+  if (st.sayiFormat) cell.numFmt = st.sayiFormat;
+}
+
+// ============================================================================
 // ===== GOOGLE SHEETS API (ağ katmanı) =====
 // ============================================================================
 
@@ -363,6 +468,7 @@ function onSignedIn(){
   document.getElementById('page-vardiya').style.display = 'block';
   document.getElementById('sidebarFooter').textContent = 'Oturum açık';
   loadAyYilTabs();
+  loadTemplateList();
 }
 
 document.getElementById('signinBtn').addEventListener('click', () => {
@@ -462,6 +568,7 @@ function renderPreview(result){
   });
   html += '</tbody>';
   document.getElementById('prevTable').innerHTML = html;
+  document.getElementById('outputCard').style.display = 'block';
 }
 
 document.getElementById('writeBtn').addEventListener('click', async () => {
@@ -485,6 +592,136 @@ document.getElementById('writeBtn').addEventListener('click', async () => {
     statusEl.className = 'status err';
   }
 });
+
+// ============================================================================
+// ===== ŞABLON SİSTEMİ =====
+// Şablonlar, PUANTAJ_SHEET_ID içindeki "Sablonlar" adlı bir sekmede (senin oluşturman
+// gerekir — kod otomatik oluşturmuyor, kontrol sende kalsın diye) satır satır saklanır:
+// A: Şablon Adı | B: Hedef Sayfa (kaydedilirken seçili olan AY-YIL) | C: JSON | D: Tarih
+// ============================================================================
+
+const TEMPLATES_TAB = 'Sablonlar';
+
+async function loadTemplateList(){
+  const sel = document.getElementById('templateSelect');
+  const statusEl = document.getElementById('templateStatus');
+  sel.innerHTML = '<option value="">Yükleniyor…</option>';
+  try {
+    const rows = await getSheetValues(PUANTAJ_SHEET_ID, `'${TEMPLATES_TAB}'!A2:D500`);
+    sel._rows = rows;
+    if (!rows.length){ sel.innerHTML = '<option value="">(henüz şablon yok)</option>'; return; }
+    sel.innerHTML = '<option value="">Şablon seç…</option>' + rows.map((r, i) => `<option value="${i}">${r[0] || '(isimsiz)'} — ${r[1] || ''}</option>`).join('');
+  } catch (err){
+    sel.innerHTML = '<option value="">Hata</option>';
+    statusEl.textContent = `✗ ${err.message}\n(Puantaj Sheet'inde "${TEMPLATES_TAB}" adında bir sekme oluşturduğundan emin ol — başlık satırına gerek yok, kod A2'den başlar.)`;
+    statusEl.className = 'status err';
+  }
+}
+document.getElementById('refreshTemplatesBtn').addEventListener('click', loadTemplateList);
+
+document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => {
+  const sel = document.getElementById('templateSelect');
+  const statusEl = document.getElementById('templateStatus');
+  if (!sel.value || !sel._rows){ statusEl.textContent = '✗ Önce bir şablon seç.'; statusEl.className = 'status err'; return; }
+  const row = sel._rows[parseInt(sel.value, 10)];
+  try {
+    const data = JSON.parse(row[2]);
+    if (data.formatState) formatState = data.formatState;
+    renderFormatTable();
+    statusEl.textContent = `✓ "${row[0]}" şablonu yüklendi.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ Şablon okunamadı: ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+
+document.getElementById('saveTemplateSheetBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('templateStatus');
+  const nameInput = document.getElementById('templateNameInput');
+  const name = nameInput.value.trim();
+  if (!name){ statusEl.textContent = '✗ Bir şablon adı yaz.'; statusEl.className = 'status err'; return; }
+  statusEl.textContent = 'Kaydediliyor…';
+  statusEl.className = 'status';
+  try {
+    const payload = JSON.stringify({ formatState });
+    const targetTab = document.getElementById('ayYilSelect').value || '(genel)';
+    const range = encodeURIComponent(`'${TEMPLATES_TAB}'!A:D`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${PUANTAJ_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED`;
+    await authFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[name, targetTab, payload, new Date().toISOString()]] }),
+    });
+    nameInput.value = '';
+    await loadTemplateList();
+    statusEl.textContent = `✓ "${name}" şablonu kaydedildi.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+
+// ============================================================================
+// ===== EXCEL'E AKTAR (.xlsx) =====
+// Son hesaplanan sonucu (lastComputeResult), yukarıdaki Biçimlendirme ayarlarıyla
+// gerçek bir .xlsx dosyasına yazıp indirir. Sheets'e HİÇBİR ŞEY yazmaz.
+// ============================================================================
+
+document.getElementById('exportExcelBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('exportStatus');
+  if (!lastComputeResult){ statusEl.textContent = '✗ Önce "1. Ay Seç ve Hesapla" ile hesapla.'; statusEl.className = 'status err'; return; }
+  statusEl.textContent = 'Excel hazırlanıyor…';
+  statusEl.className = 'status';
+  try {
+    const { rIdx, results } = lastComputeResult;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Zafer Çolak';
+    wb.lastModifiedBy = 'Zafer Çolak';
+    const ws = wb.addWorksheet((lastSelectedTab || 'Puantaj').slice(0, 31));
+
+    const allCols = rIdx.header.map((h, c) => ({ col: c, label: normalizeKey(h) })).filter(c => c.label !== '');
+    const headerRow = ws.getRow(1);
+    allCols.forEach((c, i) => {
+      const cell = headerRow.getCell(i + 1);
+      cell.value = c.label;
+      applyCellStyle(cell, formatState.baslik);
+    });
+
+    const writeColSet = new Map();
+    rIdx.dayNumCols.forEach(d => writeColSet.set(d.col, true));
+    rIdx.categoryCols.forEach(c => { if (!SKIP_CATEGORY_CODES.has(c.code)) writeColSet.set(c.col, true); });
+
+    results.forEach((r, ri) => {
+      const origRow = rIdx.dataRows[r.rowIndex];
+      const excelRow = ws.getRow(ri + 2);
+      allCols.forEach((c, i) => {
+        const val = (writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col)) ? r.updates[c.col] : origRow[c.col];
+        const cell = excelRow.getCell(i + 1);
+        cell.value = (val === undefined || val === null) ? null : val;
+        applyCellStyle(cell, formatState.veri);
+      });
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Puantaj-${lastSelectedTab || 'export'}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+    statusEl.textContent = '✓ İndirildi.';
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+
+renderFormatTable();
 </script>
 </body>
 </html>

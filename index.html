@@ -384,6 +384,7 @@ document.getElementById('formatTable').addEventListener('change', (e) => {
   else if (el.type === 'number') val = el.value === '' ? null : parseFloat(el.value);
   else val = el.value;
   formatState[target][field] = val;
+  if (lastComputeResult) renderPreview(lastComputeResult);
 });
 
 function hexToArgb(hex){
@@ -443,7 +444,7 @@ function renderCondFormatTable(){
 
 document.getElementById('addCondRuleBtn').addEventListener('click', () => {
   kosulluBicimlendirme.push({ id: condRuleIdSeq++, metrik: '', operator: 'Eşit', deger1: '', deger2: '', renk: '#ffff00', oncelik: kosulluBicimlendirme.length + 1 });
-  renderCondFormatTable();
+  if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 });
 
 document.getElementById('condFormatTable').addEventListener('change', (e) => {
@@ -454,7 +455,7 @@ document.getElementById('condFormatTable').addEventListener('change', (e) => {
   const rule = kosulluBicimlendirme.find(r => r.id === id);
   if (!rule) return;
   rule[field] = el.type === 'number' ? parseFloat(el.value) : el.value;
-  renderCondFormatTable();
+  if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 });
 
 document.getElementById('condFormatTable').addEventListener('click', (e) => {
@@ -462,7 +463,7 @@ document.getElementById('condFormatTable').addEventListener('click', (e) => {
   if (!delBtn) return;
   const id = parseInt(delBtn.getAttribute('data-cf-delete'), 10);
   kosulluBicimlendirme = kosulluBicimlendirme.filter(r => r.id !== id);
-  renderCondFormatTable();
+  if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 });
 
 const COND_OP_MAP = {
@@ -477,6 +478,56 @@ function findColByLabel(rIdx, label){
     if (normalizeKey(rIdx.header[c]) === label) return c;
   }
   return null;
+}
+
+// Bir kuralın verilen ham değere uyup uymadığını kontrol eder — hem gerçek Excel
+// koşullu biçimlendirmesini kurarken (renk/aralık) hem de DASHBOARD İÇİNDEKİ canlı
+// önizlemede aynı mantığı kullanmak için buradan tek bir yerden yönetilir.
+function ruleMatches(rule, rawValue){
+  if (!rule.metrik || rule.deger1 === '' || rule.deger1 === undefined || rule.deger1 === null) return false;
+  const vNum = (typeof rawValue === 'number') ? rawValue : parseFloat(String(rawValue ?? '').replace(',', '.'));
+  const d1Num = parseFloat(String(rule.deger1).replace(',', '.'));
+  switch (rule.operator){
+    case 'Büyük': return !isNaN(vNum) && !isNaN(d1Num) && vNum > d1Num;
+    case 'Küçük': return !isNaN(vNum) && !isNaN(d1Num) && vNum < d1Num;
+    case 'Büyük Eşit': return !isNaN(vNum) && !isNaN(d1Num) && vNum >= d1Num;
+    case 'Küçük Eşit': return !isNaN(vNum) && !isNaN(d1Num) && vNum <= d1Num;
+    case 'Eşit':
+      if (!isNaN(vNum) && !isNaN(d1Num)) return vNum === d1Num;
+      return String(rawValue ?? '').toUpperCase() === String(rule.deger1).toUpperCase();
+    case 'Farklı':
+      if (!isNaN(vNum) && !isNaN(d1Num)) return vNum !== d1Num;
+      return String(rawValue ?? '').toUpperCase() !== String(rule.deger1).toUpperCase();
+    case 'Aralık': {
+      const d2Num = parseFloat(String(rule.deger2).replace(',', '.'));
+      return !isNaN(vNum) && !isNaN(d1Num) && !isNaN(d2Num) && vNum >= d1Num && vNum <= d2Num;
+    }
+    case 'İçerdiği Metin': return String(rawValue ?? '').toUpperCase().indexOf(String(rule.deger1).toUpperCase()) !== -1;
+  }
+  return false;
+}
+
+// Bir sütun etiketi + hücre değeri için, eşleşen kurallardan en yüksek ÖNCELİKLİ
+// (küçük sayı = önce) olanın rengini döndürür — hem canlı önizlemede hem export'ta
+// AYNI kuralı, aynı önceliklendirmeyle kullanmak için.
+function getCondColorForCell(label, value){
+  const matches = kosulluBicimlendirme.filter(r => r.metrik === label && ruleMatches(r, value));
+  if (!matches.length) return null;
+  matches.sort((a, b) => (a.oncelik || 1) - (b.oncelik || 1));
+  return matches[0].renk;
+}
+
+// Biçimlendirme ayarını, önizleme tablosunda kullanılacak inline CSS'e çevirir —
+// export'taki applyCellStyle ile AYNI ayarları temsil eder, sadece Excel yerine tarayıcı içindir.
+function formatStateToCss(st){
+  if (!st.uygula) return '';
+  const parts = [];
+  if (st.kalin) parts.push('font-weight:700');
+  if (st.yaziRengi) parts.push(`color:${st.yaziRengi}`);
+  if (st.argPlan) parts.push(`background:${st.argPlan}`);
+  if (st.hizalama) parts.push(`text-align:${st.hizalama}`);
+  if (st.yaziBoyutu) parts.push(`font-size:${st.yaziBoyutu}px`);
+  return parts.join(';');
 }
 
 function applyKosulluBicimlendirme(ws, rIdx, rowCount){
@@ -652,22 +703,31 @@ function renderPreview(result){
   // ADI SOYADI, TCKN, SİCİL, UNVAN, günler, kategoriler...) — burada sütun seçip
   // ayıklamıyoruz. Sadece HESAPLANAN (gün ve kategori) sütunlar vurgulanır; geri kalan
   // her şey Puantaj Referans'taki orijinal değeriyle salt-okunur gösterilir.
-  const writeColSet = new Map(); // col -> true (hesaplanan sütun mu)
+  //
+  // Biçimlendirme (Başlık/Veri stil) ve Koşullu Biçimlendirme kuralları burada AYNI
+  // mantıkla (formatStateToCss / getCondColorForCell) CANLI uygulanır — "Excel'e Aktar"
+  // ile üretilecek dosyada göreceğin görünüm, bu tabloda ANINDA görünür.
+  const writeColSet = new Map();
   rIdx.dayNumCols.forEach(d => writeColSet.set(d.col, true));
   rIdx.categoryCols.forEach(c => { if (!SKIP_CATEGORY_CODES.has(c.code)) writeColSet.set(c.col, true); });
 
   const allCols = rIdx.header.map((h, c) => ({ col: c, label: normalizeKey(h) })).filter(c => c.label !== '');
+  const baslikCss = formatStateToCss(formatState.baslik);
+  const veriCss = formatStateToCss(formatState.veri);
 
-  let html = '<thead><tr>' + allCols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<thead><tr>' + allCols.map(c => `<th style="${baslikCss}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
   results.forEach(r => {
     const origRow = rIdx.dataRows[r.rowIndex];
     html += '<tr>';
     allCols.forEach(c => {
-      if (writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col)){
-        html += `<td class="changed">${r.updates[c.col] === undefined ? '' : r.updates[c.col]}</td>`;
-      } else {
-        html += `<td>${origRow[c.col] === undefined || origRow[c.col] === null ? '' : origRow[c.col]}</td>`;
-      }
+      const isComputed = writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col);
+      const val = isComputed ? r.updates[c.col] : origRow[c.col];
+      const condColor = getCondColorForCell(c.label, val);
+      let style = veriCss;
+      if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
+      const cls = isComputed && !condColor ? ' class="changed"' : '';
+      const display = (val === undefined || val === null) ? '' : val;
+      html += `<td${cls} style="${style}" title="${isComputed ? 'Hesaplanan değer' : ''}">${display}</td>`;
     });
     html += '</tr>';
   });

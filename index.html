@@ -437,25 +437,25 @@ function renderPreview(result){
   const warnBox = document.getElementById('warningsBox');
   warnBox.textContent = warnings.length ? ('⚠ ' + warnings.length + ' uyarı:\n' + warnings.slice(0, 20).join('\n') + (warnings.length > 20 ? `\n… (+${warnings.length - 20} tane daha)` : '')) : '';
 
-  // Sicil + ADI SOYADI + UNVAN salt-okunur bilgi sütunları (gerçek Sheets'e bunlar yazılmaz,
-  // sadece kontrol kolaylığı için gösterilir).
-  const infoCols = [{ col: rIdx.sicilCol, label: 'Sicil' }];
-  if (rIdx.adiSoyadiCol !== -1) infoCols.push({ col: rIdx.adiSoyadiCol, label: 'Adı Soyadı' });
-  if (rIdx.unvanCol !== -1) infoCols.push({ col: rIdx.unvanCol, label: 'Unvan' });
+  // Puantaj Referans'taki TÜM sütunlar, dosyadaki sıra neyse aynen gösterilir (Sıra No,
+  // ADI SOYADI, TCKN, SİCİL, UNVAN, günler, kategoriler...) — burada sütun seçip
+  // ayıklamıyoruz. Sadece HESAPLANAN (gün ve kategori) sütunlar vurgulanır; geri kalan
+  // her şey Puantaj Referans'taki orijinal değeriyle salt-okunur gösterilir.
+  const writeColSet = new Map(); // col -> true (hesaplanan sütun mu)
+  rIdx.dayNumCols.forEach(d => writeColSet.set(d.col, true));
+  rIdx.categoryCols.forEach(c => { if (!SKIP_CATEGORY_CODES.has(c.code)) writeColSet.set(c.col, true); });
 
-  const writeCols = rIdx.dayNumCols.map(d => ({ col: d.col, label: String(d.day) }))
-    .concat(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => ({ col: c.col, label: c.code })));
+  const allCols = rIdx.header.map((h, c) => ({ col: c, label: normalizeKey(h) })).filter(c => c.label !== '');
 
-  let html = '<thead><tr>' + infoCols.map(c => `<th>${c.label}</th>`).join('') + writeCols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<thead><tr>' + allCols.map(c => `<th>${c.label}</th>`).join('') + '</tr></thead><tbody>';
   results.forEach(r => {
     const origRow = rIdx.dataRows[r.rowIndex];
     html += '<tr>';
-    infoCols.forEach(c => { html += `<td>${origRow[c.col] || ''}</td>`; });
-    writeCols.forEach(c => {
-      if (Object.prototype.hasOwnProperty.call(r.updates, c.col)){
+    allCols.forEach(c => {
+      if (writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col)){
         html += `<td class="changed">${r.updates[c.col] === undefined ? '' : r.updates[c.col]}</td>`;
       } else {
-        html += `<td></td>`;
+        html += `<td>${origRow[c.col] === undefined || origRow[c.col] === null ? '' : origRow[c.col]}</td>`;
       }
     });
     html += '</tr>';

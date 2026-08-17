@@ -1280,7 +1280,10 @@ let currentProject = null;
 let resolvedTabs = {};         // kaynakAdi -> secilen sekme adi (dinamik sekmeli kaynaklar icin)
 let uploadedKaynakData = {};   // kaynakAdi -> ham 2B dizi (YuklenenDosya tipi kaynaklar icin)
 
-function parseProjeRow(r){ return { ad: normalizeKey(r[0]), sira: parseFloat(r[1]) || 0, varsayilanSablon: normalizeKey(r[2]) }; }
+function parseProjeRow(r){
+  const sira = parseFloat(r[1]);
+  return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]) };
+}
 function parseKaynakRow(r){
   return {
     proje: normalizeKey(r[0]), kaynakAdi: normalizeKey(r[1]), tip: normalizeKey(r[2]),
@@ -1304,7 +1307,7 @@ async function loadConfigAndSidebar(){
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:G500`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:E1000`),
     ]);
-    projeler = projRows.map(parseProjeRow).filter(p => p.ad).sort((a, b) => a.sira - b.sira);
+    projeler = projRows.map(parseProjeRow).filter(p => p.ad && p.sira !== null).sort((a, b) => a.sira - b.sira);
     kaynaklarConfigAll = kaynakRows.map(parseKaynakRow).filter(k => k.proje && k.kaynakAdi);
     hesaplamalarConfigAll = hesRows.map(parseHesaplamaRow).filter(h => h.proje && h.sutunAdi);
     renderSidebar();

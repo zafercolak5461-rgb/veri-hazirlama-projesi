@@ -835,6 +835,7 @@ function applyCellStyle(cell, st){
 const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit', 'Eşit', 'Farklı', 'Aralık', 'İçerdiği Metin'];
 let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, oncelik }]
 let hucreBazliBicim = null; // { palette, rows, rowCount, colCount } — elle boyanmış (kuralsız) hücreler için
+let sutunGenislikleri = null; // { colNum: width } — içe aktarılan dosyanın sütun genişlikleri
 let condRuleIdSeq = 1;
 
 const GROUP_ALL_DAYS = '__ALL_DAYS__';
@@ -1225,6 +1226,26 @@ function isBlankStyle(st){
   return !st.kalin && !st.yaziRengi && !st.argPlan && !st.hizalama && !st.kenarlik && !st.sayiFormat && !st.kaydir && !st.yaziBoyutu;
 }
 
+// Bir worksheet'in her sütununun genişliğini okur — { colNum: genişlik } şeklinde.
+// Genişliği hiç ayarlanmamış (varsayılan) sütunlar atlanır.
+function importColumnWidthsFromSheet(ws){
+  const widths = {};
+  const maxCol = ws.columnCount || 0;
+  for (let c = 1; c <= maxCol; c++){
+    const w = ws.getColumn(c).width;
+    if (w !== undefined && w !== null) widths[c] = w;
+  }
+  return widths;
+}
+
+// İçe aktarılmış sütun genişliklerini export edilen worksheet'e AYNI pozisyona uygular.
+function applyColumnWidths(ws, widths, colCount){
+  if (!widths) return;
+  for (let c = 1; c <= colCount; c++){
+    if (widths[c] !== undefined) ws.getColumn(c).width = widths[c];
+  }
+}
+
 function importFullCellFormatFromSheet(ws, themeColors){
   const paletteIndex = new Map(); // signature -> index
   const palette = [];
@@ -1372,12 +1393,14 @@ document.getElementById('condImportFile').addEventListener('change', async (e) =
     // Tam hücre bazlı biçim: elle boyanmış, hiçbir kurala bağlı olmayan renkler için —
     // sadece ilk sayfa alınır (birden fazla sayfa karışıklık yaratır).
     hucreBazliBicim = importFullCellFormatFromSheet(wb.worksheets[0], themeColors);
+    sutunGenislikleri = importColumnWidthsFromSheet(wb.worksheets[0]);
 
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 
     const parts = [`Biçimlendirme (Başlık/Veri) alındı`];
     parts.push(allImported.length ? `${allImported.length} koşullu biçimlendirme kuralı` : 'koşullu biçimlendirme bulunamadı');
     parts.push(`${hucreBazliBicim.palette.length} farklı hücre görünümü (elle boyanmış alanlar dahil)`);
+    parts.push(`${Object.keys(sutunGenislikleri).length} sütun genişliği`);
     if (!themeColors) parts.push('(dosyada tema rengi bilgisi bulunamadı, sadece ham renkler alındı)');
     statusEl.textContent = `✓ ${parts.join(', ')}. Aşağıdaki tabloları kontrol et, gerekirse düzenle.`;
     statusEl.className = 'status ok';
@@ -1746,6 +1769,7 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
       kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
     }
     hucreBazliBicim = data.hucreBazliBicim || null;
+    sutunGenislikleri = data.sutunGenislikleri || null;
     renderFormatTable();
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
     statusEl.textContent = `✓ "${row[0]}" şablonu yüklendi.`;
@@ -1768,7 +1792,7 @@ document.getElementById('saveTemplateSheetBtn').addEventListener('click', async 
     // koşullu biçimlendirme/hücre-bazlı biçim içerenler) bunu kolayca aşabiliyor. Bu yüzden
     // JSON'u PARÇALARA bölüp aynı satırda C, D, E... sütunlarına yayıyoruz (kaç parça
     // gerekiyorsa o kadar sütun) — yüklerken hepsini birleştiririz.
-    const payload = JSON.stringify({ formatState, kosulluBicimlendirme, hucreBazliBicim, tarih: new Date().toISOString() });
+    const payload = JSON.stringify({ formatState, kosulluBicimlendirme, hucreBazliBicim, sutunGenislikleri, tarih: new Date().toISOString() });
     const CHUNK_SIZE = 40000;
     const chunks = [];
     for (let i = 0; i < payload.length; i += CHUNK_SIZE) chunks.push(payload.slice(i, i + CHUNK_SIZE));
@@ -1948,7 +1972,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     const headerRow = ws.getRow(1);
     result.columns.forEach(c => {
       const cell = headerRow.getCell(c.col + 1);
-      cell.value = c.label;
+      cell.value = coerceNumberIfNumeric(c.label);
       applyCellStyle(cell, formatState.baslik);
     });
 
@@ -1991,9 +2015,12 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
 
     // Elle boyanmış (kuralsız) hücreleri, içe aktarılan şablondan AYNI pozisyona geri uygula
     // — koşullu biçimlendirmenin yakalayamadığı statik renkler için.
+    const maxOutputCol = result.columns.reduce((m, c) => Math.max(m, c.col + 1), 0);
     if (hucreBazliBicim){
-      const maxOutputCol = result.columns.reduce((m, c) => Math.max(m, c.col + 1), 0);
       applyFullCellFormat(ws, hucreBazliBicim, result.results.length + 1, maxOutputCol);
+    }
+    if (sutunGenislikleri){
+      applyColumnWidths(ws, sutunGenislikleri, maxOutputCol);
     }
 
     const buf = await wb.xlsx.writeBuffer();

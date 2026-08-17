@@ -1687,7 +1687,8 @@ async function loadTemplateList(){
   const statusEl = document.getElementById('templateStatus');
   sel.innerHTML = '<option value="">Yükleniyor…</option>';
   try {
-    const rows = await getSheetValues(CONFIG_SHEET_ID, `'${TAB_SABLONLAR}'!A2:D500`);
+    // Şablon büyükse C sütunundan sonra çok sayıda parça sütunu olabilir — geniş bir aralık okuyoruz.
+    const rows = await getSheetValues(CONFIG_SHEET_ID, `'${TAB_SABLONLAR}'!A2:ZZ500`);
     sel._rows = rows;
     if (!rows.length){ sel.innerHTML = '<option value="">(henüz şablon yok)</option>'; return; }
     sel.innerHTML = '<option value="">Şablon seç…</option>' + rows.map((r, i) => `<option value="${i}">${r[0] || '(isimsiz)'} — ${r[1] || ''}</option>`).join('');
@@ -1705,7 +1706,9 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
   if (!sel.value || !sel._rows){ statusEl.textContent = '✗ Önce bir şablon seç.'; statusEl.className = 'status err'; return; }
   const row = sel._rows[parseInt(sel.value, 10)];
   try {
-    const data = JSON.parse(row[2]);
+    // C sütunundan itibaren TÜM dolu hücreler bu şablonun parçalarıdır — sırayla birleştirilir.
+    const payload = row.slice(2).filter(c => c !== undefined && c !== null && c !== '').join('');
+    const data = JSON.parse(payload);
     if (data.formatState) formatState = data.formatState;
     if (Array.isArray(data.kosulluBicimlendirme)){
       kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
@@ -1729,17 +1732,26 @@ document.getElementById('saveTemplateSheetBtn').addEventListener('click', async 
   statusEl.textContent = 'Kaydediliyor…';
   statusEl.className = 'status';
   try {
-    const payload = JSON.stringify({ formatState, kosulluBicimlendirme, hucreBazliBicim });
-    const range = encodeURIComponent(`'${TAB_SABLONLAR}'!A:D`);
+    // Sheets'te hücre başına 50.000 karakter sınırı var — büyük şablonlar (çok sayıda
+    // koşullu biçimlendirme/hücre-bazlı biçim içerenler) bunu kolayca aşabiliyor. Bu yüzden
+    // JSON'u PARÇALARA bölüp aynı satırda C, D, E... sütunlarına yayıyoruz (kaç parça
+    // gerekiyorsa o kadar sütun) — yüklerken hepsini birleştiririz.
+    const payload = JSON.stringify({ formatState, kosulluBicimlendirme, hucreBazliBicim, tarih: new Date().toISOString() });
+    const CHUNK_SIZE = 40000;
+    const chunks = [];
+    for (let i = 0; i < payload.length; i += CHUNK_SIZE) chunks.push(payload.slice(i, i + CHUNK_SIZE));
+    const rowValues = [name, currentProject || '(genel)', ...chunks];
+
+    const range = encodeURIComponent(`'${TAB_SABLONLAR}'!A:ZZ`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED`;
     await authFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [[name, currentProject || '(genel)', payload, new Date().toISOString()]] }),
+      body: JSON.stringify({ values: [rowValues] }),
     });
     nameInput.value = '';
     await loadTemplateList();
-    statusEl.textContent = `✓ "${name}" şablonu kaydedildi.`;
+    statusEl.textContent = `✓ "${name}" şablonu kaydedildi (${chunks.length} parça, toplam ${payload.length} karakter).`;
     statusEl.className = 'status ok';
   } catch (err){
     statusEl.textContent = '✗ ' + err.message;

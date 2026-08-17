@@ -929,9 +929,20 @@ function formatStateToCss(st){
 
 function applyKosulluBicimlendirme(ws, result, rowCount){
   if (!rowCount) return;
-  kosulluBicimlendirme.forEach(rule => {
-    if (!rule.metrik || rule.deger1 === '' || rule.deger1 === undefined) return;
+  // OOXML standardı, bir sayfadaki TÜM koşullu biçimlendirme kurallarının önceliğinin
+  // (priority) BENZERSİZ olmasını şart koşar. İçe aktarılan kurallar aynı kaynak
+  // önceliğini (örn. 657) onlarca sütuna tekrar tekrar taşıyabiliyor — LibreOffice buna
+  // ses çıkarmıyor ama gerçek Excel dosyayı "bozuk" sayıp onarım istiyor. Bu yüzden
+  // burada, kullanıcının "Öncelik" alanına göre SIRALAYIP, gerçek Excel'e yazarken
+  // GARANTİLİ BENZERSİZ, ardışık bir sayı veriyoruz — görece öncelik sırası korunur,
+  // çakışma imkansız hale gelir.
+  const sortedRules = kosulluBicimlendirme
+    .filter(r => r.metrik && r.deger1 !== '' && r.deger1 !== undefined)
+    .slice()
+    .sort((a, b) => (a.oncelik || 1) - (b.oncelik || 1));
+  let priorityCounter = 1;
 
+  sortedRules.forEach(rule => {
     let ref, topLeftCellRef;
     if (rule.metrik === GROUP_ALL_DAYS){
       const dayCs = result.columns.filter(c => c.kind === 'day');
@@ -957,7 +968,7 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
 
     const argb = hexToArgb(rule.renk) || 'FFFFFF00';
     const style = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb } } };
-    const priority = rule.oncelik || 1;
+    const priority = priorityCounter++;
 
     if (rule.operator === 'İçerdiği Metin'){
       ws.addConditionalFormatting({

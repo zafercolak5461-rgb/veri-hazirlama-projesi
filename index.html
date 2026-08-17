@@ -1667,7 +1667,7 @@ function renderPreview(result){
     html += '<tr>';
     result.columns.forEach(c => {
       const isComputed = c.kind !== 'info';
-      const val = isComputed ? r.updates[c.col] : origRow[c.col];
+      const val = isComputed ? r.updates[c.col] : coerceNumberIfNumeric(origRow[c.col]);
       const colInfo = { isDay: c.kind === 'day', isCategory: c.kind === 'hesaplama' };
       const condColor = getCondColorForCell(c.label, val, colInfo);
       // Elle boyanmış (kuralsız) hücre biçimi varsa, o AYNI POZİSYONDAKİ görünümü canlı
@@ -1980,7 +1980,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
             cell.value = r.updates[c.col] ?? null;
           }
         } else {
-          const val = origRow[c.col];
+          const val = coerceNumberIfNumeric(origRow[c.col]);
           cell.value = (val === undefined || val === null) ? null : val;
         }
         applyCellStyle(cell, formatState.veri);

@@ -927,6 +927,18 @@ function formatStateToCss(st){
   return parts.join(';');
 }
 
+// Excel'in "cellIs" koşullu biçimlendirme formülleri, SAYISAL karşılaştırmalarda değeri
+// tırnaksız (97), METİN karşılaştırmalarında ise ZORUNLU OLARAK tırnak içinde ("HT") ister.
+// Tırnaksız metin yazarsak Excel bunu geçersiz bir ad/referans sanıp dosyayı "bozuk" sayar
+// (LibreOffice buna tolerans gösteriyor, gerçek Excel göstermiyor).
+function toExcelFormulaLiteral(v){
+  if (v === '' || v === null || v === undefined) return v;
+  const s = String(v).trim();
+  const n = Number(s.replace(',', '.'));
+  if (s !== '' && !isNaN(n)) return s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
 function applyKosulluBicimlendirme(ws, result, rowCount){
   if (!rowCount) return;
   // OOXML standardı, bir sayfadaki TÜM koşullu biçimlendirme kurallarının önceliğinin
@@ -978,7 +990,7 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
     }
     const opType = COND_OP_MAP[rule.operator];
     if (!opType) return;
-    const formulae = rule.operator === 'Aralık' ? [rule.deger1, rule.deger2] : [rule.deger1];
+    const formulae = rule.operator === 'Aralık' ? [toExcelFormulaLiteral(rule.deger1), toExcelFormulaLiteral(rule.deger2)] : [toExcelFormulaLiteral(rule.deger1)];
     ws.addConditionalFormatting({ ref, rules: [{ type: 'cellIs', operator: opType, formulae, style, priority }] });
   });
 }

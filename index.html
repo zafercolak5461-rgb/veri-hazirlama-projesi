@@ -1051,16 +1051,41 @@ function resolveColor(colorObj, themeColors){
 }
 
 // "F2:AJ50" gibi bir A1 aralığını { colStartLetter, colEndLetter } sütun harflerine ayırır.
-function parseRefColumns(ref){
-  const firstRef = ref.split(',')[0].trim(); // birden fazla aralık varsa ilkini al
-  const m = firstRef.match(/^\$?([A-Z]+)\$?\d+(?::\$?([A-Z]+)\$?\d+)?$/i);
+// "F2:AJ50" gibi TEK bir alanı ayrıştırır -> { colStart, colEnd, rowStart, rowEnd } ya da null.
+function parseSingleArea(area){
+  const m = area.trim().match(/^\$?([A-Z]+)\$?(\d+)(?::\$?([A-Z]+)\$?(\d+))?$/i);
   if (!m) return null;
-  return { colStart: m[1].toUpperCase(), colEnd: (m[2] || m[1]).toUpperCase() };
+  return {
+    colStart: m[1].toUpperCase(), colEnd: (m[3] || m[1]).toUpperCase(),
+    rowStart: parseInt(m[2], 10), rowEnd: parseInt(m[4] || m[2], 10),
+  };
+}
+// Excel'de bir koşullu biçimlendirme kuralı BİRDEN FAZLA parçalı alana birden uygulanabilir
+// ("F1:AJ117 G118:BF119 F127:AJ1048576" gibi, boşlukla ayrılmış). Bunların hepsini ayrıştırıp
+// en geniş sütun aralığını + kapsanan TOPLAM satır sayısını döndürür (satır sayısı, aşağıda
+// "bu gerçekten genel bir kural mı, yoksa birkaç hücrelik elle işaretleme mi" ayrımı için kullanılır).
+function parseRefColumns(ref){
+  const areas = String(ref).split(/[\s,]+/).map(parseSingleArea).filter(Boolean);
+  if (!areas.length) return null;
+  let colStart = areas[0].colStart, colEnd = areas[0].colEnd, totalRows = 0;
+  areas.forEach(a => {
+    if (colLetterToNum(a.colStart) < colLetterToNum(colStart)) colStart = a.colStart;
+    if (colLetterToNum(a.colEnd) > colLetterToNum(colEnd)) colEnd = a.colEnd;
+    totalRows += Math.max(0, a.rowEnd - a.rowStart + 1);
+  });
+  return { colStart, colEnd, totalRows };
 }
 function colLetterToNum(letter){
   let n = 0;
   for (const ch of letter) n = n * 26 + (ch.charCodeAt(0) - 64);
   return n - 1; // 0-index
+}
+// Excel'in metin karşılaştırma formüllerinde değer tırnak İÇİNDE saklanır (örn. formulae
+// = ["\"HT\""]) — bunu düz metne (HT) çevirir. Sayısal/diğer değerleri olduğu gibi bırakır.
+function unquoteFormulaValue(v){
+  const s = normalizeKey(v);
+  const m = s.match(/^"(.*)"$/);
+  return m ? m[1].replace(/""/g, '"') : s;
 }
 
 // Bir worksheet'in TÜM koşullu biçimlendirmesini bizim kural dizimize çevirir. header,
@@ -1111,13 +1136,31 @@ function importFormatFromSheet(ws, themeColors){
 function importCondFormattingFromSheet(ws, themeColors){
   const header = [];
   ws.getRow(1).eachCell({ includeEmpty: true }, (cell, c) => { header[c - 1] = normalizeKey(cell.value); });
+  const sheetDataRows = Math.max(1, (ws.rowCount || 1) - 1);
+  // Sadece VERİNİN ÖNEMLİ BİR KISMINA (en az %30'una, en az 5 satıra) uygulanan kuralları
+  // "genel/tekrar kullanılabilir kural" say — birkaç hücrelik elle işaretlenmiş istisnalar
+  // (örn. "bu kişinin bu günü elle düzeltildi" gibi anlık notlar) gürültü olarak elenir.
+  const MIN_ROWS = Math.max(5, sheetDataRows * 0.3);
+
   const imported = [];
   let oncelikSeq = 1;
   (ws.conditionalFormattings || []).forEach(cf => {
     const cols = parseRefColumns(cf.ref);
-    if (!cols) return;
+    if (!cols || cols.totalRows < MIN_ROWS) return;
     const startCol = colLetterToNum(cols.colStart);
     const endCol = colLetterToNum(cols.colEnd);
+
+    // Aralık, gün sütunlarıyla (1-31) diğer sütunları (kategori/özet) KARIŞIK içerebilir
+    // (senin gerçek dosyanda böyle oldu — F:BF tek bir aralıkta hem günleri hem kategorileri
+    // kapsıyordu). Gün kısmını AYIRIP TEK bir grup kuralına indirgiyoruz, geri kalanı
+    // (kaç sütun varsa) tek tek sütun kuralı olarak ekliyoruz.
+    const dayColsInRange = [], otherColsInRange = [];
+    for (let c = startCol; c <= endCol; c++){
+      const n = Number(header[c]);
+      const isDay = header[c] !== undefined && header[c] !== '' && header[c] !== null && Number.isInteger(n) && n >= 1 && n <= 31;
+      (isDay ? dayColsInRange : otherColsInRange).push(c);
+    }
+
     (cf.rules || []).forEach(rule => {
       const colorObj = (rule.style && rule.style.fill && (rule.style.fill.fgColor || rule.style.fill.bgColor)) || null;
       const renk = resolveColor(colorObj, themeColors) || '#ffff00';
@@ -1125,19 +1168,21 @@ function importCondFormattingFromSheet(ws, themeColors){
       // bilgisini KORUMUYOR — sadece ham SEARCH(...) formülünü bırakıyor. Bu yüzden hem orijinal
       // (yeni yazılmış) hem round-trip (dosyadan okunmuş) hallerini ayrı ayrı tanıyoruz.
       const searchMatch = !rule.type && (rule.formulae || [])[0] && String(rule.formulae[0]).match(/SEARCH\(\s*"([^"]*)"/i);
-      for (let c = startCol; c <= endCol; c++){
-        const metrik = header[c] || '';
-        if (!metrik) continue;
+
+      const pushRule = (metrik) => {
         if (rule.type === 'containsText' || searchMatch){
           const text = rule.type === 'containsText' ? (rule.text || '') : searchMatch[1];
           imported.push({ metrik, operator: 'İçerdiği Metin', deger1: text, deger2: '', renk, oncelik: rule.priority || oncelikSeq++ });
         } else if (rule.type === 'cellIs' || (!rule.type && rule.operator)){
           const op = COND_OP_MAP_REVERSE[rule.operator];
-          if (!op) continue;
+          if (!op) return;
           const f = rule.formulae || [];
-          imported.push({ metrik, operator: op, deger1: normalizeKey(f[0]), deger2: op === 'Aralık' ? normalizeKey(f[1]) : '', renk, oncelik: rule.priority || oncelikSeq++ });
+          imported.push({ metrik, operator: op, deger1: unquoteFormulaValue(f[0]), deger2: op === 'Aralık' ? unquoteFormulaValue(f[1]) : '', renk, oncelik: rule.priority || oncelikSeq++ });
         }
-      }
+      };
+
+      if (dayColsInRange.length) pushRule(GROUP_ALL_DAYS);
+      otherColsInRange.forEach(c => { const metrik = header[c] || ''; if (metrik) pushRule(metrik); });
     });
   });
   return imported;

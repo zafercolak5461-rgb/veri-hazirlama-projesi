@@ -585,6 +585,21 @@ function evaluateFormulaJs(formulaText, resolveToken){
 //   hesaplamalarConfig: bu projenin Hesaplamalar satırları
 //   ciktiRows: Çıktı Şablonu kaynağının ham 2B verisi
 // ============================================================================
+// "GÜNLER" satırının formülü içinde kullanılabilecek özel token'lar:
+// {GÜNHAM} = bu günün ham (henüz çevrilmemiş) kaynak değeri; {KaynakAdı.TABLO} = o kaynağın
+// TÜM verisi (başlık hariç), DÜŞEYARA'nın arama tablosu olarak kullanılabilir.
+function resolveGunlerToken(tok, hamDeger, kaynaklarData){
+  tok = tok.trim();
+  if (tok === 'GÜNHAM') return { value: hamDeger };
+  const m = tok.match(/^(.+)\.TABLO$/i);
+  if (m){
+    const kd = kaynaklarData[m[1].trim()];
+    if (kd) return { value: kd.rows };
+    return { __error: `#REFERANS! (${m[1].trim()} kaynağı bulunamadı)` };
+  }
+  return { __error: `#REFERANS! ({${tok}} — GÜNLER formülünde sadece {GÜNHAM} ve {Kaynak.TABLO} kullanılabilir)` };
+}
+
 function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, ciktiRows){
   const warnings = [];
   const ciktiCfg = kaynaklarConfig.find(k => k.rolu === 'Çıktı Şablonu');
@@ -613,9 +628,16 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
   }
   const dayColSet = new Set(dayCols.map(d => d.col));
 
-  // Aktif Hesaplamalar, Sütun Adı -> config eşlemesi.
+  // Aktif Hesaplamalar, Sütun Adı -> config eşlemesi. "GÜNLER" AYRILMIŞ (özel) bir isimdir:
+  // eğer sen Hesaplamalar'a Sütun Adı="GÜNLER" diye bir satır eklersen, o satırın FORMÜLÜ
+  // artık gün sütunlarının NASIL hesaplanacağını (DÜŞEYARA mantığının KENDİSİNİ) tanımlar —
+  // {GÜNHAM} (bu günün ham/çevrilmemiş değeri) ve {HerhangiBirKaynak.TABLO} (o kaynağın tüm
+  // tablosu, DÜŞEYARA'nın arama tablosu olarak) kullanabilirsin. Böyle bir satır YOKSA,
+  // eskiden olduğu gibi otomatik VLOOKUP+sözlük çevirisi uygulanır (geriye dönük uyum).
+  const GUNLER_REZERVE = 'GÜNLER';
   const activeHesaplamalar = hesaplamalarConfig.filter(h => h.aktif);
-  const hesaplamaByLabel = new Map(activeHesaplamalar.map(h => [h.sutunAdi, h]));
+  const gunlerHesaplama = activeHesaplamalar.find(h => h.sutunAdi === GUNLER_REZERVE);
+  const hesaplamaByLabel = new Map(activeHesaplamalar.filter(h => h.sutunAdi !== GUNLER_REZERVE).map(h => [h.sutunAdi, h]));
   const sabitler = new Map(activeHesaplamalar.filter(h => h.aktarimTuru === 'Sabit').map(h => [h.sutunAdi, coerceNumberIfNumeric(h.formul.trim())]));
 
   // Çıktı sütun planı: mevcut başlıklar (day / hesaplama / info) + Hesaplamalar'da olup
@@ -632,6 +654,7 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
   }
   let nextCol = ciktiHeader.length;
   activeHesaplamalar.forEach(h => {
+    if (h.sutunAdi === GUNLER_REZERVE) return; // "GÜNLER" bir çıktı sütunu değil, özel bir dönüşüm tanımıdır
     if (h.aktarimTuru === 'Sabit') return;
     if (seenLabels.has(h.sutunAdi)) return;
     columns.push({ col: nextCol++, label: h.sutunAdi, kind: 'hesaplama' });
@@ -650,13 +673,19 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
     // Info sütunlarını (Sıra No, ADI SOYADI...) doğrudan geçir.
     columns.forEach(c => { if (c.kind === 'info') byLabel[c.label] = coerceNumberIfNumeric(row[c.col]); });
 
-    // 1) Gün sütunlarını doldur (ham veri + sözlük çevirisi).
+    // 1) Gün sütunlarını doldur — "GÜNLER" satırı tanımlıysa SENİN yazdığın formülle,
+    // tanımlı değilse eski otomatik VLOOKUP+sözlük çevirisiyle.
     const gunlerListesi = [];
     dayCols.forEach(dc => {
       let converted = null;
-      if (rawRow){
-        const rc = rawDateCols.find(d => d.day === dc.day);
-        if (rc){ converted = coerceNumberIfNumeric(translateWithDict(rawRow[rc.col], dict)); }
+      const rc = rawDateCols.find(d => d.day === dc.day);
+      const hamDeger = (rawRow && rc) ? rawRow[rc.col] : undefined;
+      if (gunlerHesaplama){
+        const res = evaluateFormulaJs(gunlerHesaplama.formul, (tok) => resolveGunlerToken(tok, hamDeger, kaynaklarData));
+        if (res.error) warnings.push(`Gün ${dc.day} (Sicil ${sicil}): ${res.error}`);
+        else converted = coerceNumberIfNumeric(res.value);
+      } else if (rawRow){
+        if (rc) converted = coerceNumberIfNumeric(translateWithDict(hamDeger, dict));
         else warnings.push(`Gün ${dc.day}: "${rawCfg.kaynakAdi}" kaynağında karşılığı bulunamadı.`);
       }
       updates[dc.col] = converted;
@@ -1465,6 +1494,9 @@ function parseKaynakRow(r){
     proje: normalizeKey(r[0]), kaynakAdi: normalizeKey(r[1]), tip: normalizeKey(r[2]),
     sheetId: normalizeKey(r[3]), sekmeAdi: normalizeKey(r[4]), rolu: normalizeKey(r[5]),
     periyotDeseni: normalizeKey(r[6]),
+    // H sütunu: bu kaynağın periyot/gün sütunları Excel'e "Formüllü" (canlı DÜŞEYARA, varsayılan)
+    // mu yoksa "Değer" (hesaplanmış sabit sayı) mı yazılsın — sen Sheets'ten değiştirirsin.
+    aktarimTuru: normalizeKey(r[7]) || 'Formüllü',
   };
 }
 function parseHesaplamaRow(r){
@@ -1480,7 +1512,7 @@ async function loadConfigAndSidebar(){
   try {
     const [projRows, kaynakRows, hesRows] = await Promise.all([
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:C200`),
-      getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:G500`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:H500`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:E1000`),
     ]);
     projeler = projRows.map(parseProjeRow).filter(p => p.ad && p.sira !== null).sort((a, b) => a.sira - b.sira);
@@ -1846,6 +1878,38 @@ function buildDayExcelFormula(rawCfg, dictCfg, rawData, ciktiSicilCol, dc, excel
   return `IFERROR(VLOOKUP(${rawLookup},'${sanitizeSheetName(dictCfg.kaynakAdi)}'!$A:$B,2,FALSE),${rawLookup})`;
 }
 
+// "GÜNLER" satırında SENİN yazdığın formülü, gerçek Excel formülüne çevirir. {GÜNHAM} ->
+// o günün ham değerini VARDİYA'dan (ya da hangi kaynaksa) çeken bir VLOOKUP'a; {Kaynak.TABLO}
+// -> o kaynağın embed edilmiş sayfasındaki tüm veri aralığına dönüşür.
+function buildDayExcelFormulaCustom(gunlerFormul, rawCfg, kaynaklarData, ciktiSicilCol, dc, excelRowNum){
+  const rawData = kaynaklarData[rawCfg.kaynakAdi];
+  const rc = findDateCols(rawData.header).find(d => d.day === dc.day);
+  if (!rc) return null;
+  const maxCol = Math.max(rawData.sicilCol, rc.col);
+  const rangeStart = colNumToA1(rawData.sicilCol), rangeEnd = colNumToA1(maxCol);
+  const colIndexInRange = rc.col - rawData.sicilCol + 1;
+  const refSicilLetter = colNumToA1(ciktiSicilCol);
+  const hamRef = `VLOOKUP($${refSicilLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+
+  let unresolved = false;
+  const substituted = gunlerFormul.replace(/\{([^}]+)\}/g, (m, tokRaw) => {
+    const tok = tokRaw.trim();
+    if (tok === 'GÜNHAM') return hamRef;
+    const tm = tok.match(/^(.+)\.TABLO$/i);
+    if (tm){
+      const kd = kaynaklarData[tm[1].trim()];
+      if (kd){
+        const lastColLetter = colNumToA1(kd.header.length - 1);
+        return `'${sanitizeSheetName(tm[1].trim())}'!$A$2:$${lastColLetter}$${kd.rows.length + 1}`;
+      }
+    }
+    unresolved = true;
+    return m;
+  });
+  if (unresolved) return null;
+  return toOoxmlFormula(substituted);
+}
+
 // Excel sayfa adlarında \ / ? * [ ] : yasaktır, 31 karakteri geçemez.
 function sanitizeSheetName(name){
   return String(name || 'Sayfa').replace(/[\\/?*\[\]:]/g, '-').slice(0, 31) || 'Sayfa';
@@ -1863,7 +1927,8 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     const rawCfg = kaynaklar.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() !== '');
     const dictCfg = kaynaklar.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() === '');
     const hesaplamalar = hesaplamalarConfigAll.filter(h => h.proje === currentProject && h.aktif);
-    const hesaplamaByLabel = new Map(hesaplamalar.map(h => [h.sutunAdi, h]));
+    const gunlerHesaplama = hesaplamalar.find(h => h.sutunAdi === 'GÜNLER');
+    const hesaplamaByLabel = new Map(hesaplamalar.filter(h => h.sutunAdi !== 'GÜNLER').map(h => [h.sutunAdi, h]));
     const sabitler = new Map(hesaplamalar.filter(h => h.aktarimTuru === 'Sabit').map(h => [h.sutunAdi, coerceNumberIfNumeric(h.formul.trim())]));
 
     const wb = new ExcelJS.Workbook();
@@ -1897,7 +1962,14 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
         const cell = excelRow.getCell(c.col + 1);
         if (c.kind === 'day'){
           const dc = result.dayCols.find(d => d.col === c.col);
-          const formula = rawCfg ? buildDayExcelFormula(rawCfg, dictCfg, kaynaklarData[rawCfg.kaynakAdi], result.ciktiSicilCol, dc, excelRowNum) : null;
+          let formula = null;
+          if (gunlerHesaplama && rawCfg && gunlerHesaplama.aktarimTuru !== 'Değer'){
+            // "GÜNLER" satırı tanımlı ve Formüllü ise SENİN yazdığın formül Excel'e çevrilir.
+            formula = buildDayExcelFormulaCustom(gunlerHesaplama.formul, rawCfg, kaynaklarData, result.ciktiSicilCol, dc, excelRowNum);
+          } else if (!gunlerHesaplama && rawCfg && rawCfg.aktarimTuru !== 'Değer'){
+            // "GÜNLER" satırı tanımlı DEĞİLSE eski otomatik VLOOKUP+sözlük davranışı (geriye dönük uyum).
+            formula = buildDayExcelFormula(rawCfg, dictCfg, kaynaklarData[rawCfg.kaynakAdi], result.ciktiSicilCol, dc, excelRowNum);
+          }
           cell.value = formula ? { formula } : (r.updates[c.col] ?? null);
         } else if (c.kind === 'hesaplama'){
           const h = hesaplamaByLabel.get(c.label);

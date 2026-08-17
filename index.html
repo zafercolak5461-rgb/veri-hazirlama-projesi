@@ -6,6 +6,7 @@
 <title>Veri Hazırlama Projesi</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
     --bg:#10182B; --panel:#16213D; --panel2:#1C2944; --line:#2A3A5C;
@@ -82,8 +83,7 @@
       <div class="sub">ALO-144 Osmaniye</div>
     </div>
     <div class="nav" id="navList">
-      <div class="nav-item active" data-page="vardiya"><span class="nav-icon">📅</span> Vardiya / Puantaj</div>
-      <div class="nav-item disabled" title="Yakında"><span class="nav-icon">➕</span> (yeni alan — yakında)</div>
+      <div class="empty" style="padding:20px 12px;">Projeler yükleniyor…</div>
     </div>
     <div class="sidebar-footer" id="sidebarFooter">Oturum açılmadı</div>
   </div>
@@ -97,29 +97,34 @@
       <div id="signinStatus" class="status"></div>
     </div>
 
-    <!-- ===== Vardiya / Puantaj sayfası ===== -->
-    <div id="page-vardiya" style="display:none;">
-      <div class="page-title">Vardiya / Puantaj</div>
-      <div class="page-sub">
-        VARDİYA sayfasındaki ham vardiya verisini (saat aralığı / durum metni), Parametre sözlüğüyle standart koda çevirir,
-        Sicil'e göre Puantaj Referans şablonuna işler ve kategori (R, Yİ, HT...) sayımlarını hesaplar.
-        Hiçbir şey Sheets'e yazılmadan önce burada <b>önizlersin</b>, onaylarsan yazılır.
+    <!-- ===== Jenerik Proje sayfası — sol menüden seçilen HERHANGİ bir proje için aynı şablon
+         kullanılır, hiçbir proje-özel HTML/JS yok. Ne yapacağı tamamen "Kaynaklar" ve
+         "Hesaplamalar" sekmelerinden okunur. ===== -->
+    <div id="page-project" style="display:none;">
+      <div class="page-title" id="projectTitle">Proje</div>
+      <div class="page-sub" id="projectSub">
+        "Kaynaklar" sekmesindeki ham veriyi, "Hesaplamalar" sekmesindeki formüllerle işler, "Çıktı Şablonu"
+        rolündeki tabloya Sicil'e göre yazar. Hiçbir şey Sheets'e yazılmadan önce burada <b>önizlersin</b>.
+      </div>
+
+      <div class="card" id="kaynakSecimCard" style="display:none;">
+        <h2>1. Kaynak Sekmelerini Seç</h2>
+        <div class="hint">Bu projenin bazı kaynakları için hangi sekmenin kullanılacağı her seferinde seçilir (örn. hangi ay).</div>
+        <div class="row" id="kaynakSecimRow"></div>
       </div>
 
       <div class="card">
-        <h2>1. Ay Seç ve Hesapla</h2>
-        <div class="hint">VARDİYA sayfasındaki (Sheet ID: <code>1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ</code>) hangi AY-YIL sekmesi işlenecek?</div>
+        <h2>2. Hesapla</h2>
         <div class="row">
-          <select id="ayYilSelect"><option value="">Sekmeler yükleniyor…</option></select>
-          <button class="btn" id="refreshTabsBtn">↻ Sekmeleri Yenile</button>
           <button class="btn primary" id="computeBtn">▶ Hesapla (Önizle)</button>
+          <button class="btn" id="refreshConfigBtn">↻ Proje Ayarlarını Yenile</button>
         </div>
         <div id="computeStatus" class="status"></div>
       </div>
 
       <div class="card" id="previewCard" style="display:none;">
-        <h2>2. Önizleme</h2>
-        <div class="hint">Turuncu vurgulu hücreler değişen/yeni yazılacak değerler. Kırmızı hücreler uyarı içerir (fareyle üzerine gelince açıklama görünür).</div>
+        <h2>3. Önizleme</h2>
+        <div class="hint">Turuncu vurgulu hücreler hesaplanan değerler. Kırmızı hücreler uyarı içerir (fareyle üzerine gelince açıklama görünür).</div>
         <div id="warningsBox" class="status warn"></div>
         <div class="prev-wrap"><table class="prev" id="prevTable"></table></div>
         <div class="row" style="margin-top:14px;">
@@ -129,12 +134,13 @@
       </div>
 
       <div class="card" id="outputCard" style="display:none;">
-        <h2>3. Biçimlendirme, Şablon ve Excel'e Aktar</h2>
-        <div class="hint">Aşağıdaki biçimlendirme, "Excel'e Aktar" ile üretilecek .xlsx dosyasına uygulanır. Sheets'e yazma bundan ETKİLENMEZ (Sheets kendi biçimini korur).</div>
+        <h2>4. Biçimlendirme, Şablon ve Excel'e Aktar</h2>
+        <div class="hint">Aşağıdaki biçimlendirme, "Excel'e Aktar" ile üretilecek .xlsx dosyasına uygulanır. Sheets'e yazma bundan ETKİLENMEZ (Sheets kendi biçimini korur). Şablonlar TÜM projeler arasında paylaşılan ortak bir havuzdan gelir.</div>
 
         <div class="row" style="margin-bottom:14px;">
           <select id="templateSelect"><option value="">Şablon seç…</option></select>
           <button class="btn" id="loadTemplateSheetBtn">📂 Yükle</button>
+          <button class="btn danger" id="deleteTemplateSheetBtn">🗑 Seçili Şablonu Sil</button>
           <input type="text" id="templateNameInput" placeholder="Yeni şablon adı">
           <button class="btn" id="saveTemplateSheetBtn">💾 Bu Ayarlarla Kaydet</button>
           <button class="btn" id="refreshTemplatesBtn">↻ Şablonları Yenile</button>
@@ -145,6 +151,13 @@
 
         <h2 style="margin-top:22px;">Koşullu Biçimlendirme</h2>
         <div class="hint">Belirli bir sütundaki DEĞERE göre hücreyi renklendirir (örn. "HT" hücrelerini gri, 8'den büyük hücreleri sarı yap). Excel'in kendi native koşullu biçimlendirmesi olarak yazılır — Excel'de açtığında Ana Sayfa → Koşullu Biçimlendirme'den görüp düzenleyebilirsin.</div>
+
+        <div class="row" style="margin-bottom:10px;">
+          <label class="btn" style="cursor:pointer;">📂 Excel'den Biçim + Koşullu Biçimlendirme İçe Aktar<input type="file" id="condImportFile" accept=".xlsx,.xls" style="display:none;"></label>
+          <span id="condImportStatus" class="status" style="margin:0;"></span>
+        </div>
+        <div class="hint">Zaten biçimlendirilmiş bir Excel dosyası (örn. eski puantajın) yükle — başlık/veri satırının GÖRÜNÜMÜNÜ (kalınlık, renk, hizalama, kenarlık) ve içindeki TÜM koşullu biçimlendirme kurallarını otomatik olarak aşağıdaki iki tabloya doldurur. Sadece formüllerle uğraşman kalır. Sonra "Bu Ayarlarla Kaydet" ile şablon yapabilirsin.</div>
+
         <table class="prev" id="condFormatTable" style="margin-top:10px;"></table>
         <button class="btn" id="addCondRuleBtn" style="margin-top:10px;">+ Kural Ekle</button>
 
@@ -166,14 +179,13 @@ const CLIENT_ID = '334728137950-afbqqtqobh5us03roshseevqh43a4853.apps.googleuser
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 const FIXED_SUPER_ADMIN_EMAIL = 'zafercolak5461@gmail.com';
 
-const VARDIYA_SHEET_ID = '1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ';
-const PUANTAJ_SHEET_ID = '1YvcmSZZlyplOGvcQgiOponjszkZJGdnbxVCmYfQxiCA';
-const PUANTAJ_REFERANS_TAB = 'Sayfa1';
-const PARAMETRE_TAB = 'Sayfa2';
-
-// Puantaj Referans'taki bu kategori sütunları basit EĞERSAY ile DOLDURULMAZ — ayrı bir
-// hesap mantığı gerektirir (yol/yemek ücreti gibi). Şimdilik atlanır, boş bırakılır.
-const SKIP_CATEGORY_CODES = new Set(['YOL GÜN SAYISI', 'YOL ÜCRETİ', 'YEMEK GÜN SAYISI', 'YEMEK ÜCRETİ']);
+// "Proje Yönetimi" sekmeleri (Projeler/Kaynaklar/Hesaplamalar/Sablonlar) hep bu TEK Sheet'te
+// tutulur — sen bunu istediğin Sheet'e ekleyebilirsin, sadece ID'yi burada güncellemen yeter.
+const CONFIG_SHEET_ID = '1YvcmSZZlyplOGvcQgiOponjszkZJGdnbxVCmYfQxiCA';
+const TAB_PROJELER = 'Projeler';
+const TAB_KAYNAKLAR = 'Kaynaklar';
+const TAB_HESAPLAMALAR = 'Hesaplamalar';
+const TAB_SABLONLAR = 'Sablonlar';
 
 // ============================================================================
 // ===== HESAPLAMA MOTORU (saf JS — ağ bağlantısı yok, tamamen test edilebilir) =====
@@ -185,123 +197,10 @@ function normalizeKey(v){
   if (typeof v === 'number') return String(v);
   return String(v).trim();
 }
+// Türkçe büyük/küçük harf dönüşümünü doğru yapan karşılaştırma (İ/I/ı/i farkı gözetir) —
+// özellikle "Sicil"/"SİCİL" gibi anahtar sütun adlarını eşleştirirken şart.
+function trUpper(v){ return normalizeKey(v).toLocaleUpperCase('tr-TR'); }
 
-// Parametre sekmesi (Eski Değer | Yeni Değer) satırlarından bir arama haritası kurar.
-// Aynı anahtar birden fazla kez geçerse İLK görüleni kullanır (Sheets'teki sıraya sadık kalır).
-function buildParamMap(paramRows){
-  const map = new Map();
-  for (const row of paramRows){
-    const key = normalizeKey(row[0]);
-    if (key === '') continue;
-    if (!map.has(key)) map.set(key, row[1]);
-  }
-  return map;
-}
-
-// Bir ham vardiya hücresini sözlükte arar; bulursa çevirir, BULAMAZSA OLDUĞU GİBİ BIRAKIR.
-// (Bu, orijinal VBA makronun "dict.Exists(val)" mantığının birebir karşılığıdır — örn. "HT"
-// zaten sözlükte bir anahtar değil, hedefin kendisi, o yüzden dokunulmaz.)
-function convertCellValue(raw, paramMap){
-  if (raw === undefined || raw === null || raw === '') return raw;
-  const key = normalizeKey(raw);
-  return paramMap.has(key) ? paramMap.get(key) : raw;
-}
-
-// VARDİYA sekmesini Sicil'e göre indeksler. Başlık satırında "GG.AA.YYYY" formatında
-// görünen her sütunu bir "gün" sütunu olarak tanır.
-function indexVardiya(vardiyaRows){
-  if (!vardiyaRows.length) throw new Error('VARDİYA sekmesi boş görünüyor.');
-  const header = vardiyaRows[0];
-  const sicilCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'SİCİL' || normalizeKey(h).toUpperCase() === 'SICIL');
-  if (sicilCol === -1) throw new Error('VARDİYA sekmesinde "Sicil" başlığı bulunamadı.');
-  const dayCols = [];
-  for (let c = 0; c < header.length; c++){
-    const h = normalizeKey(header[c]);
-    const m = h.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-    if (m) dayCols.push({ col: c, day: parseInt(m[1], 10), label: h });
-  }
-  if (!dayCols.length) throw new Error('VARDİYA sekmesinde "GG.AA.YYYY" formatında gün başlığı bulunamadı.');
-  const bySicil = new Map();
-  for (let r = 1; r < vardiyaRows.length; r++){
-    const row = vardiyaRows[r];
-    const sicil = normalizeKey(row[sicilCol]);
-    if (sicil === '') continue;
-    bySicil.set(sicil, row);
-  }
-  return { header, sicilCol, dayCols, bySicil };
-}
-
-// Puantaj Referans sekmesini indeksler: Sicil sütununu, 1-31 arası gün-numarası
-// sütunlarını, ve geri kalan (kategori kodu) sütunlarını ayırt eder.
-function indexPuantajReferans(refRows){
-  if (!refRows.length) throw new Error('Puantaj Referans sekmesi boş görünüyor.');
-  const header = refRows[0];
-  const sicilCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'SİCİL' || normalizeKey(h).toUpperCase() === 'SICIL');
-  if (sicilCol === -1) throw new Error('Puantaj Referans sekmesinde "SİCİL" başlığı bulunamadı.');
-  const adiSoyadiCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'ADI SOYADI');
-  const unvanCol = header.findIndex(h => normalizeKey(h).toUpperCase() === 'UNVAN');
-  const dayNumCols = [];
-  const categoryCols = [];
-  for (let c = sicilCol + 1; c < header.length; c++){
-    const raw = header[c];
-    const n = Number(raw);
-    if (raw !== '' && raw !== null && raw !== undefined && Number.isInteger(n) && n >= 1 && n <= 31){
-      dayNumCols.push({ col: c, day: n });
-    } else if (normalizeKey(raw) !== '' && dayNumCols.length > 0){
-      // Gün-numarası bloğu (1-31) başlamadan önce gelen metin başlıkları (UNVAN gibi)
-      // kategori sütunu SAYILMAZ — sadece gün bloğundan SONRAKİ metin başlıkları
-      // (R, Yİ, HT...) gerçek kategori kodlarıdır.
-      categoryCols.push({ col: c, code: normalizeKey(raw) });
-    }
-  }
-  return { header, sicilCol, adiSoyadiCol, unvanCol, dayNumCols, categoryCols, dataRows: refRows.slice(1) };
-}
-
-// Ana hesaplama: VARDİYA + Parametre + Puantaj Referans -> her satır için { col: yeniDeğer }
-// güncellemeleri ve uyarı listesi üretir. AĞA HİÇ ÇIKMAZ, sadece bellekteki diziler üzerinde çalışır.
-function computePuantaj(vardiyaRows, paramRows, refRows){
-  const paramMap = buildParamMap(paramRows.slice(1));
-  const vIdx = indexVardiya(vardiyaRows);
-  const rIdx = indexPuantajReferans(refRows);
-
-  const results = [];
-  const warnings = [];
-
-  rIdx.dataRows.forEach((row, i) => {
-    const sicil = normalizeKey(row[rIdx.sicilCol]);
-    if (sicil === '') return;
-    const vRow = vIdx.bySicil.get(sicil);
-    const updates = {};
-    const convertedByDay = {};
-
-    if (!vRow){
-      warnings.push(`Sicil ${sicil} (satır ${i + 2}): VARDİYA sayfasında bulunamadı, günler boş bırakıldı.`);
-    } else {
-      rIdx.dayNumCols.forEach(dc => {
-        const vDay = vIdx.dayCols.find(d => d.day === dc.day);
-        if (!vDay){
-          warnings.push(`Gün ${dc.day}: VARDİYA sayfasında karşılığı bulunamadı.`);
-          return;
-        }
-        const converted = convertCellValue(vRow[vDay.col], paramMap);
-        updates[dc.col] = converted;
-        convertedByDay[dc.day] = converted;
-      });
-    }
-
-    rIdx.categoryCols.forEach(cc => {
-      if (SKIP_CATEGORY_CODES.has(cc.code)) return;
-      const count = Object.values(convertedByDay).filter(v => normalizeKey(v).toUpperCase() === cc.code.toUpperCase()).length;
-      updates[cc.col] = count;
-    });
-
-    results.push({ rowIndex: i, sicil, updates });
-  });
-
-  return { rIdx, results, warnings };
-}
-
-// Sütun numarasını (0-index) A1 harf gösterimine çevirir (Sheets API range yazımı için).
 function colNumToA1(n){
   let s = '';
   n = n + 1;
@@ -313,16 +212,503 @@ function colNumToA1(n){
   return s;
 }
 
-// computePuantaj sonucunu, Sheets API values:batchUpdate'in beklediği
-// { range, values } listesine çevirir. Her güncellenen HÜCRE tek hücrelik bir range olur —
-// basit ve hataya en dayanıklı yöntem (satır bazlı toplu range yerine).
+// ============================================================================
+// ===== JENERİK HESAPLAMA MOTORU =====
+// Hiçbir iş kuralı (Vardiya, puantaj, ne olursa) burada SABİT DEĞİL — her şey
+// "Kaynaklar" ve "Hesaplamalar" sekmelerinden okunur. Aynı motor, sol menüdeki
+// HANGİ proje seçilirse seçilsin aynen çalışır.
+// ============================================================================
+
+// "GG.AA.YYYY" gibi bir tarih deseni mi?
+function isDatePeriyot(desen){ return /^GG\.AA\.YYYY$/i.test(String(desen || '').trim()); }
+// "1-31" gibi bir sayı aralığı deseni mi? -> {lo,hi} ya da null
+function parseNumRangePeriyot(desen){
+  const m = String(desen || '').trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  return m ? { lo: parseInt(m[1], 10), hi: parseInt(m[2], 10) } : null;
+}
+
+// Bir kaynağın (ham 2B dizi) başlık satırından Sicil sütununu bulur.
+function findSicilCol(header){
+  return header.findIndex(h => { const u = trUpper(h); return u === 'SİCİL' || u === 'SICIL'; });
+}
+
+// Bir kaynağı { header, sicilCol, bySicil, rows } şeklinde indeksler — Sicil'e göre
+// hızlı satır erişimi için.
+function indexKaynak(rows){
+  const header = rows[0] || [];
+  const sicilCol = findSicilCol(header);
+  const bySicil = new Map();
+  for (let r = 1; r < rows.length; r++){
+    const row = rows[r];
+    if (sicilCol === -1) continue;
+    const sicil = normalizeKey(row[sicilCol]);
+    if (sicil === '') continue;
+    if (!bySicil.has(sicil)) bySicil.set(sicil, row);
+  }
+  return { header, sicilCol, bySicil, rows: rows.slice(1) };
+}
+
+// Bu kaynağın periyot deseni "GG.AA.YYYY" ise, tarih başlıklı sütunları { col, day } olarak bulur.
+function findDateCols(header){
+  const cols = [];
+  for (let c = 0; c < header.length; c++){
+    const m = normalizeKey(header[c]).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) cols.push({ col: c, day: parseInt(m[1], 10) });
+  }
+  return cols;
+}
+
+// Bir Kaynaklar konfigürasyonu (proje bazlı) içinden rolüne göre kaynak bulur.
+function pickKaynakConfig(kaynaklar, rolu, needsPeriyot){
+  return kaynaklar.find(k => k.rolu === rolu && (needsPeriyot ? !!k.periyotDeseni.trim() : true));
+}
+
+// Ham -> standart kod sözlüğü (Eski Değer | Yeni Değer, ilk sütun anahtar). Bulamazsa
+// OLDUĞU GİBİ bırakır — orijinal VBA makro mantığının birebir karşılığı.
+function buildDict(dictDataRows){
+  // dictDataRows, indexKaynak()'ın döndürdüğü .rows'dur ve BAŞLIK SATIRI ZATEN ÇIKARILMIŞTIR
+  // — burada tekrar 1'den başlarsak ilk gerçek satırı (örn. "08:00-18:00"->8.5) kaçırırız.
+  const map = new Map();
+  for (let r = 0; r < dictDataRows.length; r++){
+    const row = dictDataRows[r];
+    const key = normalizeKey(row[0]);
+    if (key === '' || map.has(key)) continue;
+    map.set(key, row[1]);
+  }
+  return map;
+}
+function translateWithDict(raw, dict){
+  if (raw === undefined || raw === null || raw === '') return raw;
+  const key = normalizeKey(raw);
+  return dict.has(key) ? dict.get(key) : raw;
+}
+
+// ---- Sabit sayı gibi görünen metinleri gerçek sayıya çevirir (Excel'de "tekrar sayıya
+// dönüştürmen gerekmesin" diye) — hem Sheets'ten okunanlar hem hesaplanan değerler için.
+function coerceNumberIfNumeric(v){
+  if (typeof v === 'number') return v;
+  if (v == null || v === '') return v;
+  const s = String(v).trim().replace(',', '.');
+  if (/^-?\d+(\.\d+)?$/.test(s)){
+    const n = parseFloat(s);
+    if (!isNaN(n)) return n;
+  }
+  return v;
+}
+
+// ============================================================================
+// Formül motoru: {GÜNLER} ve {SütunAdı} token'larını destekleyen, TOPLA/ÇARPIM/
+// DÜŞEYARA/EĞERSAY/BAĞ_DEĞ_SAY/BAĞ_DEĞ_DOLU_SAY/ÇAPRAZARA/ORTALAMA/EĞER/ÇOKEĞERSAY/
+// ÇOKEĞERORTALAMA/EĞERHATA/EĞERYOKSA destekleyen küçük bir yorumlayıcı.
+// ============================================================================
+
+function calcTokenize(text){
+  const tokens = [];
+  let i = 0;
+  while (i < text.length){
+    const c = text[i];
+    if (/\s/.test(c)){ i++; continue; }
+    if (c === '"'){
+      let j = i + 1, s = '';
+      while (j < text.length){
+        if (text[j] === '"'){ if (text[j + 1] === '"'){ s += '"'; j += 2; continue; } j++; break; }
+        s += text[j]; j++;
+      }
+      tokens.push({ type: 'STRING', value: s }); i = j; continue;
+    }
+    if (/[0-9]/.test(c)){
+      let j = i;
+      while (j < text.length && /[0-9.]/.test(text[j])) j++;
+      tokens.push({ type: 'NUMBER', value: parseFloat(text.slice(i, j)) }); i = j; continue;
+    }
+    if (/[\p{L}_]/u.test(c)){
+      let j = i;
+      while (j < text.length && /[\p{L}_0-9]/u.test(text[j])) j++;
+      tokens.push({ type: 'IDENT', value: text.slice(i, j) }); i = j; continue;
+    }
+    if (c === '<' && text[i + 1] === '>'){ tokens.push({ type: 'OP', value: '<>' }); i += 2; continue; }
+    if (c === '<' && text[i + 1] === '='){ tokens.push({ type: 'OP', value: '<=' }); i += 2; continue; }
+    if (c === '>' && text[i + 1] === '='){ tokens.push({ type: 'OP', value: '>=' }); i += 2; continue; }
+    if ('+-*/^&=<>();%'.includes(c)){ tokens.push({ type: 'OP', value: c }); i++; continue; }
+    throw new Error('#AD? (beklenmeyen karakter: ' + c + ')');
+  }
+  tokens.push({ type: 'EOF' });
+  return tokens;
+}
+function calcToNumber(v){
+  if (v && typeof v === 'object' && v.__err) throw new Error(v.__err);
+  if (typeof v === 'number') return v;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (v == null) return 0;
+  const n = parseFloat(String(v).replace(',', '.'));
+  if (isNaN(n)) throw new Error('#DEĞER!');
+  return n;
+}
+function calcToBool(v){
+  if (v && typeof v === 'object' && v.__err) throw new Error(v.__err);
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') return ['DOĞRU', 'TRUE'].includes(v.toUpperCase());
+  return !!v;
+}
+function calcToDisplay(v){
+  if (v && typeof v === 'object' && v.__err) throw new Error(v.__err);
+  if (v == null) return '';
+  if (typeof v === 'boolean') return v ? 'DOĞRU' : 'YANLIŞ';
+  if (typeof v === 'number') return String(Math.round(v * 1e6) / 1e6);
+  return String(v);
+}
+function calcFlatten(v){
+  if (Array.isArray(v)) return v.reduce((acc, x) => acc.concat(calcFlatten(x)), []);
+  return [v];
+}
+function calcValuesEqual(a, b){
+  const an = (typeof a === 'number') ? a : (a != null && a !== '' && !isNaN(parseFloat(String(a).replace(',', '.'))) ? parseFloat(String(a).replace(',', '.')) : null);
+  const bn = (typeof b === 'number') ? b : (b != null && b !== '' && !isNaN(parseFloat(String(b).replace(',', '.'))) ? parseFloat(String(b).replace(',', '.')) : null);
+  if (an != null && bn != null) return an === bn;
+  return trUpper(a) === trUpper(b);
+}
+function calcCriterionMatcher(crit){
+  if (crit && typeof crit === 'object' && crit.__err) throw new Error(crit.__err);
+  if (typeof crit === 'number') return (v) => calcValuesEqual(v, crit);
+  const s = String(crit == null ? '' : crit).trim();
+  const m = s.match(/^(<>|>=|<=|>|<|=)(.*)$/);
+  if (m){
+    const op = m[1], rhs = m[2].trim();
+    const rhsNum = parseFloat(rhs.replace(',', '.'));
+    const isNum = rhs !== '' && !isNaN(rhsNum);
+    return (v) => {
+      if (v && typeof v === 'object' && v.__err) return false;
+      if (isNum){
+        const vn = (typeof v === 'number') ? v : parseFloat(String(v == null ? '' : v).replace(',', '.'));
+        if (isNaN(vn)) return op === '<>';
+        switch (op){ case '>': return vn > rhsNum; case '<': return vn < rhsNum; case '>=': return vn >= rhsNum; case '<=': return vn <= rhsNum; case '=': return vn === rhsNum; case '<>': return vn !== rhsNum; }
+      }
+      const vs = trUpper(v), rs = trUpper(rhs);
+      if (op === '=') return vs === rs;
+      if (op === '<>') return vs !== rs;
+      return false;
+    };
+  }
+  return (v) => calcValuesEqual(v, crit);
+}
+
+const CALC_FUNCTIONS = {
+  SUM: (args) => { const all = []; args.forEach(a => all.push(...calcFlatten(a))); return all.reduce((s, v) => (v == null || v === '') ? s : s + calcToNumber(v), 0); },
+  PRODUCT: (args) => { const all = []; args.forEach(a => all.push(...calcFlatten(a))); const nums = all.filter(v => v != null && v !== '').map(calcToNumber); return nums.length ? nums.reduce((p, v) => p * v, 1) : 0; },
+  COUNTA: (args) => { const all = []; args.forEach(a => all.push(...calcFlatten(a))); return all.filter(v => v != null && v !== '').length; },
+  COUNT: (args) => { const all = []; args.forEach(a => all.push(...calcFlatten(a))); return all.filter(v => typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !isNaN(parseFloat(v.replace(',', '.'))))).length; },
+  AVERAGE: (args) => { const all = []; args.forEach(a => all.push(...calcFlatten(a))); const nums = all.filter(v => v != null && v !== '').map(calcToNumber); if (!nums.length) throw new Error('#SAYI/0!'); return nums.reduce((s, v) => s + v, 0) / nums.length; },
+  IF: (args) => calcToBool(args[0]) ? (args.length > 1 ? args[1] : true) : (args.length > 2 ? args[2] : false),
+  COUNTIF: (args) => { const range = calcFlatten(args[0]); const m = calcCriterionMatcher(args[1]); return range.filter(m).length; },
+  COUNTIFS: (args) => {
+    const pairs = []; for (let i = 0; i < args.length; i += 2) pairs.push([calcFlatten(args[i]), calcCriterionMatcher(args[i + 1])]);
+    const n = pairs[0] ? pairs[0][0].length : 0; let count = 0;
+    for (let idx = 0; idx < n; idx++) if (pairs.every(([arr, m]) => m(arr[idx]))) count++;
+    return count;
+  },
+  AVERAGEIFS: (args) => {
+    const avgArr = calcFlatten(args[0]);
+    const pairs = []; for (let i = 1; i < args.length; i += 2) pairs.push([calcFlatten(args[i]), calcCriterionMatcher(args[i + 1])]);
+    let sum = 0, count = 0;
+    for (let idx = 0; idx < avgArr.length; idx++){
+      if (pairs.every(([arr, m]) => m(arr[idx]))){ const v = avgArr[idx]; if (v == null || v === '') continue; sum += calcToNumber(v); count++; }
+    }
+    if (!count) throw new Error('#SAYI/0!');
+    return sum / count;
+  },
+  VLOOKUP: (args) => {
+    const lookupVal = args[0], table = args[1], colIndex = Math.trunc(calcToNumber(args[2]));
+    const approx = args.length > 3 ? calcToBool(args[3]) : true;
+    if (!Array.isArray(table) || !table.length) throw new Error('#BAŞV!');
+    if (colIndex < 1 || colIndex > table[0].length) throw new Error('#BAŞV!');
+    if (!approx){ for (const row of table) if (calcValuesEqual(row[0], lookupVal)) return row[colIndex - 1]; throw new Error('#YOK'); }
+    let best = null;
+    for (const row of table){ const rn = calcToNumber(row[0]); if (rn <= calcToNumber(lookupVal) && (best === null || rn > calcToNumber(best[0]))) best = row; }
+    if (!best) throw new Error('#YOK');
+    return best[colIndex - 1];
+  },
+  XLOOKUP: (args) => {
+    const lookupVal = args[0], lookupArr = calcFlatten(args[1]), returnArr = calcFlatten(args[2]);
+    for (let i = 0; i < lookupArr.length; i++) if (calcValuesEqual(lookupArr[i], lookupVal)) return returnArr[i];
+    if (args.length > 3) return args[3];
+    throw new Error('#YOK');
+  },
+  IFERROR: (args) => (args[0] && typeof args[0] === 'object' && args[0].__err) ? args[1] : args[0],
+  IFNA: (args) => (args[0] && typeof args[0] === 'object' && args[0].__err) ? (args[0].__err === '#YOK' ? args[1] : (() => { throw new Error(args[0].__err); })()) : args[0],
+};
+const CALC_FUNC_NAME_MAP = {
+  TOPLA: 'SUM', ÇARPIM: 'PRODUCT', DÜŞEYARA: 'VLOOKUP', EĞERSAY: 'COUNTIF',
+  BAĞ_DEĞ_DOLU_SAY: 'COUNTA', BAĞ_DEĞ_SAY: 'COUNT', ÇAPRAZARA: 'XLOOKUP', ORTALAMA: 'AVERAGE', EĞER: 'IF',
+  ÇOKEĞERSAY: 'COUNTIFS', ÇOKEĞERORTALAMA: 'AVERAGEIFS', EĞERHATA: 'IFERROR', EĞERYOKSA: 'IFNA',
+};
+// XLSX dosya formatı formülleri HER ZAMAN İngilizce fonksiyon adı + virgül ayracıyla saklar
+// (Excel'in arayüz dili ne olursa olsun) — bu yüzden Türkçe yazılan formülü Excel'e yazmadan
+// önce burada çeviriyoruz. Tırnak içindeki metinlere dokunmaz.
+const TR_BOOL_TO_EN = { 'DOĞRU': 'TRUE', 'YANLIŞ': 'FALSE' };
+function toOoxmlFormula(text){
+  let out = '', inStr = false, i = 0;
+  while (i < text.length){
+    const c = text[i];
+    if (inStr){
+      out += c;
+      if (c === '"'){ if (text[i + 1] === '"'){ out += '"'; i += 2; continue; } inStr = false; }
+      i++; continue;
+    }
+    if (c === '"'){ inStr = true; out += c; i++; continue; }
+    if (c === ';'){ out += ','; i++; continue; }
+    if (/[\p{L}_]/u.test(c)){
+      let j = i;
+      while (j < text.length && /[\p{L}_0-9]/u.test(text[j])) j++;
+      const word = text.slice(i, j), upper = word.toUpperCase();
+      if (CALC_FUNC_NAME_MAP[upper]){
+        let k = j; while (k < text.length && /\s/.test(text[k])) k++;
+        out += (text[k] === '(') ? CALC_FUNC_NAME_MAP[upper] : word;
+      } else if (TR_BOOL_TO_EN[upper]) out += TR_BOOL_TO_EN[upper];
+      else out += word;
+      i = j; continue;
+    }
+    out += c; i++;
+  }
+  return out;
+}
+
+class CalcParser {
+  constructor(tokens, placeholders){ this.tokens = tokens; this.pos = 0; this.placeholders = placeholders; }
+  peek(){ return this.tokens[this.pos]; }
+  next(){ return this.tokens[this.pos++]; }
+  isOp(v){ const t = this.peek(); return t.type === 'OP' && t.value === v; }
+  expectOp(v){ if (!this.isOp(v)) throw new Error('#AD? (beklenen: ' + v + ')'); this.next(); }
+  parseExpression(){ return this.parseComparison(); }
+  parseComparison(){
+    let left = this.parseConcat();
+    while (['=', '<>', '>', '<', '>=', '<='].some(op => this.isOp(op))){
+      const op = this.next().value; const right = this.parseConcat();
+      const err = [left, right].find(v => v && typeof v === 'object' && v.__err);
+      if (err){ left = err; continue; }
+      const an = (typeof left === 'number') ? left : parseFloat(String(left ?? '').replace(',', '.'));
+      const bn = (typeof right === 'number') ? right : parseFloat(String(right ?? '').replace(',', '.'));
+      const numeric = !isNaN(an) && !isNaN(bn) && left !== '' && right !== '';
+      switch (op){
+        case '=': left = numeric ? an === bn : calcValuesEqual(left, right); break;
+        case '<>': left = numeric ? an !== bn : !calcValuesEqual(left, right); break;
+        case '>': left = numeric ? an > bn : String(left) > String(right); break;
+        case '<': left = numeric ? an < bn : String(left) < String(right); break;
+        case '>=': left = numeric ? an >= bn : String(left) >= String(right); break;
+        case '<=': left = numeric ? an <= bn : String(left) <= String(right); break;
+      }
+    }
+    return left;
+  }
+  parseConcat(){
+    let left = this.parseAdditive();
+    while (this.isOp('&')){ this.next(); const right = this.parseAdditive(); left = calcToDisplay(left) + calcToDisplay(right); }
+    return left;
+  }
+  parseAdditive(){
+    let left = this.parseMultiplicative();
+    while (this.isOp('+') || this.isOp('-')){ const op = this.next().value; const right = this.parseMultiplicative(); left = op === '+' ? calcToNumber(left) + calcToNumber(right) : calcToNumber(left) - calcToNumber(right); }
+    return left;
+  }
+  parseMultiplicative(){
+    let left = this.parseUnary();
+    while (this.isOp('*') || this.isOp('/')){ const op = this.next().value; const right = this.parseUnary(); if (op === '/'){ const rn = calcToNumber(right); if (rn === 0) throw new Error('#SAYI/0!'); left = calcToNumber(left) / rn; } else left = calcToNumber(left) * calcToNumber(right); }
+    return left;
+  }
+  parseUnary(){
+    if (this.isOp('-')){ this.next(); return -calcToNumber(this.parseUnary()); }
+    if (this.isOp('+')){ this.next(); return calcToNumber(this.parseUnary()); }
+    return this.parsePower();
+  }
+  parsePower(){
+    let base = this.parsePercent();
+    if (this.isOp('^')){ this.next(); const exp = this.parseUnary(); base = Math.pow(calcToNumber(base), calcToNumber(exp)); }
+    return base;
+  }
+  parsePercent(){ let v = this.parsePrimary(); while (this.isOp('%')){ this.next(); v = calcToNumber(v) / 100; } return v; }
+  parsePrimary(){
+    const t = this.peek();
+    if (t.type === 'NUMBER'){ this.next(); return t.value; }
+    if (t.type === 'STRING'){ this.next(); return t.value; }
+    if (this.isOp('(')){ this.next(); const v = this.parseExpression(); this.expectOp(')'); return v; }
+    if (t.type === 'IDENT'){
+      const name = t.value; const upper = name.toUpperCase(); this.next();
+      if (this.isOp('(')){
+        this.next();
+        const args = [];
+        if (!this.isOp(')')){ args.push(this.parseArgSafe()); while (this.isOp(';')){ this.next(); args.push(this.parseArgSafe()); } }
+        this.expectOp(')');
+        const fnName = CALC_FUNC_NAME_MAP[upper];
+        if (!fnName) throw new Error('#AD? (bilinmeyen fonksiyon: ' + name + ')');
+        const err = (fnName !== 'IFERROR' && fnName !== 'IFNA') ? args.find(a => a && typeof a === 'object' && a.__err) : null;
+        if (err) return err;
+        try { return CALC_FUNCTIONS[fnName](args); } catch (e){ return { __err: e.message || '#HATA!' }; }
+      }
+      if (upper === 'DOĞRU' || upper === 'TRUE') return true;
+      if (upper === 'YANLIŞ' || upper === 'FALSE') return false;
+      if (Object.prototype.hasOwnProperty.call(this.placeholders, name)) return this.placeholders[name];
+      throw new Error('#AD? (' + name + ')');
+    }
+    throw new Error('#AD? (beklenmeyen ifade)');
+  }
+  parseArgSafe(){ try { return this.parseExpression(); } catch (e){ return { __err: e.message || '#HATA!' }; } }
+}
+
+// Formül metnindeki {token} referanslarını benzersiz __T0__ gibi tanımlayıcılarla değiştirir,
+// her birinin ÇÖZÜLMÜŞ DEĞERİNİ (JS önizleme için) placeholders'a koyar, sonra ifadeyi hesaplar.
+function evaluateFormulaJs(formulaText, resolveToken){
+  const placeholders = {};
+  let idx = 0, refError = null;
+  const substituted = formulaText.replace(/\{([^}]+)\}/g, (m, tok) => {
+    const key = `__T${idx++}__`;
+    const res = resolveToken(tok.trim());
+    if (res && res.__error){ refError = res.__error; }
+    placeholders[key] = res ? res.value : undefined;
+    return key;
+  });
+  if (refError) return { error: refError };
+  try {
+    const tokens = calcTokenize(substituted);
+    const parser = new CalcParser(tokens, placeholders);
+    const result = parser.parseExpression();
+    if (parser.peek().type !== 'EOF') throw new Error('#AD? (formülün sonunda fazlalık var)');
+    if (result && typeof result === 'object' && result.__err) return { error: result.__err };
+    return { value: result };
+  } catch (e){ return { error: e.message || '#HATA!' }; }
+}
+
+// ============================================================================
+// Ana motor: bir projenin Kaynaklar + Hesaplamalar konfigürasyonuna göre çıktıyı üretir.
+// Girdi:
+//   kaynaklarData: { [kaynakAdi]: { header, sicilCol, bySicil, rows } }  — indexKaynak() ile
+//   kaynaklarConfig: bu projenin Kaynaklar satırları (ham config, rolü/periyot dahil)
+//   hesaplamalarConfig: bu projenin Hesaplamalar satırları
+//   ciktiRows: Çıktı Şablonu kaynağının ham 2B verisi
+// ============================================================================
+function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, ciktiRows){
+  const warnings = [];
+  const ciktiCfg = kaynaklarConfig.find(k => k.rolu === 'Çıktı Şablonu');
+  if (!ciktiCfg) throw new Error('Bu projede "Çıktı Şablonu" rolünde bir Kaynak tanımlı değil.');
+  const ciktiHeader = ciktiRows[0] || [];
+  const ciktiSicilCol = findSicilCol(ciktiHeader);
+  if (ciktiSicilCol === -1) throw new Error('Çıktı Şablonu kaynağında "Sicil" başlığı bulunamadı.');
+  const ciktiDataRows = ciktiRows.slice(1);
+
+  // Ham veri kaynağı (periyotlu, örn. VARDİYA) ve sözlük kaynağı (periyotsuz, örn. Parametre).
+  const rawCfg = kaynaklarConfig.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() !== '');
+  const dictCfg = kaynaklarConfig.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() === '');
+  const rawData = rawCfg ? kaynaklarData[rawCfg.kaynakAdi] : null;
+  const dict = dictCfg ? buildDict(kaynaklarData[dictCfg.kaynakAdi].rows) : new Map();
+  const rawDateCols = rawData ? findDateCols(rawData.header) : [];
+
+  // Çıktı Şablonu'nun kendi başlıklarından "gün/periyot" sütunlarını bul (Çıktı Kaynağının
+  // Periyot Deseni'ne göre, örn. "1-31").
+  const ciktiRange = parseNumRangePeriyot(ciktiCfg.periyotDeseni);
+  const dayCols = [];
+  if (ciktiRange){
+    for (let c = 0; c < ciktiHeader.length; c++){
+      const n = Number(ciktiHeader[c]);
+      if (ciktiHeader[c] !== '' && ciktiHeader[c] != null && Number.isInteger(n) && n >= ciktiRange.lo && n <= ciktiRange.hi) dayCols.push({ col: c, day: n });
+    }
+  }
+  const dayColSet = new Set(dayCols.map(d => d.col));
+
+  // Aktif Hesaplamalar, Sütun Adı -> config eşlemesi.
+  const activeHesaplamalar = hesaplamalarConfig.filter(h => h.aktif);
+  const hesaplamaByLabel = new Map(activeHesaplamalar.map(h => [h.sutunAdi, h]));
+  const sabitler = new Map(activeHesaplamalar.filter(h => h.aktarimTuru === 'Sabit').map(h => [h.sutunAdi, coerceNumberIfNumeric(h.formul.trim())]));
+
+  // Çıktı sütun planı: mevcut başlıklar (day / hesaplama / info) + Hesaplamalar'da olup
+  // henüz Çıktı'da sütunu olmayanlar sona EKLENİR (yeni sütun).
+  const columns = [];
+  const seenLabels = new Set();
+  for (let c = 0; c < ciktiHeader.length; c++){
+    const label = normalizeKey(ciktiHeader[c]);
+    if (!label) continue;
+    seenLabels.add(label);
+    if (dayColSet.has(c)) columns.push({ col: c, label, kind: 'day' });
+    else if (hesaplamaByLabel.has(label) && hesaplamaByLabel.get(label).aktarimTuru !== 'Sabit') columns.push({ col: c, label, kind: 'hesaplama' });
+    else columns.push({ col: c, label, kind: 'info' });
+  }
+  let nextCol = ciktiHeader.length;
+  activeHesaplamalar.forEach(h => {
+    if (h.aktarimTuru === 'Sabit') return;
+    if (seenLabels.has(h.sutunAdi)) return;
+    columns.push({ col: nextCol++, label: h.sutunAdi, kind: 'hesaplama' });
+    seenLabels.add(h.sutunAdi);
+  });
+
+  const results = [];
+  ciktiDataRows.forEach((row, rowIndex) => {
+    const sicil = normalizeKey(row[ciktiSicilCol]);
+    if (sicil === '') return;
+    const rawRow = rawData ? rawData.bySicil.get(sicil) : null;
+    if (rawCfg && !rawRow) warnings.push(`Sicil ${sicil} (satır ${rowIndex + 2}): "${rawCfg.kaynakAdi}" kaynağında bulunamadı.`);
+
+    const updates = {};       // col -> deger (Excel'e/Sheets'e yazilacak)
+    const byLabel = {};       // label -> deger (formul cozumleme icin, bu satira ozel)
+    // Info sütunlarını (Sıra No, ADI SOYADI...) doğrudan geçir.
+    columns.forEach(c => { if (c.kind === 'info') byLabel[c.label] = coerceNumberIfNumeric(row[c.col]); });
+
+    // 1) Gün sütunlarını doldur (ham veri + sözlük çevirisi).
+    const gunlerListesi = [];
+    dayCols.forEach(dc => {
+      let converted = null;
+      if (rawRow){
+        const rc = rawDateCols.find(d => d.day === dc.day);
+        if (rc){ converted = coerceNumberIfNumeric(translateWithDict(rawRow[rc.col], dict)); }
+        else warnings.push(`Gün ${dc.day}: "${rawCfg.kaynakAdi}" kaynağında karşılığı bulunamadı.`);
+      }
+      updates[dc.col] = converted;
+      byLabel[dc.day] = converted; // sayısal gün anahtarıyla da erişilebilsin
+      gunlerListesi.push(converted);
+    });
+    byLabel['GÜNLER'] = gunlerListesi;
+
+    // 2) Hesaplamalar — bağımlılık sırasını KENDİ ÇÖZER (recursive + memo + döngü koruması).
+    const computing = new Set();
+    function resolveLabel(label){
+      if (label === 'GÜNLER') return { value: gunlerListesi };
+      if (Object.prototype.hasOwnProperty.call(byLabel, label)) return { value: byLabel[label] };
+      if (sabitler.has(label)) return { value: sabitler.get(label) };
+      const h = hesaplamaByLabel.get(label);
+      if (h){
+        if (computing.has(label)) return { __error: `#DÖNGÜ! (${label})` };
+        computing.add(label);
+        const res = evaluateFormulaJs(h.formul, resolveLabel);
+        computing.delete(label);
+        if (res.error) return { __error: res.error };
+        byLabel[label] = res.value;
+        return { value: res.value };
+      }
+      return { __error: `#REFERANS! ({${label}} bulunamadı)` };
+    }
+
+    columns.filter(c => c.kind === 'hesaplama').forEach(c => {
+      const h = hesaplamaByLabel.get(c.label);
+      const res = evaluateFormulaJs(h.formul, resolveLabel);
+      if (res.error){ updates[c.col] = '#' + res.error.replace(/^#/, ''); warnings.push(`${c.label} (Sicil ${sicil}): ${res.error}`); }
+      else { updates[c.col] = coerceNumberIfNumeric(res.value); byLabel[c.label] = res.value; }
+    });
+
+    results.push({ rowIndex, sicil, updates });
+  });
+
+  return {
+    columns, ciktiHeader, ciktiSicilCol, dataRows: ciktiDataRows,
+    dayCols, rawCfg, dictCfg, rawData, dict, ciktiCfg,
+    results, warnings,
+  };
+}
+
+// computeGeneric sonucunu, Sheets API values:batchUpdate'in beklediği listeye çevirir.
 function buildBatchUpdatePayload(computeResult, sheetTabName){
   const data = [];
   computeResult.results.forEach(r => {
-    const sheetRow = r.rowIndex + 2; // 1-index + başlık satırı
+    const sheetRow = r.rowIndex + 2;
     Object.entries(r.updates).forEach(([col, value]) => {
       const a1 = `'${sheetTabName}'!${colNumToA1(parseInt(col, 10))}${sheetRow}`;
-      data.push({ range: a1, values: [[value === undefined ? '' : value]] });
+      data.push({ range: a1, values: [[value === undefined || value === null ? '' : value]] });
     });
   });
   return data;
@@ -428,10 +814,10 @@ function renderCondFormatTable(){
   const wrap = document.getElementById('condFormatTable');
   const cols = [{label:'Metrik (sütun başlığı)'},{label:'Operatör'},{label:'Değer1'},{label:'Değer2'},{label:'Renk'},{label:'Öncelik'},{label:''}];
   const head = '<tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
-  const availableLabels = lastComputeResult ? lastComputeResult.rIdx.header.map(h => normalizeKey(h)).filter(l => l !== '') : [];
+  const availableLabels = lastComputeResult ? lastComputeResult.columns.map(c => c.label) : [];
   const rows = kosulluBicimlendirme.map(rule => {
     const groupOpts = `<option value="${GROUP_ALL_DAYS}" ${rule.metrik===GROUP_ALL_DAYS?'selected':''}>🗓 Tüm Gün Sütunları</option>` +
-                       `<option value="${GROUP_ALL_CATEGORIES}" ${rule.metrik===GROUP_ALL_CATEGORIES?'selected':''}>📊 Tüm Kategori Sütunları</option>`;
+                       `<option value="${GROUP_ALL_CATEGORIES}" ${rule.metrik===GROUP_ALL_CATEGORIES?'selected':''}>📊 Tüm Hesaplanan Sütunlar</option>`;
     const metrikOpts = '<option value="">Seç…</option>' + groupOpts + '<optgroup label="Tek sütun">' +
       availableLabels.map(l => `<option value="${l}" ${rule.metrik===l?'selected':''}>${l}</option>`).join('') + '</optgroup>';
     const opOpts = COND_OPERATORS.map(op => `<option value="${op}" ${rule.operator===op?'selected':''}>${op}</option>`).join('');
@@ -477,13 +863,11 @@ const COND_OP_MAP = {
   'Küçük Eşit': 'lessThanOrEqual', 'Eşit': 'equal', 'Farklı': 'notEqual', 'Aralık': 'between',
 };
 
-// Hesaplanan sonuçtaki (rIdx) TÜM sütunlar arasından, kuralın "Metrik" alanındaki başlığa
-// (label) denk gelen sütunu bulur; gün, kategori, bilgi sütunu farkı gözetmez.
-function findColByLabel(rIdx, label){
-  for (let c = 0; c < rIdx.header.length; c++){
-    if (normalizeKey(rIdx.header[c]) === label) return c;
-  }
-  return null;
+// Hesaplanan sonuçtaki TÜM sütunlar arasından, kuralın "Metrik" alanındaki başlığa (label)
+// denk gelen sütunu bulur; gün, hesaplanan, bilgi sütunu farkı gözetmez.
+function findColByLabel(result, label){
+  const c = result.columns.find(x => x.label === label);
+  return c ? c.col : null;
 }
 
 // Bir kuralın verilen ham değere uyup uymadığını kontrol eder — hem gerçek Excel
@@ -543,27 +927,28 @@ function formatStateToCss(st){
   return parts.join(';');
 }
 
-function applyKosulluBicimlendirme(ws, rIdx, rowCount){
+function applyKosulluBicimlendirme(ws, result, rowCount){
   if (!rowCount) return;
   kosulluBicimlendirme.forEach(rule => {
     if (!rule.metrik || rule.deger1 === '' || rule.deger1 === undefined) return;
 
     let ref, topLeftCellRef;
     if (rule.metrik === GROUP_ALL_DAYS){
-      if (!rIdx.dayNumCols.length) return;
-      const firstLetter = colNumToA1(rIdx.dayNumCols[0].col);
-      const lastLetter = colNumToA1(rIdx.dayNumCols[rIdx.dayNumCols.length - 1].col);
+      const dayCs = result.columns.filter(c => c.kind === 'day');
+      if (!dayCs.length) return;
+      const firstLetter = colNumToA1(dayCs[0].col);
+      const lastLetter = colNumToA1(dayCs[dayCs.length - 1].col);
       ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
       topLeftCellRef = `${firstLetter}2`;
     } else if (rule.metrik === GROUP_ALL_CATEGORIES){
-      const cats = rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code));
-      if (!cats.length) return;
-      const firstLetter = colNumToA1(cats[0].col);
-      const lastLetter = colNumToA1(cats[cats.length - 1].col);
+      const hesCs = result.columns.filter(c => c.kind === 'hesaplama');
+      if (!hesCs.length) return;
+      const firstLetter = colNumToA1(hesCs[0].col);
+      const lastLetter = colNumToA1(hesCs[hesCs.length - 1].col);
       ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
       topLeftCellRef = `${firstLetter}2`;
     } else {
-      const col = findColByLabel(rIdx, rule.metrik);
+      const col = findColByLabel(result, rule.metrik);
       if (col === null) return;
       const colLetter = colNumToA1(col);
       ref = `${colLetter}2:${colLetter}${rowCount + 1}`;
@@ -586,6 +971,217 @@ function applyKosulluBicimlendirme(ws, rIdx, rowCount){
     ws.addConditionalFormatting({ ref, rules: [{ type: 'cellIs', operator: opType, formulae, style, priority }] });
   });
 }
+
+// ============================================================================
+// ===== Excel'den Koşullu Biçimlendirme İÇE AKTARMA =====
+// Zaten kurulu bir Excel dosyasındaki (örn. eski, elle hazırlanmış puantaj) TÜM koşullu
+// biçimlendirme kurallarını okuyup bizim kural formatımıza (Metrik/Operatör/Değer/Renk)
+// çevirir. Formülleri DEĞİL, sadece görsel kuralları alır — istediğin tam olarak bu.
+// ============================================================================
+
+const COND_OP_MAP_REVERSE = {
+  greaterThan: 'Büyük', lessThan: 'Küçük', greaterThanOrEqual: 'Büyük Eşit',
+  lessThanOrEqual: 'Küçük Eşit', equal: 'Eşit', notEqual: 'Farklı', between: 'Aralık',
+};
+
+// ExcelJS'in argb ("FFRRGGBB") rengini bizim renk seçicimizin beklediği "#RRGGBB"ye çevirir.
+function argbToHex(argb){
+  if (!argb || argb.length < 6) return '#ffff00';
+  const rgb = argb.length === 8 ? argb.slice(2) : argb;
+  return '#' + rgb.toLowerCase();
+}
+
+// ============================================================================
+// ===== TEMA RENGİ ÇÖZÜCÜ =====
+// Excel dosyalarındaki hücreler bazen "ham RGB" değil, dosyanın TEMASINA (Accent 1,
+// Arka Plan 2 gibi) referans veren renkler kullanır — ExcelJS bunu {theme, tint} olarak
+// verir, .argb DEĞİL. Bunu görmezden gelirsek o renkleri hiç yakalayamayız. Bu yüzden
+// yüklenen dosyanın ZIP içindeki xl/theme/theme1.xml'ini ayrıca okuyup 12 tema rengini
+// gerçek RGB'ye, sonra tint (açma/koyulaştırma) oranını uygulayıp son rengi çıkarıyoruz.
+// ============================================================================
+
+// XML'deki tanım sırası (dk1,lt1,dk2,lt2,accent1-6,hlink,folHlink) ile Excel'in hücrelerde
+// kullandığı TEMA İNDEKSİ sırası (lt1,dk1,lt2,dk2,accent1-6,...) farklı — ilk iki çift ters.
+const THEME_INDEX_ORDER = ['lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'folHlink'];
+
+// Yüklenen dosyanın ham bayt dizisinden (ArrayBuffer) 12 tema rengini (theme index sırasıyla,
+// "RRGGBB" formatında) çıkarır. Tema dosyası yoksa ya da okunamazsa null döner.
+async function extractThemeColors(fileArrayBuffer){
+  try {
+    const zip = await JSZip.loadAsync(fileArrayBuffer);
+    const themeFile = zip.file('xl/theme/theme1.xml') || Object.values(zip.files).find(f => /xl\/theme\/theme\d*\.xml$/i.test(f.name));
+    if (!themeFile) return null;
+    const xml = await themeFile.async('string');
+    const scheme = {};
+    THEME_INDEX_ORDER.forEach(key => {
+      const block = xml.match(new RegExp(`<a:${key}>(.*?)</a:${key}>`, 's'));
+      if (!block) return;
+      const srgb = block[1].match(/(?:lastClr|val)="([0-9A-Fa-f]{6})"/);
+      if (srgb) scheme[key] = srgb[1].toUpperCase();
+    });
+    return THEME_INDEX_ORDER.map(key => scheme[key] || '000000');
+  } catch (e){
+    return null;
+  }
+}
+
+// Excel'in "tint" (açma/koyulaştırma, -1..1) mantığını hexadecimal renge kanal-bazında uygular.
+// Excel dahili olarak HSL parlaklığı üzerinden hesaplıyor; bu kanal-bazlı yaklaşım görsel olarak
+// çok yakın sonuç verir ve pratik kullanım için (renk yakalama) yeterlidir.
+function applyTint(hex, tint){
+  if (!tint) return hex;
+  const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+  const adj = (c) => {
+    const v = tint < 0 ? c * (1 + tint) : c * (1 - tint) + 255 * tint;
+    return Math.max(0, Math.min(255, Math.round(v)));
+  };
+  const toHex = (n) => n.toString(16).padStart(2, '0');
+  return toHex(adj(r)) + toHex(adj(g)) + toHex(adj(b));
+}
+
+// Bir ExcelJS renk objesini ("argb" ya da "theme"+"tint") "#rrggbb" hex'e çevirir.
+// themeColors, extractThemeColors()'dan gelen 12'lik dizidir (yoksa tema renkleri çözülemez).
+function resolveColor(colorObj, themeColors){
+  if (!colorObj) return '';
+  if (colorObj.argb) return argbToHex(colorObj.argb);
+  if (colorObj.theme !== undefined && themeColors && themeColors[colorObj.theme]){
+    return ('#' + applyTint(themeColors[colorObj.theme], colorObj.tint || 0)).toLowerCase();
+  }
+  return '';
+}
+
+// "F2:AJ50" gibi bir A1 aralığını { colStartLetter, colEndLetter } sütun harflerine ayırır.
+function parseRefColumns(ref){
+  const firstRef = ref.split(',')[0].trim(); // birden fazla aralık varsa ilkini al
+  const m = firstRef.match(/^\$?([A-Z]+)\$?\d+(?::\$?([A-Z]+)\$?\d+)?$/i);
+  if (!m) return null;
+  return { colStart: m[1].toUpperCase(), colEnd: (m[2] || m[1]).toUpperCase() };
+}
+function colLetterToNum(letter){
+  let n = 0;
+  for (const ch of letter) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1; // 0-index
+}
+
+// Bir worksheet'in TÜM koşullu biçimlendirmesini bizim kural dizimize çevirir. header,
+// sütun harfini gerçek başlık metnine (Metrik) çevirmek için kullanılır. Bir kural birden
+// fazla sütunu kapsıyorsa (örn. tüm gün bloğu), o ARALIKTAKİ HER SÜTUN İÇİN ayrı bir kural
+// üretilir — böylece hiçbir varsayım yapılmaz, ne görüldüyse birebir aktarılır.
+// Bir satırdaki İLK DOLU hücreyi bulur (A sütunu boş olabilir diye).
+function firstNonEmptyCell(row, maxCol){
+  for (let c = 1; c <= maxCol; c++){
+    const cell = row.getCell(c);
+    if (cell.value !== null && cell.value !== undefined && cell.value !== '') return cell;
+  }
+  return row.getCell(1);
+}
+
+// Bir hücrenin GERÇEK Excel biçimini (font/fill/hizalama/kenarlık/sayı formatı) bizim
+// formatState şeklimize çevirir — applyCellStyle'ın TERSİ.
+function readCellStyle(cell, themeColors){
+  const st = { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: '', kenarlik: false, sayiFormat: '', kaydir: false, yaziBoyutu: null };
+  if (cell.font){
+    st.kalin = !!cell.font.bold;
+    if (cell.font.color) st.yaziRengi = resolveColor(cell.font.color, themeColors);
+    if (cell.font.size) st.yaziBoyutu = cell.font.size;
+  }
+  if (cell.fill && cell.fill.type === 'pattern'){
+    const c = cell.fill.fgColor || cell.fill.bgColor;
+    if (c) st.argPlan = resolveColor(c, themeColors);
+  }
+  if (cell.alignment){
+    if (cell.alignment.horizontal) st.hizalama = cell.alignment.horizontal;
+    if (cell.alignment.wrapText) st.kaydir = true;
+  }
+  if (cell.border && (cell.border.top || cell.border.bottom || cell.border.left || cell.border.right)) st.kenarlik = true;
+  if (cell.numFmt && cell.numFmt !== 'General') st.sayiFormat = cell.numFmt;
+  return st;
+}
+
+// Bir worksheet'in başlık (1. satır) ve veri (2. satır) görünümünü okuyup
+// { baslik, veri } formatState şekline çevirir. themeColors yoksa (null) tema renkleri
+// çözülemez, sadece ham ARGB renkler yakalanır.
+function importFormatFromSheet(ws, themeColors){
+  const maxCol = ws.columnCount || 20;
+  const headerCell = firstNonEmptyCell(ws.getRow(1), maxCol);
+  const dataCell = firstNonEmptyCell(ws.getRow(2), maxCol);
+  return { baslik: readCellStyle(headerCell, themeColors), veri: readCellStyle(dataCell, themeColors) };
+}
+
+function importCondFormattingFromSheet(ws, themeColors){
+  const header = [];
+  ws.getRow(1).eachCell({ includeEmpty: true }, (cell, c) => { header[c - 1] = normalizeKey(cell.value); });
+  const imported = [];
+  let oncelikSeq = 1;
+  (ws.conditionalFormattings || []).forEach(cf => {
+    const cols = parseRefColumns(cf.ref);
+    if (!cols) return;
+    const startCol = colLetterToNum(cols.colStart);
+    const endCol = colLetterToNum(cols.colEnd);
+    (cf.rules || []).forEach(rule => {
+      const colorObj = (rule.style && rule.style.fill && (rule.style.fill.fgColor || rule.style.fill.bgColor)) || null;
+      const renk = resolveColor(colorObj, themeColors) || '#ffff00';
+      // ExcelJS, dosyaya kaydedilip GERİ OKUNAN "İçerdiği Metin" kurallarında rule.type/rule.text
+      // bilgisini KORUMUYOR — sadece ham SEARCH(...) formülünü bırakıyor. Bu yüzden hem orijinal
+      // (yeni yazılmış) hem round-trip (dosyadan okunmuş) hallerini ayrı ayrı tanıyoruz.
+      const searchMatch = !rule.type && (rule.formulae || [])[0] && String(rule.formulae[0]).match(/SEARCH\(\s*"([^"]*)"/i);
+      for (let c = startCol; c <= endCol; c++){
+        const metrik = header[c] || '';
+        if (!metrik) continue;
+        if (rule.type === 'containsText' || searchMatch){
+          const text = rule.type === 'containsText' ? (rule.text || '') : searchMatch[1];
+          imported.push({ metrik, operator: 'İçerdiği Metin', deger1: text, deger2: '', renk, oncelik: rule.priority || oncelikSeq++ });
+        } else if (rule.type === 'cellIs' || (!rule.type && rule.operator)){
+          const op = COND_OP_MAP_REVERSE[rule.operator];
+          if (!op) continue;
+          const f = rule.formulae || [];
+          imported.push({ metrik, operator: op, deger1: normalizeKey(f[0]), deger2: op === 'Aralık' ? normalizeKey(f[1]) : '', renk, oncelik: rule.priority || oncelikSeq++ });
+        }
+      }
+    });
+  });
+  return imported;
+}
+
+document.getElementById('condImportFile').addEventListener('change', async (e) => {
+  const statusEl = document.getElementById('condImportStatus');
+  const file = e.target.files[0];
+  if (!file) return;
+  statusEl.textContent = 'Okunuyor…';
+  statusEl.className = 'status';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    if (!wb.worksheets.length) throw new Error('Dosyada sayfa bulunamadı.');
+
+    // Dosyanın tema renklerini (varsa) ayrıca çıkar — hücreler "Accent 1" gibi tema
+    // referansı kullanıyorsa gerçek RGB'yi ancak buradan çözebiliriz.
+    const themeColors = await extractThemeColors(buf);
+
+    // Biçimlendirme: dosyanın İLK sayfasının başlık/veri görünümünü al.
+    const fmt = importFormatFromSheet(wb.worksheets[0], themeColors);
+    formatState = fmt;
+    renderFormatTable();
+
+    // Koşullu Biçimlendirme: TÜM sayfalardaki tüm kuralları al.
+    let allImported = [];
+    wb.worksheets.forEach(ws => { allImported = allImported.concat(importCondFormattingFromSheet(ws, themeColors)); });
+    allImported.forEach(r => kosulluBicimlendirme.push(Object.assign({ id: condRuleIdSeq++ }, r)));
+
+    if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
+
+    const parts = [`Biçimlendirme (Başlık/Veri) alındı`];
+    parts.push(allImported.length ? `${allImported.length} koşullu biçimlendirme kuralı` : 'koşullu biçimlendirme bulunamadı');
+    if (!themeColors) parts.push('(dosyada tema rengi bilgisi bulunamadı, sadece ham renkler alındı)');
+    statusEl.textContent = `✓ ${parts.join(', ')}. Aşağıdaki tabloları kontrol et, gerekirse düzenle.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+  e.target.value = '';
+});
 
 // ============================================================================
 // ===== GOOGLE SHEETS API (ağ katmanı) =====
@@ -648,9 +1244,8 @@ function initGis(){
 
 function onSignedIn(){
   document.getElementById('signinGate').style.display = 'none';
-  document.getElementById('page-vardiya').style.display = 'block';
   document.getElementById('sidebarFooter').textContent = 'Oturum açık';
-  loadAyYilTabs();
+  loadConfigAndSidebar();
   loadTemplateList();
 }
 
@@ -673,50 +1268,172 @@ window.addEventListener('load', () => {
 });
 
 // ============================================================================
-// ===== Vardiya sayfası — UI mantığı =====
+// ===== "Proje Yönetimi" — Projeler / Kaynaklar / Hesaplamalar =====
+// Sol menü ve her projenin davranışı BURADAN, tamamen veriden okunur. Hiçbir
+// proje-özel bilgi kodda yok — yeni bir proje eklemek için Sheets'e satır eklemen yeter.
 // ============================================================================
 
-async function loadAyYilTabs(){
-  const sel = document.getElementById('ayYilSelect');
-  sel.innerHTML = '<option value="">Yükleniyor…</option>';
-  try {
-    const tabs = await getSheetTabNames(VARDIYA_SHEET_ID);
-    if (!tabs.length){ sel.innerHTML = '<option value="">Sekme bulunamadı</option>'; return; }
-    sel.innerHTML = tabs.map(t => `<option value="${t}">${t}</option>`).join('');
-  } catch (err){
-    sel.innerHTML = '<option value="">Hata — Yenile\'ye bas</option>';
-    document.getElementById('computeStatus').textContent = '✗ ' + err.message;
-    document.getElementById('computeStatus').className = 'status err';
-  }
+let projeler = [];             // [{ ad, sira, varsayilanSablon }]
+let kaynaklarConfigAll = [];   // [{ proje, kaynakAdi, tip, sheetId, sekmeAdi, rolu, periyotDeseni }]
+let hesaplamalarConfigAll = [];// [{ proje, sutunAdi, formul, aktif, aktarimTuru }]
+let currentProject = null;
+let resolvedTabs = {};         // kaynakAdi -> secilen sekme adi (dinamik sekmeli kaynaklar icin)
+let uploadedKaynakData = {};   // kaynakAdi -> ham 2B dizi (YuklenenDosya tipi kaynaklar icin)
+
+function parseProjeRow(r){ return { ad: normalizeKey(r[0]), sira: parseFloat(r[1]) || 0, varsayilanSablon: normalizeKey(r[2]) }; }
+function parseKaynakRow(r){
+  return {
+    proje: normalizeKey(r[0]), kaynakAdi: normalizeKey(r[1]), tip: normalizeKey(r[2]),
+    sheetId: normalizeKey(r[3]), sekmeAdi: normalizeKey(r[4]), rolu: normalizeKey(r[5]),
+    periyotDeseni: normalizeKey(r[6]),
+  };
+}
+function parseHesaplamaRow(r){
+  return {
+    proje: normalizeKey(r[0]), sutunAdi: normalizeKey(r[1]), formul: normalizeKey(r[2]),
+    aktif: trUpper(r[3]) === 'EVET', aktarimTuru: normalizeKey(r[4]) || 'Formüllü',
+  };
 }
 
-document.getElementById('refreshTabsBtn').addEventListener('click', loadAyYilTabs);
+async function loadConfigAndSidebar(){
+  const nav = document.getElementById('navList');
+  nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Projeler yükleniyor…</div>';
+  try {
+    const [projRows, kaynakRows, hesRows] = await Promise.all([
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:C200`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:G500`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:E1000`),
+    ]);
+    projeler = projRows.map(parseProjeRow).filter(p => p.ad).sort((a, b) => a.sira - b.sira);
+    kaynaklarConfigAll = kaynakRows.map(parseKaynakRow).filter(k => k.proje && k.kaynakAdi);
+    hesaplamalarConfigAll = hesRows.map(parseHesaplamaRow).filter(h => h.proje && h.sutunAdi);
+    renderSidebar();
+    if (projeler.length) selectProject(projeler[0].ad);
+  } catch (err){
+    nav.innerHTML = `<div class="empty" style="color:var(--danger); padding:20px 12px;">✗ Proje ayarları okunamadı: ${err.message}<br><br>"${TAB_PROJELER}", "${TAB_KAYNAKLAR}", "${TAB_HESAPLAMALAR}" sekmelerinin CONFIG_SHEET_ID'de var olduğundan emin ol.</div>`;
+  }
+}
+document.getElementById('refreshConfigBtn')?.addEventListener('click', loadConfigAndSidebar);
+
+function renderSidebar(){
+  const nav = document.getElementById('navList');
+  if (!projeler.length){ nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Henüz proje tanımlı değil.</div>'; return; }
+  nav.innerHTML = projeler.map(p => `<div class="nav-item${p.ad === currentProject ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
+  nav.querySelectorAll('[data-proje]').forEach(el => {
+    el.addEventListener('click', () => selectProject(el.getAttribute('data-proje')));
+  });
+}
+
+function selectProject(projeAdi){
+  currentProject = projeAdi;
+  resolvedTabs = {};
+  uploadedKaynakData = {};
+  lastComputeResult = null;
+  lastKaynaklarData = null;
+  renderSidebar();
+  document.getElementById('page-project').style.display = 'block';
+  document.getElementById('projectTitle').textContent = projeAdi;
+  document.getElementById('previewCard').style.display = 'none';
+  document.getElementById('outputCard').style.display = 'none';
+  document.getElementById('computeStatus').textContent = '';
+  renderKaynakSecim();
+}
+
+// Bu projenin, "sekme adı sen seçeceksin" tipi kaynakları için seçici gösterir
+// (boş bırakılmış ya da placeholder yazan Sekme Adı = uygulamada seçilir demektir).
+function renderKaynakSecim(){
+  const card = document.getElementById('kaynakSecimCard');
+  const row = document.getElementById('kaynakSecimRow');
+  const kaynaklar = kaynaklarConfigAll.filter(k => k.proje === currentProject);
+  const dynamicOnes = kaynaklar.filter(k => k.tip === 'Sheets' && (!k.sekmeAdi || k.sekmeAdi.startsWith('(')));
+  const fileOnes = kaynaklar.filter(k => k.tip === 'YuklenenDosya');
+  if (!dynamicOnes.length && !fileOnes.length){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  row.innerHTML = dynamicOnes.map(k => `
+    <div>
+      <div style="font-size:11px; color:var(--dim); margin-bottom:4px;">${k.kaynakAdi}</div>
+      <select data-kaynak-select="${k.kaynakAdi}" data-sheet-id="${k.sheetId}"><option value="">Yükleniyor…</option></select>
+    </div>`).join('') + fileOnes.map(k => `
+    <div>
+      <div style="font-size:11px; color:var(--dim); margin-bottom:4px;">${k.kaynakAdi} (dosya yükle)</div>
+      <input type="file" data-kaynak-file="${k.kaynakAdi}" accept=".xlsx,.xls">
+    </div>`).join('');
+  dynamicOnes.forEach(async k => {
+    const sel = row.querySelector(`[data-kaynak-select="${k.kaynakAdi}"]`);
+    try {
+      const tabs = await getSheetTabNames(k.sheetId);
+      sel.innerHTML = tabs.map(t => `<option value="${t}">${t}</option>`).join('');
+      if (tabs.length) resolvedTabs[k.kaynakAdi] = tabs[0];
+    } catch (err){ sel.innerHTML = '<option value="">Hata</option>'; }
+  });
+  row.querySelectorAll('[data-kaynak-select]').forEach(sel => {
+    sel.addEventListener('change', () => { resolvedTabs[sel.getAttribute('data-kaynak-select')] = sel.value; });
+  });
+  row.querySelectorAll('[data-kaynak-file]').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const kaynakAdi = inp.getAttribute('data-kaynak-file');
+      const file = inp.files[0];
+      if (!file) return;
+      const buf = await file.arrayBuffer();
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0];
+      const rows = [];
+      ws.eachRow({ includeEmpty: true }, (r) => {
+        const vals = [];
+        r.eachCell({ includeEmpty: true }, (cell, c) => { vals[c - 1] = cell.value; });
+        rows.push(vals);
+      });
+      uploadedKaynakData[kaynakAdi] = rows;
+    });
+  });
+}
+
+// ============================================================================
+// ===== Hesapla (Önizle) =====
+// ============================================================================
 
 let lastComputeResult = null;
-let lastSelectedTab = null;
-let lastVardiyaRows = null;
-let lastParamRows = null;
+let lastKaynaklarData = null;   // { kaynakAdi: { header, sicilCol, bySicil, rows } }
+let lastKaynaklarConfig = null; // bu projenin Kaynaklar satırları (compute anındaki)
 
 document.getElementById('computeBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('computeStatus');
-  const tab = document.getElementById('ayYilSelect').value;
-  if (!tab){ statusEl.textContent = '✗ Önce bir AY-YIL sekmesi seç.'; statusEl.className = 'status err'; return; }
+  if (!currentProject){ statusEl.textContent = '✗ Önce sol menüden bir proje seç.'; statusEl.className = 'status err'; return; }
   statusEl.textContent = 'Veriler okunuyor…';
   statusEl.className = 'status';
   document.getElementById('previewCard').style.display = 'none';
   try {
-    const [vardiyaRows, paramRows, refRows] = await Promise.all([
-      getSheetValues(VARDIYA_SHEET_ID, `'${tab}'!A1:AN1000`),
-      getSheetValues(PUANTAJ_SHEET_ID, `'${PARAMETRE_TAB}'!A1:B200`),
-      getSheetValues(PUANTAJ_SHEET_ID, `'${PUANTAJ_REFERANS_TAB}'!A1:BF1000`),
-    ]);
-    const result = computePuantaj(vardiyaRows, paramRows, refRows);
+    const kaynaklar = kaynaklarConfigAll.filter(k => k.proje === currentProject);
+    const hesaplamalar = hesaplamalarConfigAll.filter(h => h.proje === currentProject);
+    if (!kaynaklar.length) throw new Error('Bu proje için "Kaynaklar" sekmesinde hiç satır tanımlı değil.');
+
+    const kaynaklarData = {};
+    for (const k of kaynaklar){
+      let rows;
+      if (k.tip === 'YuklenenDosya'){
+        rows = uploadedKaynakData[k.kaynakAdi];
+        if (!rows) throw new Error(`"${k.kaynakAdi}" için henüz bir dosya yüklemedin.`);
+      } else {
+        const tab = (!k.sekmeAdi || k.sekmeAdi.startsWith('(')) ? resolvedTabs[k.kaynakAdi] : k.sekmeAdi;
+        if (!tab) throw new Error(`"${k.kaynakAdi}" için sekme seçilmedi.`);
+        rows = await getSheetValues(k.sheetId, `'${tab}'!A1:BZ5000`);
+      }
+      kaynaklarData[k.kaynakAdi] = indexKaynak(rows);
+    }
+
+    const ciktiCfg = kaynaklar.find(k => k.rolu === 'Çıktı Şablonu');
+    if (!ciktiCfg) throw new Error('Bu projede "Çıktı Şablonu" rolünde bir kaynak tanımlı değil.');
+    const ciktiRows = kaynaklarData[ciktiCfg.kaynakAdi].header.length
+      ? [kaynaklarData[ciktiCfg.kaynakAdi].header, ...kaynaklarData[ciktiCfg.kaynakAdi].rows]
+      : [];
+
+    const result = computeGeneric(kaynaklarData, kaynaklar, hesaplamalar, ciktiRows);
     lastComputeResult = result;
-    lastSelectedTab = tab;
-    lastVardiyaRows = vardiyaRows;
-    lastParamRows = paramRows;
+    lastKaynaklarData = kaynaklarData;
+    lastKaynaklarConfig = kaynaklar;
     renderPreview(result);
-    statusEl.textContent = `✓ Hesaplandı (${result.results.length} personel). Aşağıda önizleyip onaylayabilirsin.`;
+    statusEl.textContent = `✓ Hesaplandı (${result.results.length} satır). Aşağıda önizleyip onaylayabilirsin.`;
     statusEl.className = 'status ok';
   } catch (err){
     statusEl.textContent = '✗ ' + err.message;
@@ -725,37 +1442,21 @@ document.getElementById('computeBtn').addEventListener('click', async () => {
 });
 
 function renderPreview(result){
-  const { rIdx, results, warnings } = result;
   document.getElementById('previewCard').style.display = 'block';
   const warnBox = document.getElementById('warningsBox');
-  warnBox.textContent = warnings.length ? ('⚠ ' + warnings.length + ' uyarı:\n' + warnings.slice(0, 20).join('\n') + (warnings.length > 20 ? `\n… (+${warnings.length - 20} tane daha)` : '')) : '';
+  warnBox.textContent = result.warnings.length ? ('⚠ ' + result.warnings.length + ' uyarı:\n' + result.warnings.slice(0, 20).join('\n') + (result.warnings.length > 20 ? `\n… (+${result.warnings.length - 20} tane daha)` : '')) : '';
 
-  // Puantaj Referans'taki TÜM sütunlar, dosyadaki sıra neyse aynen gösterilir (Sıra No,
-  // ADI SOYADI, TCKN, SİCİL, UNVAN, günler, kategoriler...) — burada sütun seçip
-  // ayıklamıyoruz. Sadece HESAPLANAN (gün ve kategori) sütunlar vurgulanır; geri kalan
-  // her şey Puantaj Referans'taki orijinal değeriyle salt-okunur gösterilir.
-  //
-  // Biçimlendirme (Başlık/Veri stil) ve Koşullu Biçimlendirme kuralları burada AYNI
-  // mantıkla (formatStateToCss / getCondColorForCell) CANLI uygulanır — "Excel'e Aktar"
-  // ile üretilecek dosyada göreceğin görünüm, bu tabloda ANINDA görünür.
-  const writeColSet = new Map();
-  const dayColSet = new Set(rIdx.dayNumCols.map(d => d.col));
-  const categoryColSet = new Set(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => c.col));
-  rIdx.dayNumCols.forEach(d => writeColSet.set(d.col, true));
-  rIdx.categoryCols.forEach(c => { if (!SKIP_CATEGORY_CODES.has(c.code)) writeColSet.set(c.col, true); });
-
-  const allCols = rIdx.header.map((h, c) => ({ col: c, label: normalizeKey(h) })).filter(c => c.label !== '');
   const baslikCss = formatStateToCss(formatState.baslik);
   const veriCss = formatStateToCss(formatState.veri);
 
-  let html = '<thead><tr>' + allCols.map(c => `<th style="${baslikCss}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
-  results.forEach(r => {
-    const origRow = rIdx.dataRows[r.rowIndex];
+  let html = '<thead><tr>' + result.columns.map(c => `<th style="${baslikCss}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  result.results.forEach(r => {
+    const origRow = result.dataRows[r.rowIndex];
     html += '<tr>';
-    allCols.forEach(c => {
-      const isComputed = writeColSet.has(c.col) && Object.prototype.hasOwnProperty.call(r.updates, c.col);
+    result.columns.forEach(c => {
+      const isComputed = c.kind !== 'info';
       const val = isComputed ? r.updates[c.col] : origRow[c.col];
-      const colInfo = { isDay: dayColSet.has(c.col), isCategory: categoryColSet.has(c.col) };
+      const colInfo = { isDay: c.kind === 'day', isCategory: c.kind === 'hesaplama' };
       const condColor = getCondColorForCell(c.label, val, colInfo);
       let style = veriCss;
       if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
@@ -773,17 +1474,18 @@ function renderPreview(result){
 
 document.getElementById('writeBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('writeStatus');
-  if (!lastComputeResult){ return; }
-  if (!confirm(`${lastComputeResult.results.length} personelin verisi "${PUANTAJ_REFERANS_TAB}" sekmesine YAZILACAK. Emin misin?`)) return;
+  if (!lastComputeResult || !lastKaynaklarConfig){ return; }
+  const ciktiCfg = lastKaynaklarConfig.find(k => k.rolu === 'Çıktı Şablonu');
+  const tab = (!ciktiCfg.sekmeAdi || ciktiCfg.sekmeAdi.startsWith('(')) ? resolvedTabs[ciktiCfg.kaynakAdi] : ciktiCfg.sekmeAdi;
+  if (!confirm(`${lastComputeResult.results.length} satırlık veri "${tab}" sekmesine YAZILACAK. Emin misin?`)) return;
   statusEl.textContent = 'Yazılıyor…';
   statusEl.className = 'status';
   try {
-    const payload = buildBatchUpdatePayload(lastComputeResult, PUANTAJ_REFERANS_TAB);
+    const payload = buildBatchUpdatePayload(lastComputeResult, tab);
     if (!payload.length){ statusEl.textContent = '✗ Yazılacak hücre yok.'; statusEl.className = 'status err'; return; }
-    // Sheets API tek istekte çok fazla range kabul eder ama güvenli olmak için 500'lük parçalara bölüyoruz.
     const CHUNK = 500;
     for (let i = 0; i < payload.length; i += CHUNK){
-      await batchUpdateValues(PUANTAJ_SHEET_ID, payload.slice(i, i + CHUNK));
+      await batchUpdateValues(ciktiCfg.sheetId, payload.slice(i, i + CHUNK));
     }
     statusEl.textContent = `✓ ${payload.length} hücre yazıldı.`;
     statusEl.className = 'status ok';
@@ -794,26 +1496,21 @@ document.getElementById('writeBtn').addEventListener('click', async () => {
 });
 
 // ============================================================================
-// ===== ŞABLON SİSTEMİ =====
-// Şablonlar, PUANTAJ_SHEET_ID içindeki "Sablonlar" adlı bir sekmede (senin oluşturman
-// gerekir — kod otomatik oluşturmuyor, kontrol sende kalsın diye) satır satır saklanır:
-// A: Şablon Adı | B: Hedef Sayfa (kaydedilirken seçili olan AY-YIL) | C: JSON | D: Tarih
+// ===== ŞABLON SİSTEMİ (TÜM projeler arasında paylaşılan tek havuz) =====
 // ============================================================================
-
-const TEMPLATES_TAB = 'Sablonlar';
 
 async function loadTemplateList(){
   const sel = document.getElementById('templateSelect');
   const statusEl = document.getElementById('templateStatus');
   sel.innerHTML = '<option value="">Yükleniyor…</option>';
   try {
-    const rows = await getSheetValues(PUANTAJ_SHEET_ID, `'${TEMPLATES_TAB}'!A2:D500`);
+    const rows = await getSheetValues(CONFIG_SHEET_ID, `'${TAB_SABLONLAR}'!A2:D500`);
     sel._rows = rows;
     if (!rows.length){ sel.innerHTML = '<option value="">(henüz şablon yok)</option>'; return; }
     sel.innerHTML = '<option value="">Şablon seç…</option>' + rows.map((r, i) => `<option value="${i}">${r[0] || '(isimsiz)'} — ${r[1] || ''}</option>`).join('');
   } catch (err){
     sel.innerHTML = '<option value="">Hata</option>';
-    statusEl.textContent = `✗ ${err.message}\n(Puantaj Sheet'inde "${TEMPLATES_TAB}" adında bir sekme oluşturduğundan emin ol — başlık satırına gerek yok, kod A2'den başlar.)`;
+    statusEl.textContent = `✗ ${err.message}\n("${TAB_SABLONLAR}" sekmesinin CONFIG_SHEET_ID'de var olduğundan emin ol.)`;
     statusEl.className = 'status err';
   }
 }
@@ -831,7 +1528,7 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
       kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
     }
     renderFormatTable();
-    renderCondFormatTable();
+    if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
     statusEl.textContent = `✓ "${row[0]}" şablonu yüklendi.`;
     statusEl.className = 'status ok';
   } catch (err){
@@ -849,13 +1546,12 @@ document.getElementById('saveTemplateSheetBtn').addEventListener('click', async 
   statusEl.className = 'status';
   try {
     const payload = JSON.stringify({ formatState, kosulluBicimlendirme });
-    const targetTab = document.getElementById('ayYilSelect').value || '(genel)';
-    const range = encodeURIComponent(`'${TEMPLATES_TAB}'!A:D`);
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${PUANTAJ_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED`;
+    const range = encodeURIComponent(`'${TAB_SABLONLAR}'!A:D`);
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED`;
     await authFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [[name, targetTab, payload, new Date().toISOString()]] }),
+      body: JSON.stringify({ values: [[name, currentProject || '(genel)', payload, new Date().toISOString()]] }),
     });
     nameInput.value = '';
     await loadTemplateList();
@@ -867,83 +1563,154 @@ document.getElementById('saveTemplateSheetBtn').addEventListener('click', async 
   }
 });
 
+document.getElementById('deleteTemplateSheetBtn').addEventListener('click', async () => {
+  const sel = document.getElementById('templateSelect');
+  const statusEl = document.getElementById('templateStatus');
+  if (!sel.value || !sel._rows){ statusEl.textContent = '✗ Önce silinecek bir şablon seç.'; statusEl.className = 'status err'; return; }
+  const idx = parseInt(sel.value, 10);
+  const row = sel._rows[idx];
+  if (!confirm(`"${row[0]}" şablonu kalıcı olarak silinecek. Emin misin?`)) return;
+  statusEl.textContent = 'Siliniyor…';
+  statusEl.className = 'status';
+  try {
+    // Sablonlar sekmesindeki gerçek satır numarasını bul (A2'den başladığımız için +2).
+    const sheetRow = idx + 2;
+    const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG_SHEET_ID}?fields=sheets.properties`);
+    const sheetProps = (meta.sheets || []).find(s => s.properties.title === TAB_SABLONLAR);
+    if (!sheetProps) throw new Error(`"${TAB_SABLONLAR}" sekmesi bulunamadı.`);
+    const sheetIdNum = sheetProps.properties.sheetId;
+    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${CONFIG_SHEET_ID}:batchUpdate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requests: [{ deleteDimension: { range: { sheetId: sheetIdNum, dimension: 'ROWS', startIndex: sheetRow - 1, endIndex: sheetRow } } }],
+      }),
+    });
+    await loadTemplateList();
+    statusEl.textContent = `✓ "${row[0]}" şablonu silindi.`;
+    statusEl.className = 'status ok';
+  } catch (err){
+    statusEl.textContent = '✗ ' + err.message;
+    statusEl.className = 'status err';
+  }
+});
+
 // ============================================================================
-// ===== EXCEL'E AKTAR (.xlsx) =====
-// Son hesaplanan sonucu (lastComputeResult), yukarıdaki Biçimlendirme ayarlarıyla
-// gerçek bir .xlsx dosyasına yazıp indirir. Sheets'e HİÇBİR ŞEY yazmaz.
+// ===== EXCEL'E AKTAR (.xlsx) — jenerik, gerçek formüllerle =====
+// "Formüllü" işaretli Hesaplamalar CANLI Excel formülü olarak, "Değer" işaretliler
+// SABİT değer olarak yazılır. Hiçbir Vardiya'ya özel kod yok — hepsi Kaynaklar/
+// Hesaplamalar konfigürasyonundan okunur.
 // ============================================================================
 
-// Bir günün DÜŞEYARA+EĞERHATA (VLOOKUP+IFERROR) formülünü kurar: VARDİYA sayfasında
-// Sicil'e göre o günün ham değerini bulur, Parametre'de arar, bulamazsa ham değeri korur.
-// Tıpkı orijinal VBA makronun mantığı — ama artık gerçek, görünür, düzenlenebilir bir
-// Excel formülü olarak.
-function buildDayFormula(rIdx, vIdx, dc, excelRowNum){
-  const vDay = vIdx.dayCols.find(d => d.day === dc.day);
-  if (!vDay) return null;
-  const maxNeededCol = Math.max(vIdx.sicilCol, ...vIdx.dayCols.map(d => d.col));
-  const rangeStart = colNumToA1(vIdx.sicilCol);
-  const rangeEnd = colNumToA1(maxNeededCol);
-  const colIndexInRange = vDay.col - vIdx.sicilCol + 1;
-  const refSicilLetter = colNumToA1(rIdx.sicilCol);
-  const rawLookup = `VLOOKUP($${refSicilLetter}${excelRowNum},VARDİYA!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
-  return `IFERROR(VLOOKUP(${rawLookup},Parametre!$A:$B,2,FALSE),${rawLookup})`;
+// {GÜNLER} / {SütunAdı} token'ını, EXPORT için gerçek bir Excel referansına/literaline çevirir.
+// null dönerse token çözülemedi demektir (o zaman Değer moduna düşülür).
+function buildExcelTokenString(token, ctx){
+  if (token === 'GÜNLER'){
+    const dayCs = ctx.result.columns.filter(c => c.kind === 'day');
+    if (!dayCs.length) return '""';
+    const first = colNumToA1(dayCs[0].col), last = colNumToA1(dayCs[dayCs.length - 1].col);
+    return `$${first}${ctx.excelRowNum}:$${last}${ctx.excelRowNum}`;
+  }
+  if (ctx.sabitler.has(token)) return String(ctx.sabitler.get(token));
+  const col = ctx.result.columns.find(c => c.label === token);
+  if (col) return `$${colNumToA1(col.col)}${ctx.excelRowNum}`;
+  for (const kcfg of ctx.kaynaklar.filter(k => k.rolu === 'Kaynak')){
+    const kd = ctx.kaynaklarData[kcfg.kaynakAdi];
+    if (!kd || kd.sicilCol === -1) continue;
+    const colIdx = kd.header.findIndex(h => normalizeKey(h) === token);
+    if (colIdx !== -1){
+      const rangeStart = colNumToA1(kd.sicilCol), rangeEnd = colNumToA1(Math.max(kd.sicilCol, colIdx));
+      const colIndexInRange = colIdx - kd.sicilCol + 1;
+      return `VLOOKUP($${colNumToA1(ctx.result.ciktiSicilCol)}${ctx.excelRowNum},'${sanitizeSheetName(kcfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+    }
+  }
+  return null;
+}
+function buildExcelFormulaForRow(formulText, ctx){
+  let unresolved = false;
+  const substituted = formulText.replace(/\{([^}]+)\}/g, (m, tok) => {
+    const v = buildExcelTokenString(tok.trim(), ctx);
+    if (v === null){ unresolved = true; return m; }
+    return v;
+  });
+  if (unresolved) return null;
+  return toOoxmlFormula(substituted);
 }
 
-// Bir kategori sütununun EĞERSAY (COUNTIF) formülünü kurar — o satırın gün sütunları
-// aralığında, kategori başlık hücresindeki koda kaç kez rastlandığını sayar. Orijinal
-// "MANUEL PUANTAJ" sayfasındaki =COUNTIF($F2:$AJ2,$AK$1) kalıbının birebir aynısı.
-function buildCategoryFormula(rIdx, cc, excelRowNum){
-  const firstDayLetter = colNumToA1(rIdx.dayNumCols[0].col);
-  const lastDayLetter = colNumToA1(rIdx.dayNumCols[rIdx.dayNumCols.length - 1].col);
-  return `COUNTIF($${firstDayLetter}${excelRowNum}:$${lastDayLetter}${excelRowNum},${colNumToA1(cc.col)}$1)`;
+// Gün sütununun VLOOKUP+IFERROR (ham veri + sözlük çevirisi) formülünü kurar.
+function buildDayExcelFormula(rawCfg, dictCfg, rawData, ciktiSicilCol, dc, excelRowNum){
+  const rc = findDateCols(rawData.header).find(d => d.day === dc.day);
+  if (!rc) return null;
+  const maxCol = Math.max(rawData.sicilCol, rc.col);
+  const rangeStart = colNumToA1(rawData.sicilCol), rangeEnd = colNumToA1(maxCol);
+  const colIndexInRange = rc.col - rawData.sicilCol + 1;
+  const refSicilLetter = colNumToA1(ciktiSicilCol);
+  const rawLookup = `VLOOKUP($${refSicilLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+  if (!dictCfg) return rawLookup;
+  return `IFERROR(VLOOKUP(${rawLookup},'${sanitizeSheetName(dictCfg.kaynakAdi)}'!$A:$B,2,FALSE),${rawLookup})`;
+}
+
+// Excel sayfa adlarında \ / ? * [ ] : yasaktır, 31 karakteri geçemez.
+function sanitizeSheetName(name){
+  return String(name || 'Sayfa').replace(/[\\/?*\[\]:]/g, '-').slice(0, 31) || 'Sayfa';
 }
 
 document.getElementById('exportExcelBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('exportStatus');
-  if (!lastComputeResult || !lastVardiyaRows || !lastParamRows){ statusEl.textContent = '✗ Önce "1. Ay Seç ve Hesapla" ile hesapla.'; statusEl.className = 'status err'; return; }
+  if (!lastComputeResult || !lastKaynaklarData || !lastKaynaklarConfig){ statusEl.textContent = '✗ Önce "2. Hesapla" ile hesapla.'; statusEl.className = 'status err'; return; }
   statusEl.textContent = 'Excel hazırlanıyor…';
   statusEl.className = 'status';
   try {
-    const { rIdx, results } = lastComputeResult;
-    const vIdx = indexVardiya(lastVardiyaRows);
+    const result = lastComputeResult;
+    const kaynaklar = lastKaynaklarConfig;
+    const kaynaklarData = lastKaynaklarData;
+    const rawCfg = kaynaklar.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() !== '');
+    const dictCfg = kaynaklar.find(k => k.rolu === 'Kaynak' && k.periyotDeseni.trim() === '');
+    const hesaplamalar = hesaplamalarConfigAll.filter(h => h.proje === currentProject && h.aktif);
+    const hesaplamaByLabel = new Map(hesaplamalar.map(h => [h.sutunAdi, h]));
+    const sabitler = new Map(hesaplamalar.filter(h => h.aktarimTuru === 'Sabit').map(h => [h.sutunAdi, coerceNumberIfNumeric(h.formul.trim())]));
+
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Zafer Çolak';
     wb.lastModifiedBy = 'Zafer Çolak';
 
-    // 1) VARDİYA verisini OLDUĞU GİBİ kopyala — formüllerin canlı referans vereceği kaynak.
-    const vardiyaSheet = wb.addWorksheet('VARDİYA');
-    lastVardiyaRows.forEach((row, ri) => { vardiyaSheet.getRow(ri + 1).values = row; });
+    // 1) Her "Kaynak" rolündeki veriyi OLDUĞU GİBİ kopyala — formüllerin canlı referans vereceği yer.
+    kaynaklar.filter(k => k.rolu === 'Kaynak').forEach(k => {
+      const kd = kaynaklarData[k.kaynakAdi];
+      const sheet = wb.addWorksheet(sanitizeSheetName(k.kaynakAdi));
+      const fullRows = [kd.header, ...kd.rows];
+      fullRows.forEach((row, ri) => { sheet.getRow(ri + 1).values = row; });
+    });
 
-    // 2) Parametre sözlüğünü OLDUĞU GİBİ kopyala.
-    const paramSheet = wb.addWorksheet('Parametre');
-    lastParamRows.forEach((row, ri) => { paramSheet.getRow(ri + 1).values = row; });
-
-    // 3) Ana Puantaj sayfası — gün ve kategori sütunları GERÇEK FORMÜL olarak yazılır.
-    const ws = wb.addWorksheet((lastSelectedTab || 'Puantaj').slice(0, 31));
-    const allCols = rIdx.header.map((h, c) => ({ col: c, label: normalizeKey(h) })).filter(c => c.label !== '');
+    // 2) Ana Çıktı sayfası.
+    const ws = wb.addWorksheet(sanitizeSheetName(currentProject || 'Cikti'));
     const headerRow = ws.getRow(1);
-    allCols.forEach(c => {
+    result.columns.forEach(c => {
       const cell = headerRow.getCell(c.col + 1);
       cell.value = c.label;
       applyCellStyle(cell, formatState.baslik);
     });
 
-    const dayColSet = new Set(rIdx.dayNumCols.map(d => d.col));
-    const categorySet = new Set(rIdx.categoryCols.filter(c => !SKIP_CATEGORY_CODES.has(c.code)).map(c => c.col));
-
-    results.forEach((r, ri) => {
-      const origRow = rIdx.dataRows[r.rowIndex];
+    result.results.forEach((r, ri) => {
+      const origRow = result.dataRows[r.rowIndex];
       const excelRowNum = ri + 2;
       const excelRow = ws.getRow(excelRowNum);
-      allCols.forEach(c => {
+      const ctx = { result, kaynaklar, kaynaklarData, sabitler, excelRowNum };
+
+      result.columns.forEach(c => {
         const cell = excelRow.getCell(c.col + 1);
-        if (dayColSet.has(c.col)){
-          const dc = rIdx.dayNumCols.find(d => d.col === c.col);
-          const formula = buildDayFormula(rIdx, vIdx, dc, excelRowNum);
-          cell.value = formula ? { formula } : null;
-        } else if (categorySet.has(c.col)){
-          const cc = rIdx.categoryCols.find(x => x.col === c.col);
-          cell.value = { formula: buildCategoryFormula(rIdx, cc, excelRowNum) };
+        if (c.kind === 'day'){
+          const dc = result.dayCols.find(d => d.col === c.col);
+          const formula = rawCfg ? buildDayExcelFormula(rawCfg, dictCfg, kaynaklarData[rawCfg.kaynakAdi], result.ciktiSicilCol, dc, excelRowNum) : null;
+          cell.value = formula ? { formula } : (r.updates[c.col] ?? null);
+        } else if (c.kind === 'hesaplama'){
+          const h = hesaplamaByLabel.get(c.label);
+          if (h && h.aktarimTuru === 'Formüllü'){
+            const formula = buildExcelFormulaForRow(h.formul, ctx);
+            cell.value = formula ? { formula } : (r.updates[c.col] ?? null);
+          } else {
+            cell.value = r.updates[c.col] ?? null;
+          }
         } else {
           const val = origRow[c.col];
           cell.value = (val === undefined || val === null) ? null : val;
@@ -952,18 +1719,18 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
       });
     });
 
-    applyKosulluBicimlendirme(ws, rIdx, results.length);
+    applyKosulluBicimlendirme(ws, result, result.results.length);
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Puantaj-${lastSelectedTab || 'export'}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `${(currentProject || 'export').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g, '')}-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(a.href);
-    statusEl.textContent = '✓ İndirildi (VARDİYA + Parametre + Puantaj — 3 sayfa, gerçek formüllerle).';
+    statusEl.textContent = `✓ İndirildi (${wb.worksheets.length} sayfa, gerçek formüllerle).`;
     statusEl.className = 'status ok';
   } catch (err){
     statusEl.textContent = '✗ ' + err.message;

@@ -805,6 +805,7 @@ function applyCellStyle(cell, st){
 
 const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit', 'Eşit', 'Farklı', 'Aralık', 'İçerdiği Metin'];
 let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, oncelik }]
+let hucreBazliBicim = null; // { palette, rows, rowCount, colCount } — elle boyanmış (kuralsız) hücreler için
 let condRuleIdSeq = 1;
 
 const GROUP_ALL_DAYS = '__ALL_DAYS__';
@@ -1062,13 +1063,31 @@ function applyTint(hex, tint){
   return toHex(adj(r)) + toHex(adj(g)) + toHex(adj(b));
 }
 
-// Bir ExcelJS renk objesini ("argb" ya da "theme"+"tint") "#rrggbb" hex'e çevirir.
+// Excel'in eski/klasik "indexed" renk paleti — sabit, dosyadan dosyaya değişmeyen 64 renklik
+// bir tablo (BIFF/eski OOXML mirası). Bazı hücreler renk için buna referans verir (örn.
+// {indexed: 10} = kırmızı), ne ham RGB ne tema — üçüncü bir mekanizma. İndeks 64, "otomatik/
+// sistem rengi" anlamına gelir, gerçek bir renk DEĞİLDİR — bilerek tabloya dahil edilmedi.
+const EXCEL_INDEXED_COLORS = [
+  '000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF',
+  '000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF',
+  '800000','008000','000080','808000','800080','008080','C0C0C0','808080',
+  '9999FF','993366','FFFFCC','CCFFFF','660066','FF8080','0066CC','CCCCFF',
+  '000080','FF00FF','FFFF00','00FFFF','800080','800000','008080','0000FF',
+  '00CCFF','CCFFFF','CCFFCC','FFFF99','99CCFF','FF99CC','CC99FF','FFCC99',
+  '3366FF','33CCCC','99CC00','FFCC00','FF9900','FF6600','666699','969696',
+  '003366','339966','003300','333300','993300','993366','333399','333333',
+];
+
+// Bir ExcelJS renk objesini ("argb", "theme"+"tint", ya da "indexed") "#rrggbb" hex'e çevirir.
 // themeColors, extractThemeColors()'dan gelen 12'lik dizidir (yoksa tema renkleri çözülemez).
 function resolveColor(colorObj, themeColors){
   if (!colorObj) return '';
   if (colorObj.argb) return argbToHex(colorObj.argb);
   if (colorObj.theme !== undefined && themeColors && themeColors[colorObj.theme]){
     return ('#' + applyTint(themeColors[colorObj.theme], colorObj.tint || 0)).toLowerCase();
+  }
+  if (colorObj.indexed !== undefined && EXCEL_INDEXED_COLORS[colorObj.indexed]){
+    return '#' + EXCEL_INDEXED_COLORS[colorObj.indexed].toLowerCase();
   }
   return '';
 }
@@ -1156,6 +1175,90 @@ function importFormatFromSheet(ws, themeColors){
   return { baslik: readCellStyle(headerCell, themeColors), veri: readCellStyle(dataCell, themeColors) };
 }
 
+// ============================================================================
+// ===== TAM HÜCRE BAZLI BİÇİM YAKALAMA (elle boyanmış, kuralsız hücreler için) =====
+// Bazı dosyalarda renklendirme "Koşullu Biçimlendirme" DEĞİL, satır satır elle boyanmış
+// statik renklerdir (örn. UNVAN'a göre elle boyanmış satırlar). Bunlar Excel'in koşullu
+// biçimlendirme motorunda hiç kayıtlı olmadığından normal içe aktarma bunları GÖREMEZ.
+// Bu yüzden dosyanın HER HÜCRESİNİN görünümünü tek tek okuyup, aynı stili paylaşan
+// hücreleri bir PALETTE'te birleştirerek (Sheets'in 50.000 karakter/hücre sınırına
+// sığması için) kompakt bir { palette, grid } yapısına sıkıştırıyoruz. Export sırasında
+// aynı satır/sütun konumuna göre GERİ uygulanır — pozisyon şablonla birebir eşleşir çünkü
+// her ay aynı Puantaj Referans yapısından okunuyoruz.
+// ============================================================================
+
+function styleSignature(st){
+  return JSON.stringify([st.kalin, st.yaziRengi, st.argPlan, st.hizalama, st.kenarlik, st.sayiFormat, st.kaydir, st.yaziBoyutu]);
+}
+
+// "Boş" bir stil mi (uygulamaya değmez, gridde yer kaplamasın diye atlanır)?
+function isBlankStyle(st){
+  return !st.kalin && !st.yaziRengi && !st.argPlan && !st.hizalama && !st.kenarlik && !st.sayiFormat && !st.kaydir && !st.yaziBoyutu;
+}
+
+function importFullCellFormatFromSheet(ws, themeColors){
+  const paletteIndex = new Map(); // signature -> index
+  const palette = [];
+  const rows = {}; // "r" -> [[colStart, colEnd, paletteIdx], ...] — ayni satirdaki ardisik
+                    // ayni-stildeki hucreler TEK bloğa sıkıştırılır (RLE), aksi halde
+                    // gerçek dosyalarda 50.000 karakter/hücre Sheets sınırı kolayca aşılıyor.
+  const maxRow = ws.rowCount || 0;
+  const maxCol = ws.columnCount || 0;
+  for (let r = 1; r <= maxRow; r++){
+    const row = ws.getRow(r);
+    const runs = [];
+    let curIdx = null, runStart = null;
+    for (let c = 1; c <= maxCol; c++){
+      const cell = row.getCell(c);
+      const st = readCellStyle(cell, themeColors);
+      const blank = isBlankStyle(st);
+      let idx = null;
+      if (!blank){
+        const sig = styleSignature(st);
+        idx = paletteIndex.get(sig);
+        if (idx === undefined){ idx = palette.length; palette.push(st); paletteIndex.set(sig, idx); }
+      }
+      if (idx !== curIdx){
+        if (curIdx !== null) runs.push([runStart, c - 1, curIdx]);
+        curIdx = idx; runStart = c;
+      }
+    }
+    if (curIdx !== null) runs.push([runStart, maxCol, curIdx]);
+    if (runs.length) rows[r] = runs;
+  }
+  return { palette, rows, rowCount: maxRow, colCount: maxCol };
+}
+
+// Daha önce içe aktarılmış { palette, rows } yapısını, export edilen worksheet'e AYNI
+// satır/sütun POZİSYONUNA göre uygular. cellFormatTemplate yoksa (null) hiçbir şey yapmaz —
+// bu durumda export, mevcut formatState.baslik/veri stiliyle devam eder (geriye dönük uyum).
+// Bir (satır, sütun) pozisyonunda içe aktarılmış hücre-bazlı bir biçim var mı — varsa
+// stil objesini döndürür, yoksa null. Hem canlı önizleme hem export için TEK yerden.
+function lookupCellFormatOverride(tpl, row, col){
+  if (!tpl || !tpl.rows) return null;
+  const runs = tpl.rows[row];
+  if (!runs) return null;
+  for (const [cs, ce, idx] of runs){
+    if (col >= cs && col <= ce) return tpl.palette[idx];
+  }
+  return null;
+}
+
+function applyFullCellFormat(ws, cellFormatTemplate, rowCount, colCount){
+  if (!cellFormatTemplate || !cellFormatTemplate.palette || !cellFormatTemplate.rows) return false;
+  const { palette, rows } = cellFormatTemplate;
+  for (let r = 1; r <= rowCount; r++){
+    const runs = rows[r];
+    if (!runs) continue;
+    runs.forEach(([colStart, colEnd, idx]) => {
+      for (let c = colStart; c <= Math.min(colEnd, colCount); c++){
+        applyCellStyle(ws.getRow(r).getCell(c), palette[idx]);
+      }
+    });
+  }
+  return true;
+}
+
 function importCondFormattingFromSheet(ws, themeColors){
   const header = [];
   ws.getRow(1).eachCell({ includeEmpty: true }, (cell, c) => { header[c - 1] = normalizeKey(cell.value); });
@@ -1237,10 +1340,15 @@ document.getElementById('condImportFile').addEventListener('change', async (e) =
     wb.worksheets.forEach(ws => { allImported = allImported.concat(importCondFormattingFromSheet(ws, themeColors)); });
     allImported.forEach(r => kosulluBicimlendirme.push(Object.assign({ id: condRuleIdSeq++ }, r)));
 
+    // Tam hücre bazlı biçim: elle boyanmış, hiçbir kurala bağlı olmayan renkler için —
+    // sadece ilk sayfa alınır (birden fazla sayfa karışıklık yaratır).
+    hucreBazliBicim = importFullCellFormatFromSheet(wb.worksheets[0], themeColors);
+
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 
     const parts = [`Biçimlendirme (Başlık/Veri) alındı`];
     parts.push(allImported.length ? `${allImported.length} koşullu biçimlendirme kuralı` : 'koşullu biçimlendirme bulunamadı');
+    parts.push(`${hucreBazliBicim.palette.length} farklı hücre görünümü (elle boyanmış alanlar dahil)`);
     if (!themeColors) parts.push('(dosyada tema rengi bilgisi bulunamadı, sadece ham renkler alındı)');
     statusEl.textContent = `✓ ${parts.join(', ')}. Aşağıdaki tabloları kontrol et, gerekirse düzenle.`;
     statusEl.className = 'status ok';
@@ -1523,13 +1631,17 @@ function renderPreview(result){
   let html = '<thead><tr>' + result.columns.map(c => `<th style="${baslikCss}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
   result.results.forEach(r => {
     const origRow = result.dataRows[r.rowIndex];
+    const sheetRow = r.rowIndex + 2; // hucreBazliBicim, ExcelJS 1-index satır/sütun numaralarıyla eşleşir
     html += '<tr>';
     result.columns.forEach(c => {
       const isComputed = c.kind !== 'info';
       const val = isComputed ? r.updates[c.col] : origRow[c.col];
       const colInfo = { isDay: c.kind === 'day', isCategory: c.kind === 'hesaplama' };
       const condColor = getCondColorForCell(c.label, val, colInfo);
-      let style = veriCss;
+      // Elle boyanmış (kuralsız) hücre biçimi varsa, o AYNI POZİSYONDAKİ görünümü canlı
+      // önizlemede de göster — export'ta ne göreceksen burada da onu görmelisin.
+      const cellOverride = lookupCellFormatOverride(hucreBazliBicim, sheetRow, c.col + 1);
+      let style = cellOverride ? formatStateToCss(cellOverride) : veriCss;
       if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
       const cls = isComputed && !condColor ? ' class="changed"' : '';
       const display = (val === undefined || val === null) ? '' : val;
@@ -1598,6 +1710,7 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
     if (Array.isArray(data.kosulluBicimlendirme)){
       kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
     }
+    hucreBazliBicim = data.hucreBazliBicim || null;
     renderFormatTable();
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
     statusEl.textContent = `✓ "${row[0]}" şablonu yüklendi.`;
@@ -1616,7 +1729,7 @@ document.getElementById('saveTemplateSheetBtn').addEventListener('click', async 
   statusEl.textContent = 'Kaydediliyor…';
   statusEl.className = 'status';
   try {
-    const payload = JSON.stringify({ formatState, kosulluBicimlendirme });
+    const payload = JSON.stringify({ formatState, kosulluBicimlendirme, hucreBazliBicim });
     const range = encodeURIComponent(`'${TAB_SABLONLAR}'!A:D`);
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED`;
     await authFetch(url, {
@@ -1791,6 +1904,13 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     });
 
     applyKosulluBicimlendirme(ws, result, result.results.length);
+
+    // Elle boyanmış (kuralsız) hücreleri, içe aktarılan şablondan AYNI pozisyona geri uygula
+    // — koşullu biçimlendirmenin yakalayamadığı statik renkler için.
+    if (hucreBazliBicim){
+      const maxOutputCol = result.columns.reduce((m, c) => Math.max(m, c.col + 1), 0);
+      applyFullCellFormat(ws, hucreBazliBicim, result.results.length + 1, maxOutputCol);
+    }
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

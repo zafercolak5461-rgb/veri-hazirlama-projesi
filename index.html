@@ -606,22 +606,45 @@ class CalcParser {
     }
     throw new Error('#AD? (beklenmeyen ifade)');
   }
-  parseArgSafe(){ try { return this.parseExpression(); } catch (e){ return { __err: e.message || '#HATA!' }; } }
+  // Bir argümanı hesaplarken hata oluşursa (örn. bir {token} eksik/yok, bölme hatası), argümanı
+  // {__err} olarak işaretleyip devam ederiz — AMA argümanın YARIM KALAN token'ları hâlâ akışta
+  // durabilir (hata, ifadenin ortasında bir yerde fırlatılmış olabilir). Bu yüzden, sonraki
+  // argüman ayracı (;) ya da fonksiyonun kapanış parantezine (derinlik 0'da) kadar token'ları
+  // atlayarak parser'ı senkronize ederiz — yoksa geri kalan formül "#AD?" hatasıyla bozulur.
+  parseArgSafe(){
+    const startPos = this.pos;
+    try { return this.parseExpression(); }
+    catch (e){
+      let depth = 0;
+      while (this.pos < this.tokens.length){
+        const t = this.peek();
+        if (t.type === 'EOF') break;
+        if (t.type === 'OP' && t.value === '(') depth++;
+        else if (t.type === 'OP' && t.value === ')'){ if (depth === 0) break; depth--; }
+        else if (t.type === 'OP' && t.value === ';' && depth === 0) break;
+        this.next();
+      }
+      if (this.pos === startPos && this.pos < this.tokens.length) this.next(); // en az 1 ilerle, sonsuz döngü olmasın
+      return { __err: e.message || '#HATA!' };
+    }
+  }
 }
 
 // Formül metnindeki {token} referanslarını benzersiz __T0__ gibi tanımlayıcılarla değiştirir,
-// her birinin ÇÖZÜLMÜŞ DEĞERİNİ (JS önizleme için) placeholders'a koyar, sonra ifadeyi hesaplar.
+// her birinin ÇÖZÜLMÜŞ DEĞERİNİ placeholders'a koyar, sonra ifadeyi hesaplar. Bir token
+// çözülemezse (örn. o tarih kaynakta yok, #YOK!), formülü HEMEN durdurmuyoruz — hatayı
+// {__err} etiketli bir DEĞER olarak placeholder'a koyup ifadenin içine bırakıyoruz. Böylece
+// EĞERHATA(...)/EĞERYOKSA(...) bu hatayı, tıpkı Excel'de olduğu gibi YAKALAYABİLİYOR; formül
+// bu fonksiyonlarla sarılmamışsa hata normal şekilde yukarı taşıp sonuçta görünüyor.
 function evaluateFormulaJs(formulaText, resolveToken){
   const placeholders = {};
-  let idx = 0, refError = null;
+  let idx = 0;
   const substituted = formulaText.replace(/\{([^}]+)\}/g, (m, tok) => {
     const key = `__T${idx++}__`;
     const res = resolveToken(tok.trim());
-    if (res && res.__error){ refError = res.__error; }
-    placeholders[key] = res ? res.value : undefined;
+    placeholders[key] = (res && res.__error) ? { __err: res.__error } : (res ? res.value : undefined);
     return key;
   });
-  if (refError) return { error: refError };
   try {
     const tokens = calcTokenize(substituted);
     const parser = new CalcParser(tokens, placeholders);
@@ -870,7 +893,7 @@ function applyCellStyle(cell, st){
 // değil), böylece Excel'de açınca Ana Sayfa → Koşullu Biçimlendirme'den görünür/düzenlenebilir.
 // ============================================================================
 
-const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit', 'Eşit', 'Farklı', 'Aralık', 'İçerdiği Metin'];
+const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit', 'Eşit', 'Farklı', 'Aralık', 'İçerdiği Metin', 'Boşsa Satırı Renklendir'];
 let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, oncelik }]
 let hucreBazliBicim = null; // { palette, rows, rowCount, colCount } — elle boyanmış (kuralsız) hücreler için
 let sutunGenislikleri = null; // { colNum: width } — içe aktarılan dosyanın sütun genişlikleri
@@ -893,7 +916,7 @@ function renderCondFormatTable(){
     return `<tr>
       <td><select data-cf-id="${rule.id}" data-cf-field="metrik">${metrikOpts}</select></td>
       <td><select data-cf-id="${rule.id}" data-cf-field="operator">${opOpts}</select></td>
-      <td><input type="text" data-cf-id="${rule.id}" data-cf-field="deger1" value="${rule.deger1 || ''}" style="width:80px;"></td>
+      <td><input type="text" data-cf-id="${rule.id}" data-cf-field="deger1" value="${rule.deger1 || ''}" style="width:80px;" ${rule.operator==='Boşsa Satırı Renklendir'?'disabled':''}></td>
       <td><input type="text" data-cf-id="${rule.id}" data-cf-field="deger2" value="${rule.deger2 || ''}" style="width:80px;" ${rule.operator==='Aralık'?'':'disabled'}></td>
       <td><input type="color" data-cf-id="${rule.id}" data-cf-field="renk" value="${rule.renk || '#ffff00'}"></td>
       <td><input type="number" data-cf-id="${rule.id}" data-cf-field="oncelik" value="${rule.oncelik || 1}" style="width:60px;"></td>
@@ -943,7 +966,11 @@ function findColByLabel(result, label){
 // koşullu biçimlendirmesini kurarken (renk/aralık) hem de DASHBOARD İÇİNDEKİ canlı
 // önizlemede aynı mantığı kullanmak için buradan tek bir yerden yönetilir.
 function ruleMatches(rule, rawValue){
-  if (!rule.metrik || rule.deger1 === '' || rule.deger1 === undefined || rule.deger1 === null) return false;
+  if (!rule.metrik) return false;
+  const isBlankRule = rule.deger1 === '' || rule.deger1 === undefined || rule.deger1 === null;
+  const isBlankValue = rawValue === '' || rawValue === undefined || rawValue === null;
+  if (rule.operator === 'Boşsa Satırı Renklendir') return isBlankValue;
+  if (isBlankRule && rule.operator !== 'Eşit' && rule.operator !== 'Farklı') return false;
   const vNum = (typeof rawValue === 'number') ? rawValue : parseFloat(String(rawValue ?? '').replace(',', '.'));
   const d1Num = parseFloat(String(rule.deger1).replace(',', '.'));
   switch (rule.operator){
@@ -952,9 +979,11 @@ function ruleMatches(rule, rawValue){
     case 'Büyük Eşit': return !isNaN(vNum) && !isNaN(d1Num) && vNum >= d1Num;
     case 'Küçük Eşit': return !isNaN(vNum) && !isNaN(d1Num) && vNum <= d1Num;
     case 'Eşit':
+      if (isBlankRule) return isBlankValue;
       if (!isNaN(vNum) && !isNaN(d1Num)) return vNum === d1Num;
       return String(rawValue ?? '').toUpperCase() === String(rule.deger1).toUpperCase();
     case 'Farklı':
+      if (isBlankRule) return !isBlankValue;
       if (!isNaN(vNum) && !isNaN(d1Num)) return vNum !== d1Num;
       return String(rawValue ?? '').toUpperCase() !== String(rule.deger1).toUpperCase();
     case 'Aralık': {
@@ -971,8 +1000,15 @@ function ruleMatches(rule, rawValue){
 // AYNI kuralı, aynı önceliklendirmeyle kullanmak için. Kural "Tüm Gün Sütunları" veya
 // "Tüm Kategori Sütunları" gibi bir GRUBU hedefliyorsa, o gruba ait her sütun için de eşleşir
 // — 30+ gün sütununa aynı kuralı teker teker eklemek zorunda kalmamak için.
-function getCondColorForCell(label, value, colInfo){
+function getCondColorForCell(label, value, colInfo, rowValueLookup){
   const matches = kosulluBicimlendirme.filter(r => {
+    if (r.operator === 'Boşsa Satırı Renklendir'){
+      // Bu kural TEK bir sütunu (r.metrik) kontrol edip, eşleşirse TÜM SATIRI boyar —
+      // yani şu an çizilen hücrenin kendi değeri değil, kontrol edilen sütunun bu
+      // SATIRDAKİ değeri önemli.
+      if (!rowValueLookup) return false;
+      return ruleMatches(r, rowValueLookup(r.metrik));
+    }
     if (r.metrik === label) return ruleMatches(r, value);
     if (r.metrik === GROUP_ALL_DAYS && colInfo && colInfo.isDay) return ruleMatches(r, value);
     if (r.metrik === GROUP_ALL_CATEGORIES && colInfo && colInfo.isCategory) return ruleMatches(r, value);
@@ -1000,8 +1036,13 @@ function formatStateToCss(st){
 // tırnaksız (97), METİN karşılaştırmalarında ise ZORUNLU OLARAK tırnak içinde ("HT") ister.
 // Tırnaksız metin yazarsak Excel bunu geçersiz bir ad/referans sanıp dosyayı "bozuk" sayar
 // (LibreOffice buna tolerans gösteriyor, gerçek Excel göstermiyor).
+// Koşullu biçimlendirme kuralındaki bir değeri Excel formülü içine güvenle gömülebilecek
+// metne çevirir. BOŞ değer özel durum: "boşsa" (örn. EĞERHATA'nın ürettiği boş hücreleri
+// yakalamak için) demek istiyorsan, ham boş string DEĞİL, tırnaklı boş string ("") üretmek
+// gerekir — yoksa Excel'in cellIs kuralı geçersiz/boş bir formülle bozulur.
 function toExcelFormulaLiteral(v){
-  if (v === '' || v === null || v === undefined) return v;
+  if (v === null || v === undefined) return v;
+  if (v === '') return '""';
   const s = String(v).trim();
   const n = Number(s.replace(',', '.'));
   if (s !== '' && !isNaN(n)) return s;
@@ -1017,13 +1058,37 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
   // burada, kullanıcının "Öncelik" alanına göre SIRALAYIP, gerçek Excel'e yazarken
   // GARANTİLİ BENZERSİZ, ardışık bir sayı veriyoruz — görece öncelik sırası korunur,
   // çakışma imkansız hale gelir.
+  // Not: deger1==='' filtrelenmiyor — bilerek. Bu artık "boşsa" (EĞERHATA'nın ürettiği boş
+  // hücreleri yakala) demek için GEÇERLİ bir kural; sadece metrik seçilmemiş kurallar atlanır.
   const sortedRules = kosulluBicimlendirme
-    .filter(r => r.metrik && r.deger1 !== '' && r.deger1 !== undefined)
+    .filter(r => r.metrik)
     .slice()
     .sort((a, b) => (a.oncelik || 1) - (b.oncelik || 1));
   let priorityCounter = 1;
 
   sortedRules.forEach(rule => {
+    if (rule.operator === 'Boşsa Satırı Renklendir'){
+      // Excel'in "Formül Kullan" tekniği: bir tek sütun (rule.metrik) boşsa, TÜM SATIRI
+      // (elindeki tüm çıktı sütunları, ilk sütundan son sütuna kadar) renklendirir. type=
+      // 'expression', formül SADECE kontrol edilen sütunun göreceli referansını kullanır —
+      // Excel/ExcelJS bunu her satır için otomatik kaydırır (senin orijinal dosyandaki
+      // "D5="" " kuralıyla AYNI mekanizma).
+      const checkCol = findColByLabel(result, rule.metrik);
+      if (checkCol === null) return;
+      const allCols = result.columns.map(c => c.col);
+      const firstCol = Math.min(...allCols), lastCol = Math.max(...allCols);
+      const firstLetter = colNumToA1(firstCol), lastLetter = colNumToA1(lastCol);
+      const checkLetter = colNumToA1(checkCol);
+      const ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
+      const argb = hexToArgb(rule.renk) || 'FFFFFF00';
+      const style = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb } } };
+      const priority = priorityCounter++;
+      ws.addConditionalFormatting({
+        ref, rules: [{ type: 'expression', formulae: [`${checkLetter}2=""`], style, priority }],
+      });
+      return;
+    }
+
     let ref, topLeftCellRef;
     if (rule.metrik === GROUP_ALL_DAYS){
       const dayCs = result.columns.filter(c => c.kind === 'day');
@@ -1394,6 +1459,20 @@ function importCondFormattingFromSheet(ws, themeColors){
           imported.push({ metrik, operator: op, deger1: unquoteFormulaValue(f[0]), deger2: op === 'Aralık' ? unquoteFormulaValue(f[1]) : '', renk, oncelik: rule.priority || oncelikSeq++ });
         }
       };
+
+      // "expression" tipi (Excel'in "Formül Kullan" tekniği, örn. senin dosyandaki D5="" gibi):
+      // bu, tek bir sütun (aralığın SOL ÜST hücresindeki göreceli referans) boşsa/koşulu
+      // sağlıyorsa TÜM ARALIĞI (genelde tüm satırı) renklendirir. otherColsInRange üzerinde
+      // TEK TEK dönmüyoruz — sadece formüldeki referans sütunu buluyoruz, TEK kural ekliyoruz.
+      if (rule.type === 'expression' && (rule.formulae || [])[0]){
+        const exprMatch = String(rule.formulae[0]).trim().match(/^\$?([A-Za-z]+)\$?(\d+)\s*=\s*""$/);
+        if (exprMatch){
+          const refCol = colLetterToNum(exprMatch[1].toUpperCase());
+          const metrik = header[refCol] || '';
+          if (metrik) imported.push({ metrik, operator: 'Boşsa Satırı Renklendir', deger1: '', deger2: '', renk, oncelik: rule.priority || oncelikSeq++ });
+        }
+        return;
+      }
 
       if (dayColsInRange.length) pushRule(GROUP_ALL_DAYS);
       otherColsInRange.forEach(c => { const metrik = header[c] || ''; if (metrik) pushRule(metrik); });
@@ -1790,12 +1869,17 @@ function renderPreview(result){
   result.results.forEach(r => {
     const origRow = result.dataRows[r.rowIndex];
     const sheetRow = r.rowIndex + 2; // hucreBazliBicim, ExcelJS 1-index satır/sütun numaralarıyla eşleşir
+    const rowValueLookup = (lbl) => {
+      const col = result.columns.find(cc => cc.label === lbl);
+      if (!col) return undefined;
+      return col.kind !== 'info' ? r.updates[col.col] : coerceNumberIfNumeric(origRow[col.col]);
+    };
     html += '<tr>';
     result.columns.forEach(c => {
       const isComputed = c.kind !== 'info';
       const val = isComputed ? r.updates[c.col] : coerceNumberIfNumeric(origRow[c.col]);
       const colInfo = { isDay: c.kind === 'day', isCategory: c.kind === 'hesaplama' };
-      const condColor = getCondColorForCell(c.label, val, colInfo);
+      const condColor = getCondColorForCell(c.label, val, colInfo, rowValueLookup);
       // Elle boyanmış (kuralsız) hücre biçimi varsa, o AYNI POZİSYONDAKİ görünümü canlı
       // önizlemede de göster — export'ta ne göreceksen burada da onu görmelisin.
       const cellOverride = lookupCellFormatOverride(hucreBazliBicim, sheetRow, c.col + 1);

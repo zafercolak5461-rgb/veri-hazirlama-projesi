@@ -9,11 +9,11 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
-    --bg:#F4F6FB; --panel:#FFFFFF; --panel2:#EEF1F7; --line:#D7DEEA;
-    --text:#16213D; --dim:#5D7299; --dim2:#7484A8;
-    --accent:#C6841E; --accent-soft:rgba(198,132,30,0.12);
-    --ok:#1F9C6B; --ok-soft:rgba(31,156,107,0.12);
-    --danger:#D1393F; --danger-soft:rgba(209,57,63,0.12);
+    --bg:#10182B; --panel:#16213D; --panel2:#1C2944; --line:#2A3A5C;
+    --text:#FFFFFF; --dim:#8FA3C9; --dim2:#5D7299;
+    --accent:#E8A53D; --accent-soft:rgba(232,165,61,0.16);
+    --ok:#5DD6A0; --ok-soft:rgba(93,214,160,0.14);
+    --danger:#e85d5d; --danger-soft:rgba(232,93,93,0.16);
   }
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI', Arial, sans-serif; }
@@ -147,8 +147,6 @@
         </div>
         <div id="templateStatus" class="status"></div>
 
-        <table class="prev" id="formatTable" style="margin-top:14px;"></table>
-
         <h2 style="margin-top:22px;">Koşullu Biçimlendirme</h2>
         <div class="hint">Belirli bir sütundaki DEĞERE göre hücreyi renklendirir (örn. "HT" hücrelerini gri, 8'den büyük hücreleri sarı yap). Excel'in kendi native koşullu biçimlendirmesi olarak yazılır — Excel'de açtığında Ana Sayfa → Koşullu Biçimlendirme'den görüp düzenleyebilirsin.</div>
 
@@ -219,33 +217,90 @@ function colNumToA1(n){
 // HANGİ proje seçilirse seçilsin aynen çalışır.
 // ============================================================================
 
-// "GG.AA.YYYY" gibi bir tarih deseni mi?
-function isDatePeriyot(desen){ return /^GG\.AA\.YYYY$/i.test(String(desen || '').trim()); }
+// "GG.AA.YYYY" ya da "YYYY.AA.GG" gibi bir tarih deseni mi? Hangisi olduğunu döner (null=değil).
+function detectDatePeriyotFormat(desen){
+  const s = String(desen || '').trim().toUpperCase();
+  if (/^GG\.AA\.YYYY$/.test(s)) return 'GG.AA.YYYY';
+  if (/^YYYY\.AA\.GG$/.test(s)) return 'YYYY.AA.GG';
+  return null;
+}
+function isDatePeriyot(desen){ return detectDatePeriyotFormat(desen) !== null; }
 // "1-31" gibi bir sayı aralığı deseni mi? -> {lo,hi} ya da null
 function parseNumRangePeriyot(desen){
   const m = String(desen || '').trim().match(/^(\d+)\s*-\s*(\d+)$/);
   return m ? { lo: parseInt(m[1], 10), hi: parseInt(m[2], 10) } : null;
 }
 
-// Bir kaynağın (ham 2B dizi) başlık satırından Sicil sütununu bulur.
-function findSicilCol(header){
-  return header.findIndex(h => { const u = trUpper(h); return u === 'SİCİL' || u === 'SICIL'; });
+// Bir kaynağın (ham 2B dizi) başlık satırından ANAHTAR sütununu bulur. anahtarAdi, o projenin
+// Projeler sekmesindeki "Anahtar Sütun Adı" değeridir (Sicil, Tarih, Plaka, İsim... herhangi bir
+// başlık olabilir) — sabit "Sicil" arama kaldırıldı, proje ne derse ona bakılır.
+function findKeyCol(header, anahtarAdi){
+  const target = trUpper(anahtarAdi || 'Sicil');
+  return header.findIndex(h => trUpper(h) === target);
 }
 
-// Bir kaynağı { header, sicilCol, bySicil, rows } şeklinde indeksler — Sicil'e göre
+// Anahtar KARŞILAŞTIRMASI için normalize eder. Sicil/Plaka gibi anahtarlarda normalizeKey ile
+// aynıdır. GG.AA.YYYY ya da YYYY.AA.GG görünümlü bir tarihse (gün/ay tek ya da çift haneli
+// olabilir, format hangisi olursa olsun) ORTAK bir iç kanonik forma (YYYY-MM-DD, sıfır
+// doldurulmuş) çevrilir — böylece "1.6.2026", "01.06.2026" ve "2026.6.1" AYNI gün sayılır,
+// hatta iki FARKLI formattaki kaynak birbirini bulabilir. SADECE eşleştirme/Map-anahtarı için
+// kullanılır — görüntüleme (uyarılar, sonuç etiketleri) için displayKey() kullanılır, format
+// bozulmasın diye.
+function normalizeMatchKey(v){
+  const s = normalizeKey(v);
+  const dmy = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);       // GG.AA.YYYY
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  const ymd = s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);       // YYYY.AA.GG
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
+  return s;
+}
+
+// Görüntüleme amaçlı normalize — Sicil/Tarih ne olursa FORMATINI DEĞİŞTİRMEZ, sadece tek
+// haneli gün/ay varsa okunabilirlik için sıfır doldurur. Uyarılarda ve sonuç etiketlerinde
+// ("Tarih 01.06.2026" gibi) kullanılır. Eşleştirme normalizeMatchKey ile ayrı yapılır.
+function displayKey(v){
+  const s = normalizeKey(v);
+  const dmy = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (dmy) return `${dmy[1].padStart(2, '0')}.${dmy[2].padStart(2, '0')}.${dmy[3]}`;
+  const ymd = s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})$/);
+  if (ymd) return `${ymd[1]}.${ymd[2].padStart(2, '0')}.${ymd[3].padStart(2, '0')}`;
+  return s;
+}
+
+// Bir kaynağı { header, keyCol, byKey, rows } şeklinde indeksler — projenin anahtarına göre
 // hızlı satır erişimi için.
-function indexKaynak(rows){
+function indexKaynak(rows, anahtarAdi){
   const header = rows[0] || [];
-  const sicilCol = findSicilCol(header);
-  const bySicil = new Map();
+  const keyCol = findKeyCol(header, anahtarAdi);
+  const byKey = new Map();
   for (let r = 1; r < rows.length; r++){
     const row = rows[r];
-    if (sicilCol === -1) continue;
-    const sicil = normalizeKey(row[sicilCol]);
-    if (sicil === '') continue;
-    if (!bySicil.has(sicil)) bySicil.set(sicil, row);
+    if (keyCol === -1) continue;
+    const key = normalizeMatchKey(row[keyCol]);
+    if (key === '') continue;
+    if (!byKey.has(key)) byKey.set(key, row);
   }
-  return { header, sicilCol, bySicil, rows: rows.slice(1) };
+  return { header, keyCol, byKey, rows: rows.slice(1) };
+}
+
+// Bir Ay/Yıl aralığı için (dahil), tüm günleri satır olarak üretir. Sheets'e HİÇBİR ŞEY
+// YAZILMAZ — sadece bellekte, önizleme/export için geçici bir satır listesi. format,
+// Çıktı Şablonu'nun Periyot Deseni'nden gelir ("GG.AA.YYYY" ya da "YYYY.AA.GG") — hücreye
+// YAZILACAK metnin görünümünü belirler (eşleşme zaten normalizeMatchKey ile format-bağımsız).
+function generateDateRows(headerLen, keyCol, startYear, startMonth, endYear, endMonth, format){
+  const rows = [];
+  let y = startYear, m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)){
+    const daysInMonth = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= daysInMonth; d++){
+      const row = new Array(headerLen).fill('');
+      const dd = String(d).padStart(2, '0'), mm = String(m).padStart(2, '0');
+      row[keyCol] = (format === 'YYYY.AA.GG') ? `${y}.${mm}.${dd}` : `${dd}.${mm}.${y}`;
+      rows.push(row);
+    }
+    m++; if (m > 12){ m = 1; y++; }
+  }
+  return rows;
 }
 
 // Bu kaynağın periyot deseni "GG.AA.YYYY" ise, tarih başlıklı sütunları { col, day } olarak bulur.
@@ -580,10 +635,12 @@ function evaluateFormulaJs(formulaText, resolveToken){
 // ============================================================================
 // Ana motor: bir projenin Kaynaklar + Hesaplamalar konfigürasyonuna göre çıktıyı üretir.
 // Girdi:
-//   kaynaklarData: { [kaynakAdi]: { header, sicilCol, bySicil, rows } }  — indexKaynak() ile
+//   kaynaklarData: { [kaynakAdi]: { header, keyCol, byKey, rows } }  — indexKaynak() ile
 //   kaynaklarConfig: bu projenin Kaynaklar satırları (ham config, rolü/periyot dahil)
 //   hesaplamalarConfig: bu projenin Hesaplamalar satırları
 //   ciktiRows: Çıktı Şablonu kaynağının ham 2B verisi
+//   anahtarAdi: bu projenin satır eşleme ANAHTARI (Projeler sekmesi D sütunu — "Sicil",
+//     "Tarih", "Plaka" vb. herhangi bir sütun başlığı olabilir; boşsa "Sicil" varsayılır)
 // ============================================================================
 // "GÜNLER" satırının formülü içinde kullanılabilecek özel token'lar:
 // {GÜNHAM} = bu günün ham (henüz çevrilmemiş) kaynak değeri; {KaynakAdı.TABLO} = o kaynağın
@@ -600,13 +657,13 @@ function resolveGunlerToken(tok, hamDeger, kaynaklarData){
   return { __error: `#REFERANS! ({${tok}} — GÜNLER formülünde sadece {GÜNHAM} ve {Kaynak.TABLO} kullanılabilir)` };
 }
 
-function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, ciktiRows){
+function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, ciktiRows, anahtarAdi){
   const warnings = [];
   const ciktiCfg = kaynaklarConfig.find(k => k.rolu === 'Çıktı Şablonu');
   if (!ciktiCfg) throw new Error('Bu projede "Çıktı Şablonu" rolünde bir Kaynak tanımlı değil.');
   const ciktiHeader = ciktiRows[0] || [];
-  const ciktiSicilCol = findSicilCol(ciktiHeader);
-  if (ciktiSicilCol === -1) throw new Error('Çıktı Şablonu kaynağında "Sicil" başlığı bulunamadı.');
+  const ciktiKeyCol = findKeyCol(ciktiHeader, anahtarAdi);
+  if (ciktiKeyCol === -1) throw new Error(`Çıktı Şablonu kaynağında "${anahtarAdi}" başlığı bulunamadı.`);
   const ciktiDataRows = ciktiRows.slice(1);
 
   // Ham veri kaynağı (periyotlu, örn. VARDİYA) ve sözlük kaynağı (periyotsuz, örn. Parametre).
@@ -663,10 +720,11 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
 
   const results = [];
   ciktiDataRows.forEach((row, rowIndex) => {
-    const sicil = normalizeKey(row[ciktiSicilCol]);
-    if (sicil === '') return;
-    const rawRow = rawData ? rawData.bySicil.get(sicil) : null;
-    if (rawCfg && !rawRow) warnings.push(`Sicil ${sicil} (satır ${rowIndex + 2}): "${rawCfg.kaynakAdi}" kaynağında bulunamadı.`);
+    const matchKey = normalizeMatchKey(row[ciktiKeyCol]);
+    const key = displayKey(row[ciktiKeyCol]);
+    if (matchKey === '') return;
+    const rawRow = rawData ? rawData.byKey.get(matchKey) : null;
+    if (rawCfg && !rawRow) warnings.push(`${anahtarAdi} ${key} (satır ${rowIndex + 2}): "${rawCfg.kaynakAdi}" kaynağında bulunamadı.`);
 
     const updates = {};       // col -> deger (Excel'e/Sheets'e yazilacak)
     const byLabel = {};       // label -> deger (formul cozumleme icin, bu satira ozel)
@@ -682,7 +740,7 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
       const hamDeger = (rawRow && rc) ? rawRow[rc.col] : undefined;
       if (gunlerHesaplama){
         const res = evaluateFormulaJs(gunlerHesaplama.formul, (tok) => resolveGunlerToken(tok, hamDeger, kaynaklarData));
-        if (res.error) warnings.push(`Gün ${dc.day} (Sicil ${sicil}): ${res.error}`);
+        if (res.error) warnings.push(`Gün ${dc.day} (${anahtarAdi} ${key}): ${res.error}`);
         else converted = coerceNumberIfNumeric(res.value);
       } else if (rawRow){
         if (rc) converted = coerceNumberIfNumeric(translateWithDict(hamDeger, dict));
@@ -710,21 +768,35 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
         byLabel[label] = res.value;
         return { value: res.value };
       }
+      // Ne çıktı şablonunda ne başka bir Hesaplama'da bulunamadı — son adım olarak TÜM "Kaynak"
+      // rollü kaynakları, bu satırın anahtarına (Sicil/Tarih/ne ise) göre tara. Export'taki
+      // buildExcelTokenString ile AYNI mantık — istediğin hiçbir sütun/anahtar/fonksiyon
+      // kombinasyonu için önizlemede ayrı davranmasın, DÜŞEYARA'nın kendisi zaten Sheets'te.
+      for (const kcfg of kaynaklarConfig){
+        if (kcfg.rolu !== 'Kaynak') continue;
+        const kd = kaynaklarData[kcfg.kaynakAdi];
+        if (!kd || kd.keyCol === -1) continue;
+        const colIdx = kd.header.findIndex(hh => normalizeKey(hh) === label);
+        if (colIdx === -1) continue;
+        const kaynakRow = kd.byKey.get(matchKey);
+        if (!kaynakRow) return { __error: `#YOK! ({${label}} — ${anahtarAdi} "${key}" "${kcfg.kaynakAdi}" kaynağında bulunamadı)` };
+        return { value: coerceNumberIfNumeric(kaynakRow[colIdx]) };
+      }
       return { __error: `#REFERANS! ({${label}} bulunamadı)` };
     }
 
     columns.filter(c => c.kind === 'hesaplama').forEach(c => {
       const h = hesaplamaByLabel.get(c.label);
       const res = evaluateFormulaJs(h.formul, resolveLabel);
-      if (res.error){ updates[c.col] = '#' + res.error.replace(/^#/, ''); warnings.push(`${c.label} (Sicil ${sicil}): ${res.error}`); }
+      if (res.error){ updates[c.col] = '#' + res.error.replace(/^#/, ''); warnings.push(`${c.label} (${anahtarAdi} ${key}): ${res.error}`); }
       else { updates[c.col] = coerceNumberIfNumeric(res.value); byLabel[c.label] = res.value; }
     });
 
-    results.push({ rowIndex, sicil, updates });
+    results.push({ rowIndex, key, updates });
   });
 
   return {
-    columns, ciktiHeader, ciktiSicilCol, dataRows: ciktiDataRows,
+    columns, ciktiHeader, ciktiKeyCol, anahtarAdi, dataRows: ciktiDataRows,
     dayCols, rawCfg, dictCfg, rawData, dict, ciktiCfg,
     results, warnings,
   };
@@ -767,40 +839,6 @@ let formatState = {
   baslik: { uygula: true, kalin: true, yaziRengi: '#ffffff', argPlan: '#1e2761', hizalama: 'center', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
   veri:   { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: 'left', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
 };
-
-function renderFormatTable(){
-  const wrap = document.getElementById('formatTable');
-  const head = '<tr><th>Hedef</th>' + FORMAT_COLS.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
-  const rows = FORMAT_TARGETS.map(t => {
-    const st = formatState[t.key];
-    const cells = FORMAT_COLS.map(c => {
-      const val = st[c.key];
-      if (c.type === 'bool') return `<td style="text-align:center;"><input type="checkbox" data-target="${t.key}" data-field="${c.key}" ${val ? 'checked' : ''}></td>`;
-      if (c.type === 'color') return `<td><input type="color" data-target="${t.key}" data-field="${c.key}" value="${val || '#ffffff'}"></td>`;
-      if (c.type === 'select'){
-        const opts = c.options.map(([v, tr]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${tr}</option>`).join('');
-        return `<td><select data-target="${t.key}" data-field="${c.key}">${opts}</select></td>`;
-      }
-      if (c.type === 'number') return `<td><input type="number" data-target="${t.key}" data-field="${c.key}" value="${val != null ? val : ''}"></td>`;
-      return `<td><input type="text" data-target="${t.key}" data-field="${c.key}" value="${val || ''}" placeholder="${c.placeholder || ''}"></td>`;
-    }).join('');
-    return `<tr><td style="font-weight:600;">${t.label}</td>${cells}</tr>`;
-  }).join('');
-  wrap.innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
-}
-
-document.getElementById('formatTable').addEventListener('change', (e) => {
-  const el = e.target;
-  const target = el.getAttribute('data-target');
-  const field = el.getAttribute('data-field');
-  if (!target || !field) return;
-  let val;
-  if (el.type === 'checkbox') val = el.checked;
-  else if (el.type === 'number') val = el.value === '' ? null : parseFloat(el.value);
-  else val = el.value;
-  formatState[target][field] = val;
-  if (lastComputeResult) renderPreview(lastComputeResult);
-});
 
 function hexToArgb(hex){
   const h = String(hex || '').replace('#', '');
@@ -1383,7 +1421,6 @@ document.getElementById('condImportFile').addEventListener('change', async (e) =
     // Biçimlendirme: dosyanın İLK sayfasının başlık/veri görünümünü al.
     const fmt = importFormatFromSheet(wb.worksheets[0], themeColors);
     formatState = fmt;
-    renderFormatTable();
 
     // Koşullu Biçimlendirme: TÜM sayfalardaki tüm kuralları al.
     let allImported = [];
@@ -1510,7 +1547,9 @@ let uploadedKaynakData = {};   // kaynakAdi -> ham 2B dizi (YuklenenDosya tipi k
 
 function parseProjeRow(r){
   const sira = parseFloat(r[1]);
-  return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]) };
+  // D sütunu: bu projenin satır eşleme ANAHTARI (Sicil, Tarih, Plaka, İsim... herhangi bir
+  // sütun başlığı olabilir). Boş bırakılırsa geriye dönük uyum için "Sicil" varsayılır.
+  return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]), anahtarAdi: normalizeKey(r[3]) || 'Sicil' };
 }
 function parseKaynakRow(r){
   return {
@@ -1534,7 +1573,7 @@ async function loadConfigAndSidebar(){
   nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Projeler yükleniyor…</div>';
   try {
     const [projRows, kaynakRows, hesRows] = await Promise.all([
-      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:C200`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:D200`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:H500`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:E1000`),
     ]);
@@ -1564,6 +1603,7 @@ function selectProject(projeAdi){
   uploadedKaynakData = {};
   lastComputeResult = null;
   lastKaynaklarData = null;
+  selectedDateRange = null;
   renderSidebar();
   document.getElementById('page-project').style.display = 'block';
   document.getElementById('projectTitle').textContent = projeAdi;
@@ -1575,15 +1615,43 @@ function selectProject(projeAdi){
 
 // Bu projenin, "sekme adı sen seçeceksin" tipi kaynakları için seçici gösterir
 // (boş bırakılmış ya da placeholder yazan Sekme Adı = uygulamada seçilir demektir).
+// Ayrıca — Çıktı Şablonu'nun Periyot Deseni "GG.AA.YYYY" ise (yani bu proje SATIR olarak
+// Tarih kullanıyor, Puantaj'daki gibi sütun değil), Sheets'e hiç tarih yazmadan, bir Ay/Yıl
+// ARALIĞI seçtirip o günleri BELLEKTE üretmek için ek bir seçici gösterir.
+let selectedDateRange = null; // { startYear, startMonth, endYear, endMonth } ya da null
 function renderKaynakSecim(){
   const card = document.getElementById('kaynakSecimCard');
   const row = document.getElementById('kaynakSecimRow');
   const kaynaklar = kaynaklarConfigAll.filter(k => k.proje === currentProject);
   const dynamicOnes = kaynaklar.filter(k => k.tip === 'Sheets' && (!k.sekmeAdi || k.sekmeAdi.startsWith('(')));
   const fileOnes = kaynaklar.filter(k => k.tip === 'YuklenenDosya');
-  if (!dynamicOnes.length && !fileOnes.length){ card.style.display = 'none'; return; }
+  const ciktiCfg = kaynaklar.find(k => k.rolu === 'Çıktı Şablonu');
+  const isDateRowMode = !!(ciktiCfg && isDatePeriyot(ciktiCfg.periyotDeseni));
+
+  if (!dynamicOnes.length && !fileOnes.length && !isDateRowMode){ card.style.display = 'none'; return; }
   card.style.display = 'block';
-  row.innerHTML = dynamicOnes.map(k => `
+
+  const now = new Date();
+  if (isDateRowMode && !selectedDateRange){
+    selectedDateRange = { startYear: now.getFullYear(), startMonth: now.getMonth() + 1, endYear: now.getFullYear(), endMonth: now.getMonth() + 1 };
+  }
+  const AY_ISIMLERI = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  const yilOpts = (sel) => { let o = ''; for (let y = now.getFullYear() - 3; y <= now.getFullYear() + 1; y++) o += `<option value="${y}" ${y === sel ? 'selected' : ''}>${y}</option>`; return o; };
+  const ayOpts = (sel) => AY_ISIMLERI.map((ad, i) => `<option value="${i + 1}" ${i + 1 === sel ? 'selected' : ''}>${ad}</option>`).join('');
+
+  const dateRangeHtml = isDateRowMode ? `
+    <div>
+      <div style="font-size:11px; color:var(--dim); margin-bottom:4px;">${ciktiCfg.kaynakAdi} — Tarih Aralığı (Sheets'e yazılmaz, sadece bellekte üretilir)</div>
+      <div class="row" style="gap:6px;">
+        <select id="dateRangeStartMonth">${ayOpts(selectedDateRange.startMonth)}</select>
+        <select id="dateRangeStartYear">${yilOpts(selectedDateRange.startYear)}</select>
+        <span style="align-self:center;">—</span>
+        <select id="dateRangeEndMonth">${ayOpts(selectedDateRange.endMonth)}</select>
+        <select id="dateRangeEndYear">${yilOpts(selectedDateRange.endYear)}</select>
+      </div>
+    </div>` : '';
+
+  row.innerHTML = dateRangeHtml + dynamicOnes.map(k => `
     <div>
       <div style="font-size:11px; color:var(--dim); margin-bottom:4px;">${k.kaynakAdi}</div>
       <select data-kaynak-select="${k.kaynakAdi}" data-sheet-id="${k.sheetId}"><option value="">Yükleniyor…</option></select>
@@ -1592,6 +1660,21 @@ function renderKaynakSecim(){
       <div style="font-size:11px; color:var(--dim); margin-bottom:4px;">${k.kaynakAdi} (dosya yükle)</div>
       <input type="file" data-kaynak-file="${k.kaynakAdi}" accept=".xlsx,.xls">
     </div>`).join('');
+
+  if (isDateRowMode){
+    const sync = () => {
+      selectedDateRange = {
+        startMonth: parseInt(document.getElementById('dateRangeStartMonth').value, 10),
+        startYear: parseInt(document.getElementById('dateRangeStartYear').value, 10),
+        endMonth: parseInt(document.getElementById('dateRangeEndMonth').value, 10),
+        endYear: parseInt(document.getElementById('dateRangeEndYear').value, 10),
+      };
+    };
+    ['dateRangeStartMonth','dateRangeStartYear','dateRangeEndMonth','dateRangeEndYear'].forEach(id => {
+      document.getElementById(id).addEventListener('change', sync);
+    });
+  }
+
   dynamicOnes.forEach(async k => {
     const sel = row.querySelector(`[data-kaynak-select="${k.kaynakAdi}"]`);
     try {
@@ -1628,7 +1711,7 @@ function renderKaynakSecim(){
 // ============================================================================
 
 let lastComputeResult = null;
-let lastKaynaklarData = null;   // { kaynakAdi: { header, sicilCol, bySicil, rows } }
+let lastKaynaklarData = null;   // { kaynakAdi: { header, keyCol, byKey, rows } }
 let lastKaynaklarConfig = null; // bu projenin Kaynaklar satırları (compute anındaki)
 
 document.getElementById('computeBtn').addEventListener('click', async () => {
@@ -1641,6 +1724,7 @@ document.getElementById('computeBtn').addEventListener('click', async () => {
     const kaynaklar = kaynaklarConfigAll.filter(k => k.proje === currentProject);
     const hesaplamalar = hesaplamalarConfigAll.filter(h => h.proje === currentProject);
     if (!kaynaklar.length) throw new Error('Bu proje için "Kaynaklar" sekmesinde hiç satır tanımlı değil.');
+    const anahtarAdi = (projeler.find(p => p.ad === currentProject) || {}).anahtarAdi || 'Sicil';
 
     const kaynaklarData = {};
     for (const k of kaynaklar){
@@ -1653,16 +1737,35 @@ document.getElementById('computeBtn').addEventListener('click', async () => {
         if (!tab) throw new Error(`"${k.kaynakAdi}" için sekme seçilmedi.`);
         rows = await getSheetValues(k.sheetId, `'${tab}'!A1:BZ5000`);
       }
-      kaynaklarData[k.kaynakAdi] = indexKaynak(rows);
+      kaynaklarData[k.kaynakAdi] = indexKaynak(rows, anahtarAdi);
     }
 
     const ciktiCfg = kaynaklar.find(k => k.rolu === 'Çıktı Şablonu');
     if (!ciktiCfg) throw new Error('Bu projede "Çıktı Şablonu" rolünde bir kaynak tanımlı değil.');
-    const ciktiRows = kaynaklarData[ciktiCfg.kaynakAdi].header.length
-      ? [kaynaklarData[ciktiCfg.kaynakAdi].header, ...kaynaklarData[ciktiCfg.kaynakAdi].rows]
-      : [];
+    const ciktiKaynakData = kaynaklarData[ciktiCfg.kaynakAdi];
 
-    const result = computeGeneric(kaynaklarData, kaynaklar, hesaplamalar, ciktiRows);
+    let ciktiRows;
+    if (isDatePeriyot(ciktiCfg.periyotDeseni)){
+      // Tarih SATIR bazlı çıktı — Sheets'e hiç yazmadan, seçtiğin Ay/Yıl aralığının
+      // günlerini BELLEKTE üretiyoruz. Sadece Çıktı Şablonu'nun BAŞLIK satırı kullanılır.
+      if (!selectedDateRange) throw new Error('Önce "Kaynak Sekmelerini Seç" bölümünden bir Tarih Aralığı belirle.');
+      const { startYear, startMonth, endYear, endMonth } = selectedDateRange;
+      if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) throw new Error('Tarih Aralığı: başlangıç, bitişten sonra olamaz.');
+      const totalMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+      if (totalMonths > 60) throw new Error('Tarih Aralığı çok geniş (60 aydan fazla) — daha dar bir aralık seç.');
+      const header = ciktiKaynakData.header;
+      const keyCol = findKeyCol(header, anahtarAdi);
+      if (keyCol === -1) throw new Error(`Çıktı Şablonu kaynağında "${anahtarAdi}" başlığı bulunamadı.`);
+      const dateFormat = detectDatePeriyotFormat(ciktiCfg.periyotDeseni);
+      const genRows = generateDateRows(header.length, keyCol, startYear, startMonth, endYear, endMonth, dateFormat);
+      ciktiRows = [header, ...genRows];
+    } else {
+      ciktiRows = ciktiKaynakData.header.length
+        ? [ciktiKaynakData.header, ...ciktiKaynakData.rows]
+        : [];
+    }
+
+    const result = computeGeneric(kaynaklarData, kaynaklar, hesaplamalar, ciktiRows, anahtarAdi);
     lastComputeResult = result;
     lastKaynaklarData = kaynaklarData;
     lastKaynaklarConfig = kaynaklar;
@@ -1770,7 +1873,6 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
     }
     hucreBazliBicim = data.hucreBazliBicim || null;
     sutunGenislikleri = data.sutunGenislikleri || null;
-    renderFormatTable();
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
     statusEl.textContent = `✓ "${row[0]}" şablonu yüklendi.`;
     statusEl.className = 'status ok';
@@ -1868,12 +1970,12 @@ function buildExcelTokenString(token, ctx){
   if (col) return `$${colNumToA1(col.col)}${ctx.excelRowNum}`;
   for (const kcfg of ctx.kaynaklar.filter(k => k.rolu === 'Kaynak')){
     const kd = ctx.kaynaklarData[kcfg.kaynakAdi];
-    if (!kd || kd.sicilCol === -1) continue;
+    if (!kd || kd.keyCol === -1) continue;
     const colIdx = kd.header.findIndex(h => normalizeKey(h) === token);
     if (colIdx !== -1){
-      const rangeStart = colNumToA1(kd.sicilCol), rangeEnd = colNumToA1(Math.max(kd.sicilCol, colIdx));
-      const colIndexInRange = colIdx - kd.sicilCol + 1;
-      return `VLOOKUP($${colNumToA1(ctx.result.ciktiSicilCol)}${ctx.excelRowNum},'${sanitizeSheetName(kcfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+      const rangeStart = colNumToA1(kd.keyCol), rangeEnd = colNumToA1(Math.max(kd.keyCol, colIdx));
+      const colIndexInRange = colIdx - kd.keyCol + 1;
+      return `VLOOKUP($${colNumToA1(ctx.result.ciktiKeyCol)}${ctx.excelRowNum},'${sanitizeSheetName(kcfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
     }
   }
   return null;
@@ -1890,14 +1992,14 @@ function buildExcelFormulaForRow(formulText, ctx){
 }
 
 // Gün sütununun VLOOKUP+IFERROR (ham veri + sözlük çevirisi) formülünü kurar.
-function buildDayExcelFormula(rawCfg, dictCfg, rawData, ciktiSicilCol, dc, excelRowNum){
+function buildDayExcelFormula(rawCfg, dictCfg, rawData, ciktiKeyCol, dc, excelRowNum){
   const rc = findDateCols(rawData.header).find(d => d.day === dc.day);
   if (!rc) return null;
-  const maxCol = Math.max(rawData.sicilCol, rc.col);
-  const rangeStart = colNumToA1(rawData.sicilCol), rangeEnd = colNumToA1(maxCol);
-  const colIndexInRange = rc.col - rawData.sicilCol + 1;
-  const refSicilLetter = colNumToA1(ciktiSicilCol);
-  const rawLookup = `VLOOKUP($${refSicilLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+  const maxCol = Math.max(rawData.keyCol, rc.col);
+  const rangeStart = colNumToA1(rawData.keyCol), rangeEnd = colNumToA1(maxCol);
+  const colIndexInRange = rc.col - rawData.keyCol + 1;
+  const refKeyLetter = colNumToA1(ciktiKeyCol);
+  const rawLookup = `VLOOKUP($${refKeyLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
   if (!dictCfg) return rawLookup;
   return `IFERROR(VLOOKUP(${rawLookup},'${sanitizeSheetName(dictCfg.kaynakAdi)}'!$A:$B,2,FALSE),${rawLookup})`;
 }
@@ -1905,15 +2007,15 @@ function buildDayExcelFormula(rawCfg, dictCfg, rawData, ciktiSicilCol, dc, excel
 // "GÜNLER" satırında SENİN yazdığın formülü, gerçek Excel formülüne çevirir. {GÜNHAM} ->
 // o günün ham değerini VARDİYA'dan (ya da hangi kaynaksa) çeken bir VLOOKUP'a; {Kaynak.TABLO}
 // -> o kaynağın embed edilmiş sayfasındaki tüm veri aralığına dönüşür.
-function buildDayExcelFormulaCustom(gunlerFormul, rawCfg, kaynaklarData, ciktiSicilCol, dc, excelRowNum){
+function buildDayExcelFormulaCustom(gunlerFormul, rawCfg, kaynaklarData, ciktiKeyCol, dc, excelRowNum){
   const rawData = kaynaklarData[rawCfg.kaynakAdi];
   const rc = findDateCols(rawData.header).find(d => d.day === dc.day);
   if (!rc) return null;
-  const maxCol = Math.max(rawData.sicilCol, rc.col);
-  const rangeStart = colNumToA1(rawData.sicilCol), rangeEnd = colNumToA1(maxCol);
-  const colIndexInRange = rc.col - rawData.sicilCol + 1;
-  const refSicilLetter = colNumToA1(ciktiSicilCol);
-  const hamRef = `VLOOKUP($${refSicilLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
+  const maxCol = Math.max(rawData.keyCol, rc.col);
+  const rangeStart = colNumToA1(rawData.keyCol), rangeEnd = colNumToA1(maxCol);
+  const colIndexInRange = rc.col - rawData.keyCol + 1;
+  const refKeyLetter = colNumToA1(ciktiKeyCol);
+  const hamRef = `VLOOKUP($${refKeyLetter}${excelRowNum},'${sanitizeSheetName(rawCfg.kaynakAdi)}'!$${rangeStart}:$${rangeEnd},${colIndexInRange},FALSE)`;
 
   let unresolved = false;
   const substituted = gunlerFormul.replace(/\{([^}]+)\}/g, (m, tokRaw) => {
@@ -1989,10 +2091,10 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
           let formula = null;
           if (gunlerHesaplama && rawCfg && gunlerHesaplama.aktarimTuru !== 'Değer'){
             // "GÜNLER" satırı tanımlı ve Formüllü ise SENİN yazdığın formül Excel'e çevrilir.
-            formula = buildDayExcelFormulaCustom(gunlerHesaplama.formul, rawCfg, kaynaklarData, result.ciktiSicilCol, dc, excelRowNum);
+            formula = buildDayExcelFormulaCustom(gunlerHesaplama.formul, rawCfg, kaynaklarData, result.ciktiKeyCol, dc, excelRowNum);
           } else if (!gunlerHesaplama && rawCfg && rawCfg.aktarimTuru !== 'Değer'){
             // "GÜNLER" satırı tanımlı DEĞİLSE eski otomatik VLOOKUP+sözlük davranışı (geriye dönük uyum).
-            formula = buildDayExcelFormula(rawCfg, dictCfg, kaynaklarData[rawCfg.kaynakAdi], result.ciktiSicilCol, dc, excelRowNum);
+            formula = buildDayExcelFormula(rawCfg, dictCfg, kaynaklarData[rawCfg.kaynakAdi], result.ciktiKeyCol, dc, excelRowNum);
           }
           cell.value = formula ? { formula } : (r.updates[c.col] ?? null);
         } else if (c.kind === 'hesaplama'){
@@ -2039,8 +2141,6 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     statusEl.className = 'status err';
   }
 });
-
-renderFormatTable();
 </script>
 </body>
 </html>

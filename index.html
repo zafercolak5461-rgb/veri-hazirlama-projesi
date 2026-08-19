@@ -729,15 +729,14 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
     if (!label) continue;
     seenLabels.add(label);
     if (dayColSet.has(c)) columns.push({ col: c, label, kind: 'day' });
-    else if (hesaplamaByLabel.has(label) && hesaplamaByLabel.get(label).aktarimTuru !== 'Sabit') columns.push({ col: c, label, kind: 'hesaplama' });
+    else if (hesaplamaByLabel.has(label)) columns.push({ col: c, label, kind: 'hesaplama', sayiFormat: hesaplamaByLabel.get(label).sayiFormat || '' });
     else columns.push({ col: c, label, kind: 'info' });
   }
   let nextCol = ciktiHeader.length;
   activeHesaplamalar.forEach(h => {
     if (h.sutunAdi === GUNLER_REZERVE) return; // "GÜNLER" bir çıktı sütunu değil, özel bir dönüşüm tanımıdır
-    if (h.aktarimTuru === 'Sabit') return;
     if (seenLabels.has(h.sutunAdi)) return;
-    columns.push({ col: nextCol++, label: h.sutunAdi, kind: 'hesaplama' });
+    columns.push({ col: nextCol++, label: h.sutunAdi, kind: 'hesaplama', sayiFormat: h.sayiFormat || '' });
     seenLabels.add(h.sutunAdi);
   });
 
@@ -810,6 +809,14 @@ function computeGeneric(kaynaklarData, kaynaklarConfig, hesaplamalarConfig, cikt
 
     columns.filter(c => c.kind === 'hesaplama').forEach(c => {
       const h = hesaplamaByLabel.get(c.label);
+      if (h.aktarimTuru === 'Sabit'){
+        // Sabit değer FORMÜL DEĞİL, düz metin/sayı (örn. "Aydın & Gaziantep..." bir formül gibi
+        // ayrıştırılırsa & operatörü nedeniyle hataya düşer) — sabitler map'inden OLDUĞU GİBİ al.
+        const v = sabitler.get(c.label);
+        updates[c.col] = v;
+        byLabel[c.label] = v;
+        return;
+      }
       const res = evaluateFormulaJs(h.formul, resolveLabel);
       if (res.error){ updates[c.col] = '#' + res.error.replace(/^#/, ''); warnings.push(`${c.label} (${anahtarAdi} ${key}): ${res.error}`); }
       else { updates[c.col] = coerceNumberIfNumeric(res.value); byLabel[c.label] = res.value; }
@@ -1036,10 +1043,6 @@ function formatStateToCss(st){
 // tırnaksız (97), METİN karşılaştırmalarında ise ZORUNLU OLARAK tırnak içinde ("HT") ister.
 // Tırnaksız metin yazarsak Excel bunu geçersiz bir ad/referans sanıp dosyayı "bozuk" sayar
 // (LibreOffice buna tolerans gösteriyor, gerçek Excel göstermiyor).
-// Koşullu biçimlendirme kuralındaki bir değeri Excel formülü içine güvenle gömülebilecek
-// metne çevirir. BOŞ değer özel durum: "boşsa" (örn. EĞERHATA'nın ürettiği boş hücreleri
-// yakalamak için) demek istiyorsan, ham boş string DEĞİL, tırnaklı boş string ("") üretmek
-// gerekir — yoksa Excel'in cellIs kuralı geçersiz/boş bir formülle bozulur.
 function toExcelFormulaLiteral(v){
   if (v === null || v === undefined) return v;
   if (v === '') return '""';
@@ -1047,6 +1050,40 @@ function toExcelFormulaLiteral(v){
   const n = Number(s.replace(',', '.'));
   if (s !== '' && !isNaN(n)) return s;
   return '"' + s.replace(/"/g, '""') + '"';
+}
+
+// Hesaplamalar'daki (F sütunu) Sayı Formatı'na göre, HAM sayıyı DASHBOARD'UN CANLI
+// ÖNİZLEMESİNDE gösterilecek metne çevirir — Excel'e ne yazılacaksa (numFmt) tarayıcıda da
+// AYNI görünüm. Tam bir Excel numFmt yorumlayıcısı değil, en sık kullanılan 3 kalıbı (yüzde,
+// saat/süre, binlik ayraçlı sayı) kapsar — bunların dışında bir kod yazılırsa ham sayı gösterilir.
+function formatValueForDisplay(value, numFmt){
+  if (value === '' || value === null || value === undefined) return value;
+  if (!numFmt || typeof value !== 'number') return value;
+  const fmt = numFmt.trim();
+  if (fmt.includes('%')){
+    const decMatch = fmt.match(/\.([0]+)%/);
+    const decimals = decMatch ? decMatch[1].length : 0;
+    return (value * 100).toFixed(decimals) + '%';
+  }
+  if (/[hms]{2}/i.test(fmt) && fmt.includes(':')){
+    // Excel'in gün-kesri süre değeri. "[h]:mm:ss" (köşeli parantez) TOPLAM saati sarmadan
+    // gösterir (53 günlük toplam konuşma süresi gibi büyük değerler için doğru budur);
+    // düz "hh:mm:ss" ise Excel'de 24 saatte sarar (küçük, tek-günlük süreler için uygun).
+    const showTotalHours = fmt.includes('[h]') || fmt.includes('[H]');
+    let totalSeconds = Math.round(value * 86400);
+    let h = Math.floor(totalSeconds / 3600); totalSeconds %= 3600;
+    const m = Math.floor(totalSeconds / 60); const s = totalSeconds % 60;
+    if (!showTotalHours) h = h % 24;
+    const pad = (n) => String(n).padStart(2, '0');
+    if (/h/i.test(fmt)) return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    return `${pad(m)}:${pad(s)}`;
+  }
+  if (fmt.includes('#,##0') || fmt.includes('0,000')){
+    const decMatch = fmt.match(/\.([0]+)/);
+    const decimals = decMatch ? decMatch[1].length : 0;
+    return value.toLocaleString('tr-TR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+  return value;
 }
 
 function applyKosulluBicimlendirme(ws, result, rowCount){
@@ -1644,6 +1681,9 @@ function parseHesaplamaRow(r){
   return {
     proje: normalizeKey(r[0]), sutunAdi: normalizeKey(r[1]), formul: normalizeKey(r[2]),
     aktif: trUpper(r[3]) === 'EVET', aktarimTuru: normalizeKey(r[4]) || 'Formüllü',
+    // F sütunu: bu sütunun Excel SAYI FORMATI (örn. "0.00%" yüzde için, "hh:mm:ss" süre için,
+    // "#,##0" tam sayı için). Boşsa hiç uygulanmaz, hücre genel (General) formatta kalır.
+    sayiFormat: normalizeKey(r[5]),
   };
 }
 
@@ -1654,7 +1694,7 @@ async function loadConfigAndSidebar(){
     const [projRows, kaynakRows, hesRows] = await Promise.all([
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:D200`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:H500`),
-      getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:E1000`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:F1000`),
     ]);
     projeler = projRows.map(parseProjeRow).filter(p => p.ad && p.sira !== null).sort((a, b) => a.sira - b.sira);
     kaynaklarConfigAll = kaynakRows.map(parseKaynakRow).filter(k => k.proje && k.kaynakAdi);
@@ -1886,7 +1926,7 @@ function renderPreview(result){
       let style = cellOverride ? formatStateToCss(cellOverride) : veriCss;
       if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
       const cls = isComputed && !condColor ? ' class="changed"' : '';
-      const display = (val === undefined || val === null) ? '' : val;
+      const display = (val === undefined || val === null) ? '' : formatValueForDisplay(val, c.sayiFormat);
       html += `<td${cls} style="${style}" title="${isComputed ? 'Hesaplanan değer' : ''}">${display}</td>`;
     });
     html += '</tr>';
@@ -2194,6 +2234,13 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
           cell.value = (val === undefined || val === null) ? null : val;
         }
         applyCellStyle(cell, formatState.veri);
+        // Hesaplamalar'da bu sütun için (F sütunu) bir Sayı Formatı tanımlıysa, genel
+        // "Veri Satırları" biçiminin ÜZERİNE yazılır — her sütun kendi formatını (yüzde,
+        // saat, tam sayı) alabilsin diye.
+        if (c.kind === 'hesaplama'){
+          const h = hesaplamaByLabel.get(c.label);
+          if (h && h.sayiFormat) cell.numFmt = h.sayiFormat;
+        }
       });
     });
 

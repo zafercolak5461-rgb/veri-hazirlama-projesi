@@ -878,6 +878,13 @@ const FORMAT_COLS = [
 let formatState = {
   baslik: { uygula: true, kalin: true, yaziRengi: '#ffffff', argPlan: '#1e2761', hizalama: 'center', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
   veri:   { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: 'left', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
+  // Excel'den içe aktarırken, "Veri Satırları" için TEK bir örnek hücre yerine HER SÜTUNUN
+  // KENDİ stilini ayrı ayrı yakalarız (örn. sadece Lokasyon sütunu lacivert, geri kalanı
+  // beyaz olabilir — tek bir genel renk tüm sütunlara yanlışlıkla yayılmasın diye). Sütun
+  // İSMİNE göre anahtarlanır (pozisyona göre değil) — sütun sırası değişse bile doğru bulunur.
+  // Burada olmayan bir sütun için baslik/veri (yukarıdaki genel değerler) varsayılan olarak kullanılır.
+  baslikPerCol: {},
+  veriPerCol: {},
 };
 
 function hexToArgb(hex){
@@ -1359,11 +1366,28 @@ function readCellStyle(cell, themeColors){
 // Bir worksheet'in başlık (1. satır) ve veri (2. satır) görünümünü okuyup
 // { baslik, veri } formatState şekline çevirir. themeColors yoksa (null) tema renkleri
 // çözülemez, sadece ham ARGB renkler yakalanır.
+// Bir worksheet'in başlık (1. satır) ve veri (2. satır) görünümünü okuyup HER SÜTUN İÇİN AYRI
+// AYRI { baslikPerCol, veriPerCol } + genel bir yedek ({ baslik, veri }, ilk dolu hücreden)
+// üretir. themeColors yoksa (null) tema renkleri çözülemez, sadece ham ARGB renkler yakalanır.
 function importFormatFromSheet(ws, themeColors){
   const maxCol = ws.columnCount || 20;
-  const headerCell = firstNonEmptyCell(ws.getRow(1), maxCol);
-  const dataCell = firstNonEmptyCell(ws.getRow(2), maxCol);
-  return { baslik: readCellStyle(headerCell, themeColors), veri: readCellStyle(dataCell, themeColors) };
+  const headerRow = ws.getRow(1);
+  const dataRow = ws.getRow(2);
+  const baslikPerCol = {}, veriPerCol = {};
+  for (let c = 1; c <= maxCol; c++){
+    const headerCell = headerRow.getCell(c);
+    const label = normalizeKey(headerCell.value);
+    if (!label) continue;
+    baslikPerCol[label] = readCellStyle(headerCell, themeColors);
+    veriPerCol[label] = readCellStyle(dataRow.getCell(c), themeColors);
+  }
+  const headerCell = firstNonEmptyCell(headerRow, maxCol);
+  const dataCell = firstNonEmptyCell(dataRow, maxCol);
+  return {
+    baslik: readCellStyle(headerCell, themeColors),
+    veri: readCellStyle(dataCell, themeColors),
+    baslikPerCol, veriPerCol,
+  };
 }
 
 // ============================================================================
@@ -2015,7 +2039,13 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
     // C sütunundan itibaren TÜM dolu hücreler bu şablonun parçalarıdır — sırayla birleştirilir.
     const payload = row.slice(2).filter(c => c !== undefined && c !== null && c !== '').join('');
     const data = JSON.parse(payload);
-    if (data.formatState) formatState = data.formatState;
+    if (data.formatState){
+      formatState = data.formatState;
+      // Bugünden ÖNCE kaydedilmiş eski şablonlarda baslikPerCol/veriPerCol hiç yoktu —
+      // eksikse boş nesneye düşür, yoksa export'ta "undefined'ın özelliği okunamaz" hatası olur.
+      if (!formatState.baslikPerCol) formatState.baslikPerCol = {};
+      if (!formatState.veriPerCol) formatState.veriPerCol = {};
+    }
     if (Array.isArray(data.kosulluBicimlendirme)){
       kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
     }
@@ -2223,7 +2253,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     result.columns.forEach(c => {
       const cell = headerRow.getCell(c.col + 1);
       cell.value = coerceNumberIfNumeric(c.label);
-      applyCellStyle(cell, formatState.baslik);
+      applyCellStyle(cell, formatState.baslikPerCol[c.label] || formatState.baslik);
     });
 
     result.results.forEach((r, ri) => {
@@ -2257,7 +2287,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
           const val = coerceNumberIfNumeric(origRow[c.col]);
           cell.value = (val === undefined || val === null) ? null : val;
         }
-        applyCellStyle(cell, formatState.veri);
+        applyCellStyle(cell, formatState.veriPerCol[c.label] || formatState.veri);
         // Hesaplamalar'da bu sütun için (F sütunu) bir Sayı Formatı tanımlıysa, genel
         // "Veri Satırları" biçiminin ÜZERİNE yazılır — her sütun kendi formatını (yüzde,
         // saat, tam sayı) alabilsin diye.

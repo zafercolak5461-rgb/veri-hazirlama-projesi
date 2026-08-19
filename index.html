@@ -170,6 +170,13 @@
         <table class="prev" id="condFormatTable" style="margin-top:10px;"></table>
         <button class="btn" id="addCondRuleBtn" style="margin-top:10px;">+ Kural Ekle</button>
 
+        <h2 style="margin-top:22px;">Alt Toplam / Excel Tablosu</h2>
+        <div class="hint">Açarsan, üretilen .xlsx'te veri gerçek bir Excel Tablosuna dönüştürülür ve en alta bir "Toplam Satırı" eklenir — hangi sütun için Toplam/Ortalama/Maksimum/Minimum istediğini SEN Excel'i açtığında, o satırdaki her hücreye tıklayıp açılan menüden seçersin. Biz burada hiçbir hesap türü önceden seçmiyoruz, senin renklerine/koşullu biçimlendirmene dokunmaz.</div>
+        <label class="row" style="cursor:pointer;">
+          <input type="checkbox" id="exportAsTableChk">
+          <span>Excel Tablosu olarak oluştur (alt toplam seçenekli)</span>
+        </label>
+
         <div class="row" style="margin-top:16px;">
           <button class="btn primary" id="exportExcelBtn">⬇ Excel'e Aktar (.xlsx)</button>
         </div>
@@ -2338,6 +2345,31 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     }
     if (sutunGenislikleri){
       applyColumnWidths(ws, sutunGenislikleri, maxOutputCol);
+    }
+
+    // "Excel Tablosu olarak oluştur" işaretliyse — TÜM biçimlendirme (başlık/veri rengi,
+    // koşullu biçimlendirme, hücre-bazlı biçim) bittikten SONRA, en son adım olarak tabloya
+    // çeviriyoruz (test edildi: bu sıra renklere/kurallara dokunmuyor). Hiçbir sütun için
+    // Toplam/Ortalama/Maks/Min ÖNCEDEN SEÇİLMİYOR — Excel'de açtığında alt satırdaki her
+    // hücreye tıklayıp kendi seçimini kendin yaparsın.
+    if (document.getElementById('exportAsTableChk').checked){
+      const tableCols = result.columns.map(c => ({ name: String(c.label) }));
+      const tableName = sanitizeSheetName(currentProject || 'Cikti').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 60) || 'Tablo';
+      // ÖNEMLİ: addTable'ın rows parametresi, verdiğin ne olursa olsun hücrenin üzerine
+      // YAZIYOR — az önce yazdığımız CANLI FORMÜLLERİ (Formüllü Aktarım Türü) düz sayıya
+      // çevirip EZEBİLİYOR (test ederek doğruladım). Bunu önlemek için kendi hesapladığımız
+      // değeri değil, hücreye AZ ÖNCE GERÇEKTEN NE YAZILDIYSA (formül objesi dahil) onu
+      // GERİ OKUYUP aynen veriyoruz — birebir fidelite, hiçbir formül kaybolmasın diye.
+      const rowsForTable = result.results.map((r, ri) => {
+        const excelRowNum = ri + 2;
+        return result.columns.map(c => ws.getRow(excelRowNum).getCell(c.col + 1).value);
+      });
+      ws.addTable({
+        name: tableName, ref: 'A1', headerRow: true, totalsRow: true,
+        style: { theme: null, showRowStripes: false },
+        columns: tableCols,
+        rows: rowsForTable,
+      });
     }
 
     const buf = await wb.xlsx.writeBuffer();

@@ -9,11 +9,17 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
-    --bg:#10182B; --panel:#16213D; --panel2:#1C2944; --line:#2A3A5C;
-    --text:#FFFFFF; --dim:#8FA3C9; --dim2:#5D7299;
-    --accent:#E8A53D; --accent-soft:rgba(232,165,61,0.16);
-    --ok:#5DD6A0; --ok-soft:rgba(93,214,160,0.14);
-    --danger:#e85d5d; --danger-soft:rgba(232,93,93,0.16);
+    /* Ana içerik alanı: BEYAZ tema — önizleme tablosu gerçek Excel'e ne kadar benzerse o kadar
+       faydalı, koyu bir arka plan üzerinde "boş" (renksiz) hücreler yanlışlıkla dolu gibi görünüyordu. */
+    --bg:#F3F5F9; --panel:#FFFFFF; --panel2:#F1F3F8; --line:#DCE1EA;
+    --text:#1B2333; --dim:#5B6B85; --dim2:#8B99AF;
+    --accent:#C97F0E; --accent-soft:rgba(201,127,14,0.12);
+    --ok:#1F9D63; --ok-soft:rgba(31,157,99,0.12);
+    --danger:#D6423C; --danger-soft:rgba(214,66,60,0.10);
+    /* Sol menü: BİLEREK koyu/farklı bırakıldı — ana içerikten belirgin ayrılsın, "neredeyim"
+       hep net olsun (marka renginle de tutarlı: lacivert + amber). */
+    --sb-bg:#10182B; --sb-panel2:#1C2944; --sb-line:#2A3A5C;
+    --sb-text:#FFFFFF; --sb-dim:#8FA3C9; --sb-dim2:#5D7299;
   }
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:'Segoe UI', Arial, sans-serif; }
@@ -21,27 +27,27 @@
 
   .app{ display:flex; min-height:100vh; }
 
-  /* ===== Sol dikey menü ===== */
-  .sidebar{ width:230px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; }
-  .sidebar-header{ padding:20px 18px; border-bottom:1px solid var(--line); }
-  .sidebar-header h1{ margin:0; font-size:15px; font-weight:700; letter-spacing:0.3px; }
-  .sidebar-header .sub{ margin:4px 0 0; font-size:11px; color:var(--dim); }
+  /* ===== Sol dikey menü (koyu, ana içerikten belirgin ayrı) ===== */
+  .sidebar{ width:230px; flex-shrink:0; background:var(--sb-bg); border-right:1px solid var(--sb-line); display:flex; flex-direction:column; color:var(--sb-text); }
+  .sidebar-header{ padding:20px 18px; border-bottom:1px solid var(--sb-line); }
+  .sidebar-header h1{ margin:0; font-size:15px; font-weight:700; letter-spacing:0.3px; color:var(--sb-text); }
+  .sidebar-header .sub{ margin:4px 0 0; font-size:11px; color:var(--sb-dim); }
   .nav{ flex:1; padding:14px 10px; }
-  .nav-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; color:var(--dim); font-size:13.5px; cursor:pointer; margin-bottom:2px; border:1px solid transparent; }
-  .nav-item:hover{ background:var(--panel2); color:var(--text); }
-  .nav-item.active{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .nav-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; color:var(--sb-dim); font-size:13.5px; cursor:pointer; margin-bottom:2px; border:1px solid transparent; }
+  .nav-item:hover{ background:var(--sb-panel2); color:var(--sb-text); }
+  .nav-item.active{ background:rgba(232,165,61,0.18); color:#F0B94D; border-color:#F0B94D; font-weight:600; }
   .nav-item.disabled{ opacity:0.4; cursor:default; }
-  .nav-item.disabled:hover{ background:none; color:var(--dim); }
+  .nav-item.disabled:hover{ background:none; color:var(--sb-dim); }
   .nav-icon{ width:18px; text-align:center; }
-  .sidebar-footer{ padding:14px 18px; border-top:1px solid var(--line); font-size:11px; color:var(--dim2); }
+  .sidebar-footer{ padding:14px 18px; border-top:1px solid var(--sb-line); font-size:11px; color:var(--sb-dim2); }
 
-  /* ===== Sağ içerik ===== */
+  /* ===== Sağ içerik (beyaz) ===== */
   .main{ flex:1; min-width:0; padding:26px 32px; }
-  .page-title{ font-size:20px; font-weight:700; margin:0 0 4px; }
+  .page-title{ font-size:20px; font-weight:700; margin:0 0 4px; color:var(--text); }
   .page-sub{ color:var(--dim); font-size:13px; margin:0 0 22px; line-height:1.6; }
 
-  .card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:18px; }
-  .card h2{ font-size:15px; margin:0 0 12px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:18px; box-shadow:0 1px 3px rgba(20,30,60,0.06); }
+  .card h2{ font-size:15px; margin:0 0 12px; color:var(--text); }
   .card .hint{ color:var(--dim); font-size:12.5px; margin-bottom:14px; line-height:1.6; }
 
   .btn{ background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:9px 16px; border-radius:8px; font-size:13px; cursor:pointer; }
@@ -66,8 +72,13 @@
   table.prev{ border-collapse:collapse; width:100%; font-size:12px; margin-top:14px; }
   table.prev th, table.prev td{ border:1px solid var(--line); padding:5px 8px; white-space:nowrap; }
   table.prev th{ background:var(--panel2); color:var(--accent); position:sticky; top:0; }
-  table.prev td.changed{ background:rgba(232,165,61,0.08); }
-  table.prev td.warn-cell{ color:var(--danger); font-weight:600; }
+  /* Hücreler VARSAYILAN OLARAK BEYAZ — koşullu biçimlendirme rengi varsa inline style bunun
+     üzerine yazar. Excel'de "renksiz" bir hücre nasıl görünüyorsa önizlemede de öyle görünsün
+     diye BİLEREK açık/beyaz — aksi halde koyu bir sayfa arka planından görünüp yanlışlıkla
+     "dolu/renkli" sanılıyordu. */
+  table.prev td{ background:#FFFFFF; color:#1B2333; }
+  table.prev td.changed{ background:rgba(201,127,14,0.10); }
+  table.prev td.warn-cell{ background:rgba(214,66,60,0.14); color:var(--danger); font-weight:600; cursor:help; }
   .prev-wrap{ max-height:460px; overflow:auto; border:1px solid var(--line); border-radius:8px; }
 
   .signin-gate{ display:flex; align-items:center; justify-content:center; min-height:60vh; flex-direction:column; gap:16px; }
@@ -194,6 +205,13 @@ function normalizeKey(v){
   if (v === undefined || v === null) return '';
   if (typeof v === 'number') return String(v);
   return String(v).trim();
+}
+// Sütun İSMİ eşleştirmesi için — normalizeKey'den daha TOLERANSLI: iç boşluk farklarını da
+// (örn. "Talk )" ile "Talk)") ve büyük/küçük harfi yok sayar. SADECE biçim (formatState
+// baslikPerCol/veriPerCol) sözlük anahtarlarında kullanılır — Sicil/Tarih gibi ANAHTAR
+// eşleştirmesi hâlâ normalizeMatchKey ile ayrı, daha sıkı kurallarla yapılıyor.
+function normalizeLabelKey(v){
+  return trUpper(String(v == null ? '' : v)).replace(/\s+/g, '');
 }
 // Türkçe büyük/küçük harf dönüşümünü doğru yapan karşılaştırma (İ/I/ı/i farkı gözetir) —
 // özellikle "Sicil"/"SİCİL" gibi anahtar sütun adlarını eşleştirirken şart.
@@ -875,17 +893,17 @@ const FORMAT_COLS = [
   { key: 'kaydir', label: 'Kaydır', type: 'bool' },
   { key: 'yaziBoyutu', label: 'Yazı Boyutu', type: 'number' },
 ];
-let formatState = {
-  baslik: { uygula: true, kalin: true, yaziRengi: '#ffffff', argPlan: '#1e2761', hizalama: 'center', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
-  veri:   { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: 'left', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
-  // Excel'den içe aktarırken, "Veri Satırları" için TEK bir örnek hücre yerine HER SÜTUNUN
-  // KENDİ stilini ayrı ayrı yakalarız (örn. sadece Lokasyon sütunu lacivert, geri kalanı
-  // beyaz olabilir — tek bir genel renk tüm sütunlara yanlışlıkla yayılmasın diye). Sütun
-  // İSMİNE göre anahtarlanır (pozisyona göre değil) — sütun sırası değişse bile doğru bulunur.
-  // Burada olmayan bir sütun için baslik/veri (yukarıdaki genel değerler) varsayılan olarak kullanılır.
-  baslikPerCol: {},
-  veriPerCol: {},
-};
+// Varsayılan formatState'i üretir — hem ilk yüklemede hem "şablon yükle" sırasında (seçilen
+// şablonda biçim verisi yoksa ÖNCEKİ ŞABLONUN kalıntısı kalmasın diye) kullanılır.
+function defaultFormatState(){
+  return {
+    baslik: { uygula: true, kalin: true, yaziRengi: '#ffffff', argPlan: '#1e2761', hizalama: 'center', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
+    veri:   { uygula: true, kalin: false, yaziRengi: '', argPlan: '', hizalama: 'left', kenarlik: true, sayiFormat: '', kaydir: false, yaziBoyutu: null },
+    baslikPerCol: {},
+    veriPerCol: {},
+  };
+}
+let formatState = defaultFormatState();
 
 function hexToArgb(hex){
   const h = String(hex || '').replace('#', '');
@@ -1378,8 +1396,9 @@ function importFormatFromSheet(ws, themeColors){
     const headerCell = headerRow.getCell(c);
     const label = normalizeKey(headerCell.value);
     if (!label) continue;
-    baslikPerCol[label] = readCellStyle(headerCell, themeColors);
-    veriPerCol[label] = readCellStyle(dataRow.getCell(c), themeColors);
+    const key = normalizeLabelKey(label);
+    baslikPerCol[key] = readCellStyle(headerCell, themeColors);
+    veriPerCol[key] = readCellStyle(dataRow.getCell(c), themeColors);
   }
   const headerCell = firstNonEmptyCell(headerRow, maxCol);
   const dataCell = firstNonEmptyCell(dataRow, maxCol);
@@ -1586,10 +1605,13 @@ document.getElementById('condImportFile').addEventListener('change', async (e) =
     const fmt = importFormatFromSheet(wb.worksheets[0], themeColors);
     formatState = fmt;
 
-    // Koşullu Biçimlendirme: TÜM sayfalardaki tüm kuralları al.
+    // Koşullu Biçimlendirme: TÜM sayfalardaki tüm kuralları al. YERİNE KOY (eskilerin
+    // üzerine EKLEME) — aksi halde aynı dosyayı iki kez ya da farklı bir dosyayı art arda
+    // içe aktarınca eski kurallar temizlenmeden birikir (senin gördüğün "aynı kural 2 kere"
+    // sorununun asıl kaynağı muhtemelen buydu).
     let allImported = [];
     wb.worksheets.forEach(ws => { allImported = allImported.concat(importCondFormattingFromSheet(ws, themeColors)); });
-    allImported.forEach(r => kosulluBicimlendirme.push(Object.assign({ id: condRuleIdSeq++ }, r)));
+    kosulluBicimlendirme = allImported.map(r => Object.assign({ id: condRuleIdSeq++ }, r));
 
     // Tam hücre bazlı biçim: elle boyanmış, hiçbir kurala bağlı olmayan renkler için —
     // sadece ilk sayfa alınır (birden fazla sayfa karışıklık yaratır).
@@ -1950,10 +1972,13 @@ function renderPreview(result){
   const warnBox = document.getElementById('warningsBox');
   warnBox.textContent = result.warnings.length ? ('⚠ ' + result.warnings.length + ' uyarı:\n' + result.warnings.slice(0, 20).join('\n') + (result.warnings.length > 20 ? `\n… (+${result.warnings.length - 20} tane daha)` : '')) : '';
 
-  const baslikCss = formatStateToCss(formatState.baslik);
-  const veriCss = formatStateToCss(formatState.veri);
+  // HTML özniteliklerine (title gibi) güvenle gömmek için tırnak/köşeli parantez kaçışı.
+  function escapeAttr(s){ return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 
-  let html = '<thead><tr>' + result.columns.map(c => `<th style="${baslikCss}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<thead><tr>' + result.columns.map(c => {
+    const cssC = formatStateToCss(formatState.baslikPerCol[normalizeLabelKey(c.label)] || formatState.baslik);
+    return `<th style="${cssC}">${c.label}</th>`;
+  }).join('') + '</tr></thead><tbody>';
   result.results.forEach(r => {
     const origRow = result.dataRows[r.rowIndex];
     const sheetRow = r.rowIndex + 2; // hucreBazliBicim, ExcelJS 1-index satır/sütun numaralarıyla eşleşir
@@ -1971,11 +1996,17 @@ function renderPreview(result){
       // Elle boyanmış (kuralsız) hücre biçimi varsa, o AYNI POZİSYONDAKİ görünümü canlı
       // önizlemede de göster — export'ta ne göreceksen burada da onu görmelisin.
       const cellOverride = lookupCellFormatOverride(hucreBazliBicim, sheetRow, c.col + 1);
-      let style = cellOverride ? formatStateToCss(cellOverride) : veriCss;
+      // Sütunun KENDİ rengi varsa (export'takiyle AYNI mantık) onu kullan, yoksa genel yedek.
+      const veriCssForCol = formatStateToCss(formatState.veriPerCol[normalizeLabelKey(c.label)] || formatState.veri);
+      let style = cellOverride ? formatStateToCss(cellOverride) : veriCssForCol;
       if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
-      const cls = isComputed && !condColor ? ' class="changed"' : '';
+      // Hata değeri mi (örn. "#YOK!", "#DEĞER!")? Öyleyse KIRMIZI + gerçek hata mesajı fare
+      // üzerine gelince görünsün. Değilse, hesaplanan (ve koşullu renk almayan) hücreler turuncu.
+      const isError = isComputed && typeof val === 'string' && val.trim().startsWith('#');
+      const cls = isError ? ' class="warn-cell"' : (isComputed && !condColor ? ' class="changed"' : '');
+      const title = isError ? escapeAttr(val) : (isComputed ? 'Hesaplanan değer' : '');
       const display = (val === undefined || val === null) ? '' : formatValueForDisplay(val, c.sayiFormat);
-      html += `<td${cls} style="${style}" title="${isComputed ? 'Hesaplanan değer' : ''}">${display}</td>`;
+      html += `<td${cls} style="${style}" title="${title}">${display}</td>`;
     });
     html += '</tr>';
   });
@@ -2039,16 +2070,15 @@ document.getElementById('loadTemplateSheetBtn').addEventListener('click', () => 
     // C sütunundan itibaren TÜM dolu hücreler bu şablonun parçalarıdır — sırayla birleştirilir.
     const payload = row.slice(2).filter(c => c !== undefined && c !== null && c !== '').join('');
     const data = JSON.parse(payload);
-    if (data.formatState){
-      formatState = data.formatState;
-      // Bugünden ÖNCE kaydedilmiş eski şablonlarda baslikPerCol/veriPerCol hiç yoktu —
-      // eksikse boş nesneye düşür, yoksa export'ta "undefined'ın özelliği okunamaz" hatası olur.
-      if (!formatState.baslikPerCol) formatState.baslikPerCol = {};
-      if (!formatState.veriPerCol) formatState.veriPerCol = {};
-    }
-    if (Array.isArray(data.kosulluBicimlendirme)){
-      kosulluBicimlendirme = data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }));
-    }
+    // ÖNEMLİ: hepsi HER ZAMAN atanır (koşullu değil) — yoksa seçtiğin YENİ şablonda o alan
+    // boşsa, ÖNCEKİ şablondan kalan veri (örn. başka bir projenin koşullu biçimlendirme
+    // kuralları) hafızada kalmaya devam eder, "şablon değiştirince eskisi temizlenmiyor" hatası.
+    formatState = data.formatState || defaultFormatState();
+    if (!formatState.baslikPerCol) formatState.baslikPerCol = {};
+    if (!formatState.veriPerCol) formatState.veriPerCol = {};
+    kosulluBicimlendirme = Array.isArray(data.kosulluBicimlendirme)
+      ? data.kosulluBicimlendirme.map(r => Object.assign({}, r, { id: condRuleIdSeq++ }))
+      : [];
     hucreBazliBicim = data.hucreBazliBicim || null;
     sutunGenislikleri = data.sutunGenislikleri || null;
     if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
@@ -2253,7 +2283,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     result.columns.forEach(c => {
       const cell = headerRow.getCell(c.col + 1);
       cell.value = coerceNumberIfNumeric(c.label);
-      applyCellStyle(cell, formatState.baslikPerCol[c.label] || formatState.baslik);
+      applyCellStyle(cell, formatState.baslikPerCol[normalizeLabelKey(c.label)] || formatState.baslik);
     });
 
     result.results.forEach((r, ri) => {
@@ -2287,7 +2317,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
           const val = coerceNumberIfNumeric(origRow[c.col]);
           cell.value = (val === undefined || val === null) ? null : val;
         }
-        applyCellStyle(cell, formatState.veriPerCol[c.label] || formatState.veri);
+        applyCellStyle(cell, formatState.veriPerCol[normalizeLabelKey(c.label)] || formatState.veri);
         // Hesaplamalar'da bu sütun için (F sütunu) bir Sayı Formatı tanımlıysa, genel
         // "Veri Satırları" biçiminin ÜZERİNE yazılır — her sütun kendi formatını (yüzde,
         // saat, tam sayı) alabilsin diye.

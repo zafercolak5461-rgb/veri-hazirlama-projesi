@@ -192,7 +192,11 @@
 // ===== SABİTLER =====
 // ============================================================================
 const CLIENT_ID = '334728137950-afbqqtqobh5us03roshseevqh43a4853.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets email';
+// Yetkilendirme, ALO-144/Personel Karnesi ile AYNI dosyayı kullanır — bu dashboard için
+// sadece "VERİ HAZIRLAMA" adında AYRI bir sekme eklenir, dosyanın kendisi paylaşılıyor olmalı.
+const AUTH_SHEET_ID = '1PfYdeuiGvuHbHsCx5PTcApepdwdjY-2C491cufssQhU';
+const AUTH_TAB = 'VERİ HAZIRLAMA';
 const FIXED_SUPER_ADMIN_EMAIL = 'zafercolak5461@gmail.com';
 
 // "Proje Yönetimi" sekmeleri (Projeler/Kaynaklar/Hesaplamalar/Sablonlar) hep bu TEK Sheet'te
@@ -1703,7 +1707,17 @@ function initGis(){
 function onSignedIn(){
   document.getElementById('signinGate').style.display = 'none';
   document.getElementById('sidebarFooter').textContent = 'Oturum açık';
-  loadConfigAndSidebar();
+  (async () => {
+    try {
+      const info = await authFetch('https://www.googleapis.com/oauth2/v3/userinfo');
+      currentUserEmail = info.email || '';
+    } catch (err){
+      currentUserEmail = '';
+      console.error('Kullanıcı bilgisi alınamadı:', err.message);
+    }
+    await loadConfigAndSidebar();
+    sendLog('giris');
+  })();
   loadTemplateList();
 }
 
@@ -1737,6 +1751,101 @@ let hesaplamalarConfigAll = [];// [{ proje, sutunAdi, formul, aktif, aktarimTuru
 let currentProject = null;
 let resolvedTabs = {};         // kaynakAdi -> secilen sekme adi (dinamik sekmeli kaynaklar icin)
 let uploadedKaynakData = {};   // kaynakAdi -> ham 2B dizi (YuklenenDosya tipi kaynaklar icin)
+
+// ============================================================================
+// ===== Yetkilendirme — AUTH_SHEET_ID > "VERİ HAZIRLAMA" sekmesi =====
+// Sütunlar İSME göre bulunur (pozisyona göre DEĞİL): A=İsim, B=Gmail, C=Süper Yetkili, sonra
+// HER PROJE için bir sütun (Projeler sekmesindeki adla BİREBİR), ayrıca 3 sabit özellik
+// sütunu: "Excel" (Excel'e Aktar butonu), "Tablo Özelliği" (Excel Tablosu checkbox'ı),
+// "Şablon yükleme" (Excel'den Biçim+KB İçe Aktar butonu). Süper Yetkili ya da sabit süper
+// admin her zaman her şeyi görür. Kişi tabloda hiç yoksa ya da bir proje sütunu hiç
+// eklenmemişse, GÜVENLİ TARAF seçilir: gizli kalır (kilitlenmeyi önlemek için süper admin hariç).
+const AUTH_FEATURE_COLS = ['Excel', 'Tablo Özelliği', 'Şablon yükleme'];
+// Giriş/çıkış logları — ALO-144/Personel Karnesi ile AYNI Apps Script'e, AYNI Sheet'e yazar
+// (dashboard sütunu "Veri Hazırlama" ile ayırt edilir).
+const LOG_URL = 'https://script.google.com/macros/s/AKfycbzeyn_R-Khl7qAMZozWuq4ZWIy6UAGiqi906MFEnRgl9YNpgQiV-Me2KpF4IJW43WbI/exec';
+let currentUserEmail = '';
+let currentUserDisplayName = '';
+let userPerms = { superYetkili: false, projeler: new Set(), excel: false, tabloOzelligi: false, sablonYukleme: false };
+
+// Bir giriş/çıkış olayını logServer'a gönderir. sendBeacon TARAYICI SEKME KAPANIRKEN BİLE
+// isteğin gitme ihtimalini artırır (fetch'in aksine, sayfa kapanışını beklemeden arka planda
+// tamamlanabilir) — "çıkış" logu için en güvenilir yöntem budur, yine de %100 garanti değildir.
+function sendLog(type){
+  try {
+    const payload = JSON.stringify({
+      isim: currentUserDisplayName || currentUserEmail || '',
+      type,
+      dashboard: 'Veri Hazırlama',
+      page: currentProject || '',
+    });
+    if (navigator.sendBeacon){
+      navigator.sendBeacon(LOG_URL, new Blob([payload], { type: 'text/plain;charset=UTF-8' }));
+    } else {
+      fetch(LOG_URL, { method: 'POST', body: payload, keepalive: true, mode: 'no-cors' });
+    }
+  } catch (err){ /* loglama başarısız olsa bile kullanıcı deneyimini bozmasın, sessizce geç */ }
+}
+window.addEventListener('pagehide', () => { if (currentUserEmail) sendLog('cikis'); });
+
+async function loadUserPermissions(){
+  if (currentUserEmail && normalizeKey(currentUserEmail).toLowerCase() === FIXED_SUPER_ADMIN_EMAIL.toLowerCase()){
+    userPerms = { superYetkili: true, projeler: new Set(projeler.map(p => p.ad)), excel: true, tabloOzelligi: true, sablonYukleme: true };
+    currentUserDisplayName = currentUserDisplayName || 'Zafer Çolak';
+    return;
+  }
+  try {
+    const rows = await getSheetValues(AUTH_SHEET_ID, `'${AUTH_TAB}'!A1:ZZ500`);
+    if (!rows.length) throw new Error('Yetkilendirme sekmesi boş.');
+    const header = rows[0];
+    const isimCol = header.findIndex(h => trUpper(h) === trUpper('İsim'));
+    const gmailCol = header.findIndex(h => trUpper(h) === trUpper('Gmail'));
+    const superCol = header.findIndex(h => trUpper(h) === trUpper('Süper Yetkili'));
+    if (gmailCol === -1) throw new Error('"Gmail" başlığı bulunamadı.');
+    const myRow = rows.slice(1).find(r => normalizeKey(r[gmailCol]).toLowerCase() === normalizeKey(currentUserEmail).toLowerCase());
+    const isTrue = (v) => trUpper(v) === trUpper('true') || trUpper(v) === trUpper('doğru') || trUpper(v) === trUpper('evet');
+    if (!myRow){
+      userPerms = { superYetkili: false, projeler: new Set(), excel: false, tabloOzelligi: false, sablonYukleme: false };
+      return;
+    }
+    if (isimCol !== -1) currentUserDisplayName = normalizeKey(myRow[isimCol]) || currentUserDisplayName;
+    const superYetkili = superCol !== -1 && isTrue(myRow[superCol]);
+    const projSet = new Set();
+    if (!superYetkili){
+      projeler.forEach(p => {
+        const col = header.findIndex(h => normalizeLabelKey(h) === normalizeLabelKey(p.ad));
+        if (col !== -1 && isTrue(myRow[col])) projSet.add(p.ad);
+      });
+    } else {
+      projeler.forEach(p => projSet.add(p.ad));
+    }
+    const featCol = (name) => header.findIndex(h => normalizeLabelKey(h) === normalizeLabelKey(name));
+    const excelCol = featCol('Excel'), tabloCol = featCol('Tablo Özelliği'), sablonCol = featCol('Şablon yükleme');
+    userPerms = {
+      superYetkili,
+      projeler: projSet,
+      excel: superYetkili || (excelCol !== -1 && isTrue(myRow[excelCol])),
+      tabloOzelligi: superYetkili || (tabloCol !== -1 && isTrue(myRow[tabloCol])),
+      sablonYukleme: superYetkili || (sablonCol !== -1 && isTrue(myRow[sablonCol])),
+    };
+  } catch (err){
+    // Yetkilendirme okunamazsa GÜVENLİ TARAF: hiçbir şey gösterme (sabit süper admin zaten
+    // yukarıda ayrıca ele alındığı için kilitlenmiyor).
+    userPerms = { superYetkili: false, projeler: new Set(), excel: false, tabloOzelligi: false, sablonYukleme: false };
+    console.error('Yetkilendirme okunamadı:', err.message);
+  }
+}
+
+// Yetkiye göre gösterilecek/gizlenecek özellik düğmelerini uygular.
+function applyFeaturePermissions(){
+  const exportBtn = document.getElementById('exportExcelBtn');
+  const tableChkRow = document.getElementById('exportAsTableChk')?.closest('label');
+  const importLabel = document.getElementById('condImportFile')?.closest('label');
+  if (exportBtn) exportBtn.style.display = userPerms.excel ? '' : 'none';
+  if (tableChkRow) tableChkRow.style.display = userPerms.tabloOzelligi ? '' : 'none';
+  if (importLabel) importLabel.style.display = userPerms.sablonYukleme ? '' : 'none';
+}
+
 
 function parseProjeRow(r){
   const sira = parseFloat(r[1]);
@@ -1776,8 +1885,12 @@ async function loadConfigAndSidebar(){
     projeler = projRows.map(parseProjeRow).filter(p => p.ad && p.sira !== null).sort((a, b) => a.sira - b.sira);
     kaynaklarConfigAll = kaynakRows.map(parseKaynakRow).filter(k => k.proje && k.kaynakAdi);
     hesaplamalarConfigAll = hesRows.map(parseHesaplamaRow).filter(h => h.proje && h.sutunAdi);
+    await loadUserPermissions(); // projeler artık dolu, proje-bazlı yetki sütunları eşleştirilebilir
     renderSidebar();
-    if (projeler.length) selectProject(projeler[0].ad);
+    applyFeaturePermissions();
+    const gorulebilirProjeler = projeler.filter(p => userPerms.superYetkili || userPerms.projeler.has(p.ad));
+    if (gorulebilirProjeler.length) selectProject(gorulebilirProjeler[0].ad);
+    else nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Bu hesap için görüntülenebilir bir proje bulunamadı. Yetkilendirme gerekiyorsa yöneticinle iletişime geç.</div>';
   } catch (err){
     nav.innerHTML = `<div class="empty" style="color:var(--danger); padding:20px 12px;">✗ Proje ayarları okunamadı: ${err.message}<br><br>"${TAB_PROJELER}", "${TAB_KAYNAKLAR}", "${TAB_HESAPLAMALAR}" sekmelerinin CONFIG_SHEET_ID'de var olduğundan emin ol.</div>`;
   }
@@ -1786,8 +1899,9 @@ document.getElementById('refreshConfigBtn')?.addEventListener('click', loadConfi
 
 function renderSidebar(){
   const nav = document.getElementById('navList');
-  if (!projeler.length){ nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Henüz proje tanımlı değil.</div>'; return; }
-  nav.innerHTML = projeler.map(p => `<div class="nav-item${p.ad === currentProject ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
+  const gorulebilir = projeler.filter(p => userPerms.superYetkili || userPerms.projeler.has(p.ad));
+  if (!gorulebilir.length){ nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Görüntülenebilir proje yok.</div>'; return; }
+  nav.innerHTML = gorulebilir.map(p => `<div class="nav-item${p.ad === currentProject ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
   nav.querySelectorAll('[data-proje]').forEach(el => {
     el.addEventListener('click', () => selectProject(el.getAttribute('data-proje')));
   });

@@ -1017,13 +1017,21 @@ function ruleMatches(rule, rawValue){
 // AYNI kuralı, aynı önceliklendirmeyle kullanmak için. Kural "Tüm Gün Sütunları" veya
 // "Tüm Kategori Sütunları" gibi bir GRUBU hedefliyorsa, o gruba ait her sütun için de eşleşir
 // — 30+ gün sütununa aynı kuralı teker teker eklemek zorunda kalmamak için.
-function getCondColorForCell(label, value, colInfo, rowValueLookup){
+function getCondColorForCell(label, value, colInfo, rowValueLookup, columns){
   const matches = kosulluBicimlendirme.filter(r => {
     if (r.operator === 'Boşsa Satırı Renklendir'){
-      // Bu kural TEK bir sütunu (r.metrik) kontrol edip, eşleşirse TÜM SATIRI boyar —
-      // yani şu an çizilen hücrenin kendi değeri değil, kontrol edilen sütunun bu
-      // SATIRDAKİ değeri önemli.
+      // Bu kural TEK bir sütunu (r.metrik) kontrol edip, eşleşirse bir ARALIĞI boyar —
+      // aralık rule.rangeStart/rangeEnd ile geldiyse SADECE o aralıktaki sütunlar boyanır
+      // (senin orijinal dosyandaki "sadece C'den K'ya" gibi kısıtlı aralıklar dahil).
       if (!rowValueLookup) return false;
+      if (columns && (r.rangeStart || r.rangeEnd)){
+        const thisCol = columns.find(c => c.label === label);
+        const startCol = r.rangeStart ? columns.find(c => c.label === r.rangeStart) : null;
+        const endCol = r.rangeEnd ? columns.find(c => c.label === r.rangeEnd) : null;
+        if (thisCol && startCol && endCol){
+          if (thisCol.col < startCol.col || thisCol.col > endCol.col) return false;
+        }
+      }
       return ruleMatches(r, rowValueLookup(r.metrik));
     }
     if (r.metrik === label) return ruleMatches(r, value);
@@ -1115,15 +1123,18 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
 
   sortedRules.forEach(rule => {
     if (rule.operator === 'Boşsa Satırı Renklendir'){
-      // Excel'in "Formül Kullan" tekniği: bir tek sütun (rule.metrik) boşsa, TÜM SATIRI
-      // (elindeki tüm çıktı sütunları, ilk sütundan son sütuna kadar) renklendirir. type=
-      // 'expression', formül SADECE kontrol edilen sütunun göreceli referansını kullanır —
-      // Excel/ExcelJS bunu her satır için otomatik kaydırır (senin orijinal dosyandaki
-      // "D5="" " kuralıyla AYNI mekanizma).
+      // Excel'in "Formül Kullan" tekniği: bir tek sütun (rule.metrik) boşsa, bir ARALIĞI
+      // renklendirir. Bu aralık rule.rangeStart/rangeEnd (sütun İSMİ) ile geldiyse AYNEN
+      // KORUNUR — senin orijinal dosyandaki "sadece C'den K'ya" gibi kısıtlı aralıklar
+      // yanlışlıkla tüm satıra genişletilmesin diye. Bu alanlar yoksa (manuel eklenmiş,
+      // eski kural gibi) geriye dönük uyumlu olarak TÜM ÇIKTI SÜTUNLARI kullanılır.
       const checkCol = findColByLabel(result, rule.metrik);
       if (checkCol === null) return;
+      const startColResolved = rule.rangeStart ? findColByLabel(result, rule.rangeStart) : null;
+      const endColResolved = rule.rangeEnd ? findColByLabel(result, rule.rangeEnd) : null;
       const allCols = result.columns.map(c => c.col);
-      const firstCol = Math.min(...allCols), lastCol = Math.max(...allCols);
+      const firstCol = (startColResolved !== null) ? startColResolved : Math.min(...allCols);
+      const lastCol = (endColResolved !== null) ? endColResolved : Math.max(...allCols);
       const firstLetter = colNumToA1(firstCol), lastLetter = colNumToA1(lastCol);
       const checkLetter = colNumToA1(checkCol);
       const ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
@@ -1507,16 +1518,19 @@ function importCondFormattingFromSheet(ws, themeColors){
         }
       };
 
-      // "expression" tipi (Excel'in "Formül Kullan" tekniği, örn. senin dosyandaki D5="" gibi):
+      // "expression" tipi (Excel'in "Formül Kullan" tekniği, örn. senin dosyandaki C2="" gibi):
       // bu, tek bir sütun (aralığın SOL ÜST hücresindeki göreceli referans) boşsa/koşulu
-      // sağlıyorsa TÜM ARALIĞI (genelde tüm satırı) renklendirir. otherColsInRange üzerinde
-      // TEK TEK dönmüyoruz — sadece formüldeki referans sütunu buluyoruz, TEK kural ekliyoruz.
+      // sağlıyorsa kuralın kendi ARALIĞINI (startCol..endCol — senin dosyanda C:K gibi, HER
+      // ZAMAN tüm satır değil) renklendirir. Aralığın başlangıç/bitiş sütun İSİMLERİNİ
+      // (pozisyon değil) saklıyoruz — export'ta sütun sırası değişse bile doğru bulunsun diye.
       if (rule.type === 'expression' && (rule.formulae || [])[0]){
         const exprMatch = String(rule.formulae[0]).trim().match(/^\$?([A-Za-z]+)\$?(\d+)\s*=\s*""$/);
         if (exprMatch){
           const refCol = colLetterToNum(exprMatch[1].toUpperCase());
           const metrik = header[refCol] || '';
-          if (metrik) imported.push({ metrik, operator: 'Boşsa Satırı Renklendir', deger1: '', deger2: '', renk, oncelik: rule.priority || oncelikSeq++ });
+          const rangeStart = header[startCol] || '';
+          const rangeEnd = header[endCol] || '';
+          if (metrik) imported.push({ metrik, operator: 'Boşsa Satırı Renklendir', deger1: '', deger2: '', renk, oncelik: rule.priority || oncelikSeq++, rangeStart, rangeEnd });
         }
         return;
       }
@@ -1929,7 +1943,7 @@ function renderPreview(result){
       const isComputed = c.kind !== 'info';
       const val = isComputed ? r.updates[c.col] : coerceNumberIfNumeric(origRow[c.col]);
       const colInfo = { isDay: c.kind === 'day', isCategory: c.kind === 'hesaplama' };
-      const condColor = getCondColorForCell(c.label, val, colInfo, rowValueLookup);
+      const condColor = getCondColorForCell(c.label, val, colInfo, rowValueLookup, result.columns);
       // Elle boyanmış (kuralsız) hücre biçimi varsa, o AYNI POZİSYONDAKİ görünümü canlı
       // önizlemede de göster — export'ta ne göreceksen burada da onu görmelisin.
       const cellOverride = lookupCellFormatOverride(hucreBazliBicim, sheetRow, c.col + 1);

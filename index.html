@@ -184,6 +184,23 @@
       </div>
     </div>
 
+    <!-- ===== Yetkilendirme sayfası — sadece Süper Yetkili görür. Kişi/proje/özellik erişimini
+         tikleyerek yönetir, "Kaydet" ile AUTH_SHEET_ID > AUTH_TAB'a geri yazar. ===== -->
+    <div id="page-auth" style="display:none;">
+      <div class="page-title">⚙ Yetkilendirme</div>
+      <div class="page-sub">Kim hangi projeyi/özelliği görebilir, buradan tikleyerek yönetirsin. "Kaydet" dediğinde doğrudan Yetkilendirme Sheet'ine yazılır.</div>
+      <div id="authMissingWarn" class="card" style="display:none; border-color:var(--accent);"></div>
+      <div class="card">
+        <div id="authTableWrap" class="prev-wrap"><table class="prev" id="authTable"></table></div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn" id="authAddRowBtn">+ Yeni Kişi Ekle</button>
+          <button class="btn primary" id="authSaveBtn">💾 Kaydet</button>
+          <button class="btn" id="authRefreshBtn">↻ Yenile</button>
+        </div>
+        <div id="authStatus" class="status"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1749,6 +1766,9 @@ let projeler = [];             // [{ ad, sira, varsayilanSablon }]
 let kaynaklarConfigAll = [];   // [{ proje, kaynakAdi, tip, sheetId, sekmeAdi, rolu, periyotDeseni }]
 let hesaplamalarConfigAll = [];// [{ proje, sutunAdi, formul, aktif, aktarimTuru }]
 let currentProject = null;
+let authPageActive = false;
+let authHeader = [];   // Yetkilendirme Sheet'inin başlık satırı
+let authRows = [];     // her satır: header ile aynı uzunlukta dizi (metin/TRUE-FALSE)
 let resolvedTabs = {};         // kaynakAdi -> secilen sekme adi (dinamik sekmeli kaynaklar icin)
 let uploadedKaynakData = {};   // kaynakAdi -> ham 2B dizi (YuklenenDosya tipi kaynaklar icin)
 
@@ -1846,6 +1866,128 @@ function applyFeaturePermissions(){
   if (importLabel) importLabel.style.display = userPerms.sablonYukleme ? '' : 'none';
 }
 
+// ============================================================================
+// ===== Yetkilendirme Sayfası (sadece Süper Yetkili) =====
+// ============================================================================
+async function showAuthPage(){
+  authPageActive = true;
+  renderSidebar();
+  document.getElementById('page-project').style.display = 'none';
+  document.getElementById('page-auth').style.display = 'block';
+  await loadAuthPageData();
+}
+
+async function loadAuthPageData(){
+  const statusEl = document.getElementById('authStatus');
+  statusEl.textContent = 'Yükleniyor…';
+  statusEl.className = 'status';
+  try {
+    const rows = await getSheetValues(AUTH_SHEET_ID, `'${AUTH_TAB}'!A1:ZZ500`);
+    if (!rows.length) throw new Error('Yetkilendirme sekmesi boş görünüyor.');
+    authHeader = rows[0];
+    authRows = rows.slice(1).filter(r => r.some(c => normalizeKey(c) !== ''))
+      .map(r => authHeader.map((_, i) => r[i] !== undefined ? r[i] : ''));
+    renderAuthMissingWarning();
+    renderAuthTable();
+    statusEl.textContent = '';
+  } catch (err){
+    statusEl.textContent = `✗ ${err.message}\n("${AUTH_TAB}" sekmesinin AUTH_SHEET_ID'de var olduğundan ve seninle paylaşıldığından emin ol.)`;
+    statusEl.className = 'status err';
+  }
+}
+
+// Projeler sekmesinde olup Yetkilendirme'de karşılığı olmayan projeler için UYARI (sütunu
+// biz OLUŞTURMUYORUZ — sen "sütun ismini ben yazarım" dedin, sadece hatırlatıyoruz).
+function renderAuthMissingWarning(){
+  const box = document.getElementById('authMissingWarn');
+  const eksik = projeler.filter(p => !authHeader.some(h => normalizeLabelKey(h) === normalizeLabelKey(p.ad)));
+  if (!eksik.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<b>⚠ Sütunu eksik projeler:</b> ${eksik.map(p => p.ad).join(', ')}<br>
+    <span style="color:var(--dim); font-size:12.5px;">Bu projeler için Yetkilendirme Sheet'inin başlık satırına (1. satır), projenin adıyla BİREBİR aynı yeni bir sütun eklemen gerekiyor — biz otomatik eklemiyoruz, ekleyene kadar bu projeler burada yönetilemez.</span>`;
+}
+
+function authColIndex(name){
+  return authHeader.findIndex(h => normalizeLabelKey(h) === normalizeLabelKey(name));
+}
+
+function renderAuthTable(){
+  const table = document.getElementById('authTable');
+  const isimCol = authColIndex('İsim'), gmailCol = authColIndex('Gmail'), superCol = authColIndex('Süper Yetkili');
+  // Tik kutusu olarak gösterilecek sütunlar: İsim/Gmail DIŞINDAKİ her şey (Süper Yetkili +
+  // her proje + 3 sabit özellik) — hangi sütunlar olduğu TAMAMEN Sheets'teki başlıklardan gelir.
+  const checkboxCols = authHeader.map((h, i) => i).filter(i => i !== isimCol && i !== gmailCol);
+  const isTrue = (v) => trUpper(v) === trUpper('true') || trUpper(v) === trUpper('doğru') || trUpper(v) === trUpper('evet');
+
+  let head = '<tr><th>İsim</th><th>Gmail</th>' + checkboxCols.map(i => `<th>${authHeader[i]}</th>`).join('') + '<th></th></tr>';
+  let body = authRows.map((row, rIdx) => {
+    const isimVal = isimCol !== -1 ? (row[isimCol] || '') : '';
+    const gmailVal = gmailCol !== -1 ? (row[gmailCol] || '') : '';
+    const cells = checkboxCols.map(cIdx => {
+      const checked = isTrue(row[cIdx]) ? 'checked' : '';
+      return `<td style="text-align:center;"><input type="checkbox" data-auth-row="${rIdx}" data-auth-col="${cIdx}" ${checked}></td>`;
+    }).join('');
+    return `<tr>
+      <td><input type="text" data-auth-row="${rIdx}" data-auth-col="${isimCol}" value="${isimVal.replace(/"/g, '&quot;')}" style="width:140px;"></td>
+      <td><input type="text" data-auth-row="${rIdx}" data-auth-col="${gmailCol}" value="${gmailVal.replace(/"/g, '&quot;')}" style="width:200px;"></td>
+      ${cells}
+      <td><button class="btn danger" data-auth-remove="${rIdx}" style="padding:4px 10px;">Sil</button></td>
+    </tr>`;
+  }).join('');
+  table.innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+
+  table.querySelectorAll('input[type=checkbox][data-auth-row]').forEach(el => {
+    el.addEventListener('change', () => {
+      const r = parseInt(el.getAttribute('data-auth-row'), 10), c = parseInt(el.getAttribute('data-auth-col'), 10);
+      authRows[r][c] = el.checked ? 'TRUE' : 'FALSE';
+    });
+  });
+  table.querySelectorAll('input[type=text][data-auth-row]').forEach(el => {
+    el.addEventListener('input', () => {
+      const r = parseInt(el.getAttribute('data-auth-row'), 10), c = parseInt(el.getAttribute('data-auth-col'), 10);
+      if (c !== -1) authRows[r][c] = el.value;
+    });
+  });
+  table.querySelectorAll('[data-auth-remove]').forEach(el => {
+    el.addEventListener('click', () => {
+      authRows.splice(parseInt(el.getAttribute('data-auth-remove'), 10), 1);
+      renderAuthTable();
+    });
+  });
+}
+
+document.getElementById('authAddRowBtn').addEventListener('click', () => {
+  authRows.push(authHeader.map(() => ''));
+  renderAuthTable();
+});
+
+document.getElementById('authRefreshBtn').addEventListener('click', loadAuthPageData);
+
+document.getElementById('authSaveBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('authStatus');
+  statusEl.textContent = 'Kaydediliyor…';
+  statusEl.className = 'status';
+  try {
+    const gmailCol = authColIndex('Gmail');
+    const bosGmail = authRows.some(r => gmailCol !== -1 && normalizeKey(r[gmailCol]) === '');
+    if (bosGmail) throw new Error('Bir ya da daha fazla satırda Gmail alanı boş — kaydetmeden önce doldur ya da satırı sil.');
+    const lastCol = colNumToA1(authHeader.length - 1);
+    const range = `'${AUTH_TAB}'!A2:${lastCol}${authRows.length + 1}`;
+    await batchUpdateValues(AUTH_SHEET_ID, [{ range, values: authRows }]);
+    statusEl.textContent = `✓ Kaydedildi (${authRows.length} kişi).`;
+    statusEl.className = 'status ok';
+    // Kendi yetkilerin de değişmiş olabilir (örn. kendi Süper Yetkili tikini kaldırdıysan) —
+    // hemen yeniden uygula ki dashboard tutarlı kalsın.
+    await loadUserPermissions();
+    renderSidebar();
+    applyFeaturePermissions();
+  } catch (err){
+    statusEl.textContent = `✗ Kaydedilemedi: ${err.message}`;
+    statusEl.className = 'status err';
+  }
+});
+
+
 
 function parseProjeRow(r){
   const sira = parseFloat(r[1]);
@@ -1900,21 +2042,33 @@ document.getElementById('refreshConfigBtn')?.addEventListener('click', loadConfi
 function renderSidebar(){
   const nav = document.getElementById('navList');
   const gorulebilir = projeler.filter(p => userPerms.superYetkili || userPerms.projeler.has(p.ad));
-  if (!gorulebilir.length){ nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Görüntülenebilir proje yok.</div>'; return; }
-  nav.innerHTML = gorulebilir.map(p => `<div class="nav-item${p.ad === currentProject ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
+  let html = '';
+  if (!gorulebilir.length){
+    html = '<div class="empty" style="padding:20px 12px;">Görüntülenebilir proje yok.</div>';
+  } else {
+    html = gorulebilir.map(p => `<div class="nav-item${(p.ad === currentProject && !authPageActive) ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
+  }
+  if (userPerms.superYetkili){
+    html += `<div class="nav-item${authPageActive ? ' active' : ''}" data-auth="1" style="margin-top:10px; border-top:1px solid var(--sb-line); padding-top:12px;"><span class="nav-icon">⚙</span> Yetkilendirme</div>`;
+  }
+  nav.innerHTML = html;
   nav.querySelectorAll('[data-proje]').forEach(el => {
     el.addEventListener('click', () => selectProject(el.getAttribute('data-proje')));
   });
+  const authNav = nav.querySelector('[data-auth]');
+  if (authNav) authNav.addEventListener('click', showAuthPage);
 }
 
 function selectProject(projeAdi){
   currentProject = projeAdi;
+  authPageActive = false;
   resolvedTabs = {};
   uploadedKaynakData = {};
   lastComputeResult = null;
   lastKaynaklarData = null;
   selectedDateRange = null;
   renderSidebar();
+  document.getElementById('page-auth').style.display = 'none';
   document.getElementById('page-project').style.display = 'block';
   document.getElementById('projectTitle').textContent = projeAdi;
   document.getElementById('previewCard').style.display = 'none';

@@ -995,7 +995,12 @@ function applyCellStyle(cell, st){
 // ============================================================================
 
 const COND_OPERATORS = ['Büyük', 'Küçük', 'Büyük Eşit', 'Küçük Eşit', 'Eşit', 'Farklı', 'Aralık', 'İçerdiği Metin', 'Boşsa Satırı Renklendir'];
-let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, oncelik }]
+let kosulluBicimlendirme = []; // [{ id, metrik, operator, deger1, deger2, renk, yaziRengi, oncelik }]
+// yaziRengi: OPSİYONEL — boş/'' ise eskisi gibi "veri" sütun varsayılan yazı rengi kullanılır,
+// davranış değişmez (geriye dönük uyum). Dolu ise (örn. "BD" kuralı: renk=siyah, yaziRengi=
+// beyaz) hem önizlemede hem Excel çıktısında yazı rengini override eder. Eklenme sebebi:
+// koşullu biçimlendirmenin eskiden SADECE arkaplan rengi taşıması — koyu arkaplan + varsayılan
+// (siyah) yazı = görünmez metin (kanıtlandı: 30.10.2026, "BD" siyah hücrede "BD" yazısı kayboldu).
 let hucreBazliBicim = null; // { palette, rows, rowCount, colCount } — elle boyanmış (kuralsız) hücreler için
 let sutunGenislikleri = null; // { colNum: width } — içe aktarılan dosyanın sütun genişlikleri
 let condRuleIdSeq = 1;
@@ -1005,7 +1010,7 @@ const GROUP_ALL_CATEGORIES = '__ALL_CATEGORIES__';
 
 function renderCondFormatTable(){
   const wrap = document.getElementById('condFormatTable');
-  const cols = [{label:'Metrik (sütun başlığı)'},{label:'Operatör'},{label:'Değer1'},{label:'Değer2'},{label:'Renk'},{label:'Öncelik'},{label:''}];
+  const cols = [{label:'Metrik (sütun başlığı)'},{label:'Operatör'},{label:'Değer1'},{label:'Değer2'},{label:'Renk'},{label:'Yazı Rengi'},{label:'Öncelik'},{label:''}];
   const head = '<tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
   const availableLabels = lastComputeResult ? lastComputeResult.columns.map(c => c.label) : [];
   const rows = kosulluBicimlendirme.map(rule => {
@@ -1020,15 +1025,19 @@ function renderCondFormatTable(){
       <td><input type="text" data-cf-id="${rule.id}" data-cf-field="deger1" value="${rule.deger1 || ''}" style="width:80px;" ${rule.operator==='Boşsa Satırı Renklendir'?'disabled':''}></td>
       <td><input type="text" data-cf-id="${rule.id}" data-cf-field="deger2" value="${rule.deger2 || ''}" style="width:80px;" ${rule.operator==='Aralık'?'':'disabled'}></td>
       <td><input type="color" data-cf-id="${rule.id}" data-cf-field="renk" value="${rule.renk || '#ffff00'}"></td>
+      <td style="white-space:nowrap;">
+        <input type="color" data-cf-id="${rule.id}" data-cf-field="yaziRengi" value="${rule.yaziRengi || '#000000'}" title="${rule.yaziRengi ? 'Yazı rengi override: ' + rule.yaziRengi : 'Override yok — sütunun varsayılan yazı rengi kullanılır'}" style="${rule.yaziRengi ? '' : 'opacity:0.35;'}">
+        ${rule.yaziRengi ? `<button type="button" class="btn" data-cf-clear-yazi="${rule.id}" title="Yazı rengi override'ını kaldır" style="padding:2px 6px;">✕</button>` : ''}
+      </td>
       <td><input type="number" data-cf-id="${rule.id}" data-cf-field="oncelik" value="${rule.oncelik || 1}" style="width:60px;"></td>
       <td><button type="button" class="btn danger" data-cf-delete="${rule.id}">✕</button></td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<thead>${head}</thead><tbody>${rows || '<tr><td colspan="7" style="text-align:center; color:var(--dim2);">Henüz kural yok</td></tr>'}</tbody>`;
+  wrap.innerHTML = `<thead>${head}</thead><tbody>${rows || '<tr><td colspan="8" style="text-align:center; color:var(--dim2);">Henüz kural yok</td></tr>'}</tbody>`;
 }
 
 document.getElementById('addCondRuleBtn').addEventListener('click', () => {
-  kosulluBicimlendirme.push({ id: condRuleIdSeq++, metrik: '', operator: 'Eşit', deger1: '', deger2: '', renk: '#ffff00', oncelik: kosulluBicimlendirme.length + 1 });
+  kosulluBicimlendirme.push({ id: condRuleIdSeq++, metrik: '', operator: 'Eşit', deger1: '', deger2: '', renk: '#ffff00', yaziRengi: '', oncelik: kosulluBicimlendirme.length + 1 });
   if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
 });
 
@@ -1045,10 +1054,19 @@ document.getElementById('condFormatTable').addEventListener('change', (e) => {
 
 document.getElementById('condFormatTable').addEventListener('click', (e) => {
   const delBtn = e.target.closest('[data-cf-delete]');
-  if (!delBtn) return;
-  const id = parseInt(delBtn.getAttribute('data-cf-delete'), 10);
-  kosulluBicimlendirme = kosulluBicimlendirme.filter(r => r.id !== id);
-  if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
+  if (delBtn){
+    const id = parseInt(delBtn.getAttribute('data-cf-delete'), 10);
+    kosulluBicimlendirme = kosulluBicimlendirme.filter(r => r.id !== id);
+    if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
+    return;
+  }
+  const clearYaziBtn = e.target.closest('[data-cf-clear-yazi]');
+  if (clearYaziBtn){
+    const id = parseInt(clearYaziBtn.getAttribute('data-cf-clear-yazi'), 10);
+    const rule = kosulluBicimlendirme.find(r => r.id === id);
+    if (rule) rule.yaziRengi = '';
+    if (lastComputeResult) renderPreview(lastComputeResult); else renderCondFormatTable();
+  }
 });
 
 const COND_OP_MAP = {
@@ -1125,7 +1143,10 @@ function getCondColorForCell(label, value, colInfo, rowValueLookup, columns){
   });
   if (!matches.length) return null;
   matches.sort((a, b) => (a.oncelik || 1) - (b.oncelik || 1));
-  return matches[0].renk;
+  // Hem arkaplanı hem (varsa) yazı rengi override'ını birlikte döndür — eskiden sadece .renk
+  // (düz string) dönüyordu, çağıran yer sadece arkaplanı uyguluyordu (koyu arkaplan + varsayılan
+  // yazı rengi = görünmez metin bug'ı, 30.10.2026).
+  return { renk: matches[0].renk, yaziRengi: matches[0].yaziRengi || '' };
 }
 
 // Biçimlendirme ayarını, önizleme tablosunda kullanılacak inline CSS'e çevirir —
@@ -1224,6 +1245,10 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
       const ref = `${firstLetter}2:${lastLetter}${rowCount + 1}`;
       const argb = hexToArgb(rule.renk) || 'FFFFFF00';
       const style = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb } } };
+      // Kuralın kendi yazı rengi override'ı varsa (örn. koyu zeminli satırlarda metin
+      // görünür kalsın diye) Excel'in native font.color'ına da yaz — sadece arkaplan değil
+      // (30.10.2026, "BD" siyah zeminde metin görünmezdi).
+      if (rule.yaziRengi) style.font = { color: { argb: hexToArgb(rule.yaziRengi) || 'FF000000' } };
       const priority = priorityCounter++;
       ws.addConditionalFormatting({
         ref, rules: [{ type: 'expression', formulae: [`${checkLetter}2=""`], style, priority }],
@@ -1256,6 +1281,7 @@ function applyKosulluBicimlendirme(ws, result, rowCount){
 
     const argb = hexToArgb(rule.renk) || 'FFFFFF00';
     const style = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb } } };
+    if (rule.yaziRengi) style.font = { color: { argb: hexToArgb(rule.yaziRengi) || 'FF000000' } };
     const priority = priorityCounter++;
 
     if (rule.operator === 'İçerdiği Metin'){
@@ -1603,6 +1629,12 @@ function importCondFormattingFromSheet(ws, themeColors){
     (cf.rules || []).forEach(rule => {
       const colorObj = (rule.style && rule.style.fill && (rule.style.fill.fgColor || rule.style.fill.bgColor)) || null;
       const renk = resolveColor(colorObj, themeColors) || '#ffff00';
+      // Kuralın YAZI rengini de oku — eskiden SADECE arkaplan (fill) okunuyordu, kuralın kendi
+      // font.color'ı sessizce atılıyordu. Koyu arkaplanlı kurallarda (örn. "BD": siyah zemin +
+      // beyaz yazı) bu yüzden metin görünmez oluyordu (kanıtlandı: 30.10.2026). Yoksa/okunamazsa
+      // '' kalır — "override yok, sütun varsayılanını kullan" demek, geriye dönük uyumlu.
+      const fontColorObj = (rule.style && rule.style.font && rule.style.font.color) || null;
+      const yaziRengi = fontColorObj ? (resolveColor(fontColorObj, themeColors) || '') : '';
       // ExcelJS, dosyaya kaydedilip GERİ OKUNAN "İçerdiği Metin" kurallarında rule.type/rule.text
       // bilgisini KORUMUYOR — sadece ham SEARCH(...) formülünü bırakıyor. Bu yüzden hem orijinal
       // (yeni yazılmış) hem round-trip (dosyadan okunmuş) hallerini ayrı ayrı tanıyoruz.
@@ -1611,12 +1643,12 @@ function importCondFormattingFromSheet(ws, themeColors){
       const pushRule = (metrik) => {
         if (rule.type === 'containsText' || searchMatch){
           const text = rule.type === 'containsText' ? (rule.text || '') : searchMatch[1];
-          imported.push({ metrik, operator: 'İçerdiği Metin', deger1: text, deger2: '', renk, oncelik: rule.priority || oncelikSeq++ });
+          imported.push({ metrik, operator: 'İçerdiği Metin', deger1: text, deger2: '', renk, yaziRengi, oncelik: rule.priority || oncelikSeq++ });
         } else if (rule.type === 'cellIs' || (!rule.type && rule.operator)){
           const op = COND_OP_MAP_REVERSE[rule.operator];
           if (!op) return;
           const f = rule.formulae || [];
-          imported.push({ metrik, operator: op, deger1: unquoteFormulaValue(f[0]), deger2: op === 'Aralık' ? unquoteFormulaValue(f[1]) : '', renk, oncelik: rule.priority || oncelikSeq++ });
+          imported.push({ metrik, operator: op, deger1: unquoteFormulaValue(f[0]), deger2: op === 'Aralık' ? unquoteFormulaValue(f[1]) : '', renk, yaziRengi, oncelik: rule.priority || oncelikSeq++ });
         }
       };
 
@@ -1632,7 +1664,7 @@ function importCondFormattingFromSheet(ws, themeColors){
           const metrik = header[refCol] || '';
           const rangeStart = header[startCol] || '';
           const rangeEnd = header[endCol] || '';
-          if (metrik) imported.push({ metrik, operator: 'Boşsa Satırı Renklendir', deger1: '', deger2: '', renk, oncelik: rule.priority || oncelikSeq++, rangeStart, rangeEnd });
+          if (metrik) imported.push({ metrik, operator: 'Boşsa Satırı Renklendir', deger1: '', deger2: '', renk, yaziRengi, oncelik: rule.priority || oncelikSeq++, rangeStart, rangeEnd });
         }
         return;
       }
@@ -2305,7 +2337,13 @@ function renderPreview(result){
       // Sütunun KENDİ rengi varsa (export'takiyle AYNI mantık) onu kullan, yoksa genel yedek.
       const veriCssForCol = formatStateToCss(formatState.veriPerCol[normalizeLabelKey(c.label)] || formatState.veri);
       let style = cellOverride ? formatStateToCss(cellOverride) : veriCssForCol;
-      if (condColor) style += (style ? ';' : '') + `background:${condColor}`;
+      if (condColor){
+        style += (style ? ';' : '') + `background:${condColor.renk}`;
+        // Kuralın kendi yazı rengi override'ı varsa (örn. "BD": siyah zemin + beyaz yazı) EN
+        // SONA ekle — CSS'te sonraki bildirim kazanır, böylece sütun/hücre varsayılan yazı
+        // rengini ezer (30.10.2026: koyu arkaplanlı kurallarda metin görünmez oluyordu).
+        if (condColor.yaziRengi) style += `;color:${condColor.yaziRengi}`;
+      }
       // Hata değeri mi (örn. "#YOK!", "#DEĞER!")? Öyleyse KIRMIZI + gerçek hata mesajı fare
       // üzerine gelince görünsün. Değilse, hesaplanan (ve koşullu renk almayan) hücreler turuncu.
       const isError = isComputed && typeof val === 'string' && val.trim().startsWith('#');

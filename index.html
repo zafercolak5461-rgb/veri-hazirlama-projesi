@@ -256,6 +256,14 @@ function normalizeDictKey(v){
 // Türkçe büyük/küçük harf dönüşümünü doğru yapan karşılaştırma (İ/I/ı/i farkı gözetir) —
 // özellikle "Sicil"/"SİCİL" gibi anahtar sütun adlarını eşleştirirken şart.
 function trUpper(v){ return normalizeKey(v).toLocaleUpperCase('tr-TR'); }
+// trUpper ile aynı, ama normalizeDictKey tabanlı: formül motorundaki (DÜŞEYARA/ÇAPRAZARA/
+// EĞERSAY/EĞER metin eşitliği) serbest metin karşılaştırmalarında kullanılır — "10:00-19:00"
+// gibi saat aralığı içeren DEĞERLER tire varyantı yüzünden yanlış eşleşmesin diye. Sütun adı/
+// anahtar eşleştirmesi (findKeyCol, Yetkilendirme, aktif bayrağı vb.) hâlâ normal trUpper
+// kullanır, dokunulmadı — sadece hesaplama motorunun İKİ serbest metin karşılaştırma noktası
+// (calcValuesEqual, calcCriterionMatcher'ın =/<> dalı) buna geçti (29.10.2026, GÜNLER satırında
+// DÜŞEYARA({GÜNHAM};{Parametre.TABLO};2;YANLIŞ) ile kanıtlanan ikinci karşılaştırma yolu).
+function trUpperDict(v){ return normalizeDictKey(v).toLocaleUpperCase('tr-TR'); }
 
 function colNumToA1(n){
   let s = '';
@@ -485,11 +493,22 @@ function calcFlatten(v){
   if (Array.isArray(v)) return v.reduce((acc, x) => acc.concat(calcFlatten(x)), []);
   return [v];
 }
+// SADECE hücrenin TAMAMI sayıysa (parseFloat'ın KISMİ/gevşek ayrıştırması DEĞİL, baştan sona
+// tam regex eşleşmesi) sayıya çevirir. parseFloat('08:00-13:00') NaN DEĞİL, 8 döner (ilk ":"
+// öncesini okuyup durur) — bu yüzden eski kod "08:00-13:00" ile "08:00-18:00"i İKİSİNİ DE 8'e
+// indirgeyip "eşit" sanıyordu, DÜŞEYARA(...,YANLIŞ) tablodaki İLK "08:xx" satırını (yanlış
+// satırı) buluyordu — saat aralığı metninin TAMAMI hiç karşılaştırılmıyordu (kanıtlandı:
+// 29.10.2026, "08:00-13:00" beklenen 4,5 yerine hep ilk "08:xx" satırının değerini — 8,5 — verdi).
+function calcStrictNumber(v){
+  if (typeof v === 'number') return v;
+  if (v == null || v === '') return null;
+  const s = String(v).trim().replace(',', '.');
+  return /^-?\d+(\.\d+)?$/.test(s) ? parseFloat(s) : null;
+}
 function calcValuesEqual(a, b){
-  const an = (typeof a === 'number') ? a : (a != null && a !== '' && !isNaN(parseFloat(String(a).replace(',', '.'))) ? parseFloat(String(a).replace(',', '.')) : null);
-  const bn = (typeof b === 'number') ? b : (b != null && b !== '' && !isNaN(parseFloat(String(b).replace(',', '.'))) ? parseFloat(String(b).replace(',', '.')) : null);
+  const an = calcStrictNumber(a), bn = calcStrictNumber(b);
   if (an != null && bn != null) return an === bn;
-  return trUpper(a) === trUpper(b);
+  return trUpperDict(a) === trUpperDict(b);
 }
 function calcCriterionMatcher(crit){
   if (crit && typeof crit === 'object' && crit.__err) throw new Error(crit.__err);
@@ -507,7 +526,7 @@ function calcCriterionMatcher(crit){
         if (isNaN(vn)) return op === '<>';
         switch (op){ case '>': return vn > rhsNum; case '<': return vn < rhsNum; case '>=': return vn >= rhsNum; case '<=': return vn <= rhsNum; case '=': return vn === rhsNum; case '<>': return vn !== rhsNum; }
       }
-      const vs = trUpper(v), rs = trUpper(rhs);
+      const vs = trUpperDict(v), rs = trUpperDict(rhs);
       if (op === '=') return vs === rs;
       if (op === '<>') return vs !== rs;
       return false;

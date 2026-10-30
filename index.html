@@ -241,6 +241,18 @@ function normalizeKey(v){
 function normalizeLabelKey(v){
   return trUpper(String(v == null ? '' : v)).replace(/\s+/g, '');
 }
+// Parametre sözlüğü (Eski Değer -> Yeni Değer) eşleştirmesi için — normalizeKey'den daha
+// TOLERANSLI: Sheets'in "Otomatik değiştirmeler" özelliği "10:00-19:00" gibi saat aralığı
+// girişlerindeki düz tireyi (-) sessizce en-dash (–) ya da benzer bir Unicode tireye
+// çevirebiliyor; görsel olarak AYNI görünür ama karakter olarak FARKLI olduğu için ham veri
+// ("VARDİYA") ile sözlük ("Parametre") hücresi eşleşmez ve DÜŞEYARA yanlış/varsayılan satırı
+// döndürür (kanıtlandı: 29.10.2026, "10:00-19:00"->7,5 ve "08:00-13:00"->4,5 eşleşmedi).
+// Bilinen tüm tire varyantlarını (‐ ‑ ‒ – — −) düz tireye indirger, iç boşlukları tek boşluğa
+// sadeleştirir. SADECE buildDict/translateWithDict'te (sözlük çevirisinde) kullanılır — Sicil/
+// Tarih gibi ANAHTAR eşleştirmesine ya da sütun adı eşleştirmesine dokunmaz.
+function normalizeDictKey(v){
+  return normalizeKey(v).replace(/[‐‑‒–—−]/g, '-').replace(/\s+/g, ' ');
+}
 // Türkçe büyük/küçük harf dönüşümünü doğru yapan karşılaştırma (İ/I/ı/i farkı gözetir) —
 // özellikle "Sicil"/"SİCİL" gibi anahtar sütun adlarını eşleştirirken şart.
 function trUpper(v){ return normalizeKey(v).toLocaleUpperCase('tr-TR'); }
@@ -372,7 +384,7 @@ function buildDict(dictDataRows){
   const map = new Map();
   for (let r = 0; r < dictDataRows.length; r++){
     const row = dictDataRows[r];
-    const key = normalizeKey(row[0]);
+    const key = normalizeDictKey(row[0]);
     if (key === '' || map.has(key)) continue;
     map.set(key, row[1]);
   }
@@ -380,7 +392,7 @@ function buildDict(dictDataRows){
 }
 function translateWithDict(raw, dict){
   if (raw === undefined || raw === null || raw === '') return raw;
-  const key = normalizeKey(raw);
+  const key = normalizeDictKey(raw);
   return dict.has(key) ? dict.get(key) : raw;
 }
 

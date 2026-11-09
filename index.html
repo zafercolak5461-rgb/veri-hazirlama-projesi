@@ -2726,5 +2726,79 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
   }
 });
 </script>
+<script>
+/* ===== PANEL KÖPRÜSÜ =====
+   Bu program alo-144/panel.html içinde (iframe + ?panel=1) açıldığında devreye girer:
+   - kendi sol menüsünü gizler,
+   - görünen (yetkisi olan) menü öğelerini panele bildirir, değiştikçe yeniden bildirir,
+   - panelden gelen "şu öğeyi aç" isteğini kendi menü düğmesine tıklayarak uygular.
+   Tek başına açıldığında HİÇBİR ŞEY yapmaz. Sadece aşağıdaki CFG bu programa özeldir. */
+(function(){
+  const CFG = {
+    app: 'veri',
+    menu: '.app > .sidebar',
+    gizle: '',
+    oge: '#navList .nav-item',
+    id: el => el.dataset.proje ? 'proje:' + el.dataset.proje : (el.dataset.auth ? 'auth' : ''),
+    grup: el => el.dataset.auth ? 'Yönetim' : 'Projeler'
+  };
+  if (window.parent === window) return;                                   // tek başına açıldı: hiçbir şey yapma
+  if (!new URLSearchParams(location.search).has('panel')) return;         // panelden açılmadı: hiçbir şey yapma
+  const KAYNAK = 'alo144-panel';
+
+  // Kendi sol menüsü ekran dışına alınır (silinmez/display:none yapılmaz) - böylece programın
+  // kendi yetki gizlemeleri aynen çalışır ve hangi öğenin görünür olduğu ölçülebilir.
+  const st = document.createElement('style');
+  st.textContent = CFG.menu + '{position:fixed !important; left:-10000px !important; top:0 !important; visibility:hidden !important; pointer-events:none !important;}'
+    + (CFG.gizle ? CFG.gizle + '{display:none !important;}' : '');
+  document.head.appendChild(st);
+
+  function etiket(el){
+    const c = el.cloneNode(true);
+    c.querySelectorAll('.nav-icon, .dot-indicator').forEach(x => x.remove());
+    return c.textContent.replace(/\s+/g, ' ').trim();
+  }
+  function ogeler(){ return Array.from(document.querySelectorAll(CFG.oge)); }
+  // Görünür (yetkili) öğeler: kendisi ya da bir üstü display:none ise kutusu olmaz.
+  function liste(){
+    return ogeler().filter(el => el.getClientRects().length > 0).map(el => ({
+      id: CFG.id(el), ad: etiket(el), grup: CFG.grup(el),
+      aktif: el.classList.contains('active'), pasif: el.classList.contains('disabled')
+    })).filter(o => o.id);
+  }
+  let son = '';
+  function bildir(zorla){
+    const l = liste(); const j = JSON.stringify(l);
+    if (!zorla && j === son) return;
+    son = j;
+    try { window.parent.postMessage({ kaynak: KAYNAK, tur: 'menu', app: CFG.app, ogeler: l }, '/'); } catch(e){}
+  }
+  let zamanlayici = null;
+  function planla(){ clearTimeout(zamanlayici); zamanlayici = setTimeout(() => bildir(false), 120); }
+
+  window.addEventListener('message', e => {
+    if (e.source !== window.parent || e.origin !== location.origin) return;
+    const m = e.data || {};
+    if (m.kaynak !== KAYNAK) return;
+    if (m.tur === 'menu-iste') bildir(true);
+    if (m.tur === 'ac'){
+      const el = ogeler().find(x => CFG.id(x) === m.id);
+      if (el) el.click();       // programın kendi menü düğmesine tıklanır - kendi mantığı çalışır
+      planla();
+    }
+  });
+
+  // Menüde ya da onu saran kutularda (giriş ekranı → uygulama, yetki sınıfları) değişiklik olunca yeniden bildir.
+  const menuEl = document.querySelector(CFG.menu);
+  if (menuEl){
+    const gozcu = new MutationObserver(planla);
+    gozcu.observe(menuEl, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
+    for (let a = menuEl.parentElement; a; a = a.parentElement){
+      gozcu.observe(a, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+    }
+  }
+  bildir(true);
+})();
+</script>
 </body>
 </html>

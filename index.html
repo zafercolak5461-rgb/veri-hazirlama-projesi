@@ -1734,7 +1734,12 @@ let tokenClient = null;
 
 async function authFetch(url, options){
   options = options || {};
-  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + accessToken });
+  let token = accessToken;
+  // Panel içinde açıldıysa giriş izni salt okunurdur; yazma isteklerinde (GET dışı) yazma izni panelden alınır.
+  if (window.__panelYazmaIzni && options.method && options.method.toUpperCase() !== 'GET'){
+    token = await window.__panelYazmaIzni();
+  }
+  const headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + token });
   const res = await fetch(url, Object.assign({}, options, { headers }));
   if (!res.ok){
     const bodyText = await res.text();
@@ -1855,6 +1860,8 @@ let userPerms = { superYetkili: false, projeler: new Set(), excel: false, tabloO
 // isteğin gitme ihtimalini artırır (fetch'in aksine, sayfa kapanışını beklemeden arka planda
 // tamamlanabilir) — "çıkış" logu için en güvenilir yöntem budur, yine de %100 garanti değildir.
 function sendLog(type){
+  // Panel içinde açıldıysa giriş/çıkış kaydını panel tek seferde yazar; burada atlanır.
+  if (window.__panelModu && (type === 'giris' || type === 'cikis')) return;
   try {
     const payload = JSON.stringify({
       isim: currentUserDisplayName || currentUserEmail || '',
@@ -2729,7 +2736,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
 <script>
 /* ===== PANEL KÖPRÜSÜ =====
    Bu program alo-144/panel.html içinde (iframe + ?panel=1) açıldığında devreye girer:
-   - kendi sol menüsünü gizler,
+   - kendi sol menüsünü ve giriş ekranını gizler; Google girişini panelden alır,
    - görünen (yetkisi olan) menü öğelerini panele bildirir, değiştikçe yeniden bildirir,
    - panelden gelen "şu öğeyi aç" isteğini kendi menü düğmesine tıklayarak uygular.
    Tek başına açıldığında HİÇBİR ŞEY yapmaz. Sadece aşağıdaki CFG bu programa özeldir. */
@@ -2738,13 +2745,21 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     app: 'veri',
     menu: '.app > .sidebar',
     gizle: '',
+    giris: '#signinGate',
     oge: '#navList .nav-item',
     id: el => el.dataset.proje ? 'proje:' + el.dataset.proje : (el.dataset.auth ? 'auth' : ''),
-    grup: el => el.dataset.auth ? 'Yönetim' : 'Projeler'
+    grup: el => el.dataset.auth ? 'Yönetim' : 'Projeler',
+    yazmaPanelden: true,                              // yazma istekleri panelden izinle (authFetch)
+    oturum: (token, ilk) => {
+      accessToken = token;
+      if (ilk) onSignedIn();
+    }
   };
   if (window.parent === window) return;                                   // tek başına açıldı: hiçbir şey yapma
   if (!new URLSearchParams(location.search).has('panel')) return;         // panelden açılmadı: hiçbir şey yapma
   const KAYNAK = 'alo144-panel';
+  window.__panelModu = true;   // programın sendLog'u giriş/çıkış kaydını bu bayrağa bakıp atlar
+  function gonder(m){ try { window.parent.postMessage(Object.assign({ kaynak: KAYNAK }, m), '/'); } catch(e){} }
 
   // Kendi sol menüsü ekran dışına alınır (silinmez/display:none yapılmaz) - böylece programın
   // kendi yetki gizlemeleri aynen çalışır ve hangi öğenin görünür olduğu ölçülebilir.
@@ -2752,7 +2767,48 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
   st.textContent = CFG.menu + '{position:fixed !important; left:-10000px !important; top:0 !important; visibility:hidden !important; pointer-events:none !important;}'
     + (CFG.gizle ? CFG.gizle + '{display:none !important;}' : '');
   document.head.appendChild(st);
+  // Kendi giriş ekranı gizlenir; giriş panelden gelir. Panelden izin gelmezse kendi girişi geri açılır.
+  const girisStil = document.createElement('style');
+  girisStil.textContent = CFG.giris + '{display:none !important;}';
+  document.head.appendChild(girisStil);
+  const girisYedek = setTimeout(() => girisStil.remove(), 10000);
 
+  // ----- Oturum: panelden gelen okuma izni -----
+  let oturumVar = false;
+  function gisHazir(){ return !!(window.google && google.accounts && google.accounts.oauth2); }
+  function oturumUygula(token){
+    const ilk = !oturumVar;
+    oturumVar = true;
+    if (!ilk){ CFG.oturum(token, false); return; }       // yenileme: yalnız izin değişir
+    clearTimeout(girisYedek);
+    const basla = Date.now();
+    (function bekle(){                                      // programın kendi kodu Google kütüphanesini kullanabilsin
+      if (gisHazir() || Date.now() - basla > 8000){
+        try { CFG.oturum(token, true); } catch(e){ console.error('Panel oturumu uygulanamadı:', e); }
+        girisStil.remove();
+        planla();
+      } else setTimeout(bekle, 100);
+    })();
+  }
+
+  // ----- Yazma izni: panelden istenir (CFG.yazmaPanelden ise) -----
+  if (CFG.yazmaPanelden){
+    const bekleyen = {}; let sayac = 0;
+    window.__panelYazmaIzni = () => new Promise((res, rej) => {
+      const no = ++sayac;
+      bekleyen[no] = { res, rej };
+      gonder({ tur: 'yazma-iste', no });
+    });
+    window.addEventListener('message', e => {
+      if (e.source !== window.parent || e.origin !== location.origin) return;
+      const m = e.data || {};
+      if (m.kaynak !== KAYNAK || m.tur !== 'yazma' || !bekleyen[m.no]) return;
+      const b = bekleyen[m.no]; delete bekleyen[m.no];
+      if (m.token) b.res(m.token); else b.rej(new Error(m.hata || 'Yazma izni alınamadı.'));
+    });
+  }
+
+  // ----- Menü bildirimi -----
   function etiket(el){
     const c = el.cloneNode(true);
     c.querySelectorAll('.nav-icon, .dot-indicator').forEach(x => x.remove());
@@ -2771,7 +2827,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     const l = liste(); const j = JSON.stringify(l);
     if (!zorla && j === son) return;
     son = j;
-    try { window.parent.postMessage({ kaynak: KAYNAK, tur: 'menu', app: CFG.app, ogeler: l }, '/'); } catch(e){}
+    gonder({ tur: 'menu', app: CFG.app, ogeler: l });
   }
   let zamanlayici = null;
   function planla(){ clearTimeout(zamanlayici); zamanlayici = setTimeout(() => bildir(false), 120); }
@@ -2781,6 +2837,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     const m = e.data || {};
     if (m.kaynak !== KAYNAK) return;
     if (m.tur === 'menu-iste') bildir(true);
+    if (m.tur === 'oturum' && m.token) oturumUygula(m.token);
     if (m.tur === 'ac'){
       const el = ogeler().find(x => CFG.id(x) === m.id);
       if (el) el.click();       // programın kendi menü düğmesine tıklanır - kendi mantığı çalışır
@@ -2798,6 +2855,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
     }
   }
   bildir(true);
+  gonder({ tur: 'oturum-iste' });
 })();
 </script>
 </body>

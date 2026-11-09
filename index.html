@@ -213,7 +213,9 @@ const SCOPES = 'https://www.googleapis.com/auth/spreadsheets email';
 // Yetkilendirme, ALO-144/Personel Karnesi ile AYNI dosyayı kullanır — bu dashboard için
 // sadece "VERİ HAZIRLAMA" adında AYRI bir sekme eklenir, dosyanın kendisi paylaşılıyor olmalı.
 const AUTH_SHEET_ID = '1PfYdeuiGvuHbHsCx5PTcApepdwdjY-2C491cufssQhU';
-const AUTH_TAB = 'VERİ HAZIRLAMA';
+// Yetki tek sekmede (09.11.2026): "YETKİLENDİRME" sekmesi — İsim, Gmail, Erişim, Süper Yetkili.
+// Erişim = tüm projeler ve özellikler. Kişi ekleme/çıkarma panel.html > Yetkilendirme ekranından yapılır.
+const AUTH_TAB = 'YETKİLENDİRME';
 const FIXED_SUPER_ADMIN_EMAIL = 'zafercolak5461@gmail.com';
 
 // "Proje Yönetimi" sekmeleri (Projeler/Kaynaklar/Hesaplamalar/Sablonlar) hep bu TEK Sheet'te
@@ -1885,13 +1887,12 @@ async function loadUserPermissions(){
     return;
   }
   try {
-    const rows = await getSheetValues(AUTH_SHEET_ID, `'${AUTH_TAB}'!A1:ZZ500`);
+    const rows = await getSheetValues(AUTH_SHEET_ID, `'${AUTH_TAB}'!A1:Z1000`);
     if (!rows.length) throw new Error('Yetkilendirme sekmesi boş.');
     const header = rows[0];
-    const isimCol = header.findIndex(h => trUpper(h) === trUpper('İsim'));
-    const gmailCol = header.findIndex(h => trUpper(h) === trUpper('Gmail'));
-    const superCol = header.findIndex(h => trUpper(h) === trUpper('Süper Yetkili'));
-    if (gmailCol === -1) throw new Error('"Gmail" başlığı bulunamadı.');
+    const col = (ad) => header.findIndex(h => trUpper(h) === trUpper(ad));
+    const isimCol = col('İsim'), gmailCol = col('Gmail'), erisimCol = col('Erişim'), superCol = col('Süper Yetkili');
+    if (gmailCol === -1 || erisimCol === -1 || superCol === -1) throw new Error('Başlıklar bulunamadı (İsim, Gmail, Erişim, Süper Yetkili).');
     const myRow = rows.slice(1).find(r => normalizeKey(r[gmailCol]).toLowerCase() === normalizeKey(currentUserEmail).toLowerCase());
     const isTrue = (v) => trUpper(v) === trUpper('true') || trUpper(v) === trUpper('doğru') || trUpper(v) === trUpper('evet');
     if (!myRow){
@@ -1899,24 +1900,12 @@ async function loadUserPermissions(){
       return;
     }
     if (isimCol !== -1) currentUserDisplayName = normalizeKey(myRow[isimCol]) || currentUserDisplayName;
-    const superYetkili = superCol !== -1 && isTrue(myRow[superCol]);
-    const projSet = new Set();
-    if (!superYetkili){
-      projeler.forEach(p => {
-        const col = header.findIndex(h => normalizeLabelKey(h) === normalizeLabelKey(p.ad));
-        if (col !== -1 && isTrue(myRow[col])) projSet.add(p.ad);
-      });
-    } else {
-      projeler.forEach(p => projSet.add(p.ad));
-    }
-    const featCol = (name) => header.findIndex(h => normalizeLabelKey(h) === normalizeLabelKey(name));
-    const excelCol = featCol('Excel'), tabloCol = featCol('Tablo Özelliği'), sablonCol = featCol('Şablon yükleme');
+    const superYetkili = isTrue(myRow[superCol]);
+    const erisim = superYetkili || isTrue(myRow[erisimCol]);
     userPerms = {
       superYetkili,
-      projeler: projSet,
-      excel: superYetkili || (excelCol !== -1 && isTrue(myRow[excelCol])),
-      tabloOzelligi: superYetkili || (tabloCol !== -1 && isTrue(myRow[tabloCol])),
-      sablonYukleme: superYetkili || (sablonCol !== -1 && isTrue(myRow[sablonCol])),
+      projeler: new Set(erisim ? projeler.map(p => p.ad) : []),
+      excel: erisim, tabloOzelligi: erisim, sablonYukleme: erisim,
     };
   } catch (err){
     // Yetkilendirme okunamazsa GÜVENLİ TARAF: hiçbir şey gösterme (sabit süper admin zaten
@@ -2118,7 +2107,8 @@ function renderSidebar(){
   } else {
     html = gorulebilir.map(p => `<div class="nav-item${(p.ad === currentProject && !authPageActive) ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
   }
-  if (userPerms.superYetkili){
+  // Eski Yetkilendirme sayfası kaldırıldı (09.11.2026): yetki Panel > Yetkilendirme ekranında.
+  if (false){
     html += `<div class="nav-item${authPageActive ? ' active' : ''}" data-auth="1" style="margin-top:10px; border-top:1px solid var(--sb-line); padding-top:12px;"><span class="nav-icon">⚙</span> Yetkilendirme</div>`;
   }
   nav.innerHTML = html;

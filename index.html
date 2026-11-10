@@ -3020,6 +3020,17 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris){
                    durum, sebepGrup, sebepAd, aciklama: aciklama.filter(Boolean).join(' · '), planli, satirAd,
                    geldi: !!login && planli && !sebepGrup });
   }
+  // DÜZENLEME sayfasındaki "Açıklama" sütunu: büyük harf değer + renk türü (izin / sm / off / bilgi).
+  for (const k of kisiler){
+    const p = ayar.personel.find(x => x.sicil === k.sicil);
+    const ozelAktif = p && p.ozel && (!p.bitis || ykSira(p.bitis) >= sira);
+    if (k.sebepGrup){ k.exAciklama = k.sebepAd; k.exTur = 'izin'; }
+    else if (k.durum === 'Çalışmıyor' || k.durum === 'Plan yok'){ k.exAciklama = 'OFF'; k.exTur = 'off'; }
+    else if (k.rg === 'SM'){ k.exAciklama = 'SM'; k.exTur = 'sm'; }
+    else if (ozelAktif){ k.exAciklama = p.ozel; k.exTur = 'bilgi'; }
+    else { k.exAciklama = ''; k.exTur = ''; }
+    k.exAciklama = String(k.exAciklama || '').toLocaleUpperCase('tr-TR');
+  }
   // Özet: vardiya satırları (başlangıç saatine göre), İzinli satırları en sonda.
   const ozet = new Map();
   for (const k of kisiler){
@@ -3040,8 +3051,8 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris){
   for (const k of kisiler){
     if (k.sebepGrup === 'Diğer') listeler['Diğer'].push(`${k.ad} (${k.sebepAd})`);
     else if (listeler[k.sebepGrup]) listeler[k.sebepGrup].push(k.ad);
+    else if (k.rg === 'SM' && !k.login && (k.durum === 'Gelmedi' || k.durum === 'Çalışmıyor')) listeler['Sosyal Medya'].push(`${k.ad} (${k.vardiya ? k.vardiya.replace('-', ' - ') + ' VARDİYASI' : 'OFF'})`);
     else if (k.durum === 'Gelmedi') listeler['Gelmedi'].push(`${k.ad} (${k.vardiya})`);
-    if (k.rg === 'SM' && !k.geldi && !k.sebepGrup && k.durum !== 'Gelmedi') listeler['Sosyal Medya'].push(`${k.ad} (${k.vardiya || k.planVal || k.driveVal || 'plan yok'})`);
   }
   // Uyarılar
   if (!planGun) uyarilar.push(`${tarih} için kayıtlı haftalık plan yok: vardiyalar Drive VARDİYA'dan alındı, rapor/izinli kişilerin vardiyası bilinmiyor. Haftalık Plan sayfasından planı yapıştır.`);
@@ -3177,7 +3188,7 @@ function ykSonucCiz(){
   document.getElementById('ykUyari').textContent = s.uyarilar.map(u => '⚠ ' + u).join('\n');
   document.getElementById('ykOzetTablo').innerHTML =
     '<tr><th>Vardiya</th><th class="sayi">Planlanan</th><th class="sayi">Gerçekleşen</th><th class="sayi">Eksik</th><th class="sayi">Oran</th></tr>' +
-    s.satirlar.map(r => `<tr><td>${ykEsc(r.ad)}</td><td class="sayi">${r.planlanan}</td><td class="sayi">${r.gerceklesen}</td><td class="sayi${r.eksik ? ' eksik' : ''}">${r.eksik}</td><td class="sayi">${ykYuzde(r.oran)}</td></tr>`).join('') +
+    s.satirlar.map(r => `<tr><td>${ykEsc(ykVardiyaEtiket(r.ad))}</td><td class="sayi">${r.planlanan}</td><td class="sayi">${r.gerceklesen}</td><td class="sayi${r.eksik ? ' eksik' : ''}">${r.eksik}</td><td class="sayi">${ykYuzde(r.oran)}</td></tr>`).join('') +
     `<tr class="toplam"><td>Toplam Planlanan</td><td class="sayi">${s.toplam.planlanan}</td><td class="sayi">${s.toplam.gerceklesen}</td><td class="sayi">${s.toplam.eksik}</td><td class="sayi">${ykYuzde(s.toplam.oran)}</td></tr>`;
   const bas = ['Yıllık İzin', 'Rapor', 'Diğer', 'Gelmedi', 'Sosyal Medya'];
   const uz = Math.max(...bas.map(b => s.listeler[b].length), 0);
@@ -3222,7 +3233,7 @@ function ykRaporHtml(){
   const th = st + 'background:#1F3864;color:#fff;font-weight:bold;';
   let h = `<p style="font-family:Calibri,Arial;font-size:12pt;"><b>${s.tarih} TARİHLİ VARDİYA RAPORU</b></p>`;
   h += `<table style="border-collapse:collapse;"><tr>${['VARDİYA','PLANLANAN','GERÇEKLEŞEN','EKSİK','ORAN'].map(x => `<th style="${th}">${x}</th>`).join('')}</tr>`;
-  s.satirlar.forEach(r => { h += `<tr><td style="${st}">${ykEsc(r.ad)}</td><td style="${st}text-align:right;">${r.planlanan}</td><td style="${st}text-align:right;">${r.gerceklesen}</td><td style="${st}text-align:right;">${r.eksik}</td><td style="${st}text-align:right;">${ykYuzde(r.oran)}</td></tr>`; });
+  s.satirlar.forEach(r => { h += `<tr><td style="${st}">${ykEsc(ykVardiyaEtiket(r.ad))}</td><td style="${st}text-align:right;">${r.planlanan}</td><td style="${st}text-align:right;">${r.gerceklesen}</td><td style="${st}text-align:right;">${r.eksik}</td><td style="${st}text-align:right;">${ykYuzde(r.oran)}</td></tr>`; });
   h += `<tr><td style="${st}font-weight:bold;">Toplam Planlanan</td><td style="${st}text-align:right;font-weight:bold;">${s.toplam.planlanan}</td><td style="${st}text-align:right;font-weight:bold;">${s.toplam.gerceklesen}</td><td style="${st}text-align:right;font-weight:bold;">${s.toplam.eksik}</td><td style="${st}text-align:right;font-weight:bold;">${ykYuzde(s.toplam.oran)}</td></tr></table><br>`;
   const bas = ['Yıllık İzin','Rapor','Diğer','Gelmedi','Sosyal Medya'];
   const uz = Math.max(...bas.map(b => s.listeler[b].length), 0);
@@ -3241,26 +3252,87 @@ document.getElementById('ykKopyalaBtn').addEventListener('click', async () => {
   } catch(err){ ykDurum('ykKayitDurum', '✗ Kopyalanamadı: ' + err.message, 'err'); }
 });
 
+// Excel çıktısı GÜNLÜK YOKLAMA.xlsm > DÜZENLEME sayfasıyla aynı düzende:
+// A1:E vardiya tablosu (Toplam Planlanan + ALL), I1:L sebep sütunları (YILLIK İZİN / RAPOR / DİĞER / Sosyal Medya)
+// ve altında sayıları, 17. satırdan itibaren kişi listesi (izinliler önce, renkli Açıklama).
+function ykVardiyaEtiket(ad){ return String(ad).replace(/^(\d{2}:\d{2})-(\d{2}:\d{2})/, '$1 - $2'); }
 document.getElementById('ykExcelBtn').addEventListener('click', async () => {
   if (!ykSonuc) return;
   const s = ykSonuc, wb = new ExcelJS.Workbook();
-  const baslikStil = r => r.eachCell(c => { c.font = { bold:true, color:{ argb:'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1F3864' } }; });
-  const w1 = wb.addWorksheet('Yoklama');
-  w1.addRow([`${s.tarih} TARİHLİ VARDİYA RAPORU`]).font = { bold:true, size:13 };
-  baslikStil(w1.addRow(['VARDİYA','PLANLANAN','GERÇEKLEŞEN','EKSİK','ORAN']));
-  s.satirlar.forEach(r => { const x = w1.addRow([r.ad, r.planlanan, r.gerceklesen, r.eksik, r.oran]); x.getCell(5).numFmt = '0.0%'; });
-  const t = w1.addRow(['Toplam Planlanan', s.toplam.planlanan, s.toplam.gerceklesen, s.toplam.eksik, s.toplam.oran]); t.font = { bold:true }; t.getCell(5).numFmt = '0.0%';
-  w1.addRow([]);
-  const bas = ['Yıllık İzin','Rapor','Diğer','Gelmedi','Sosyal Medya'];
-  baslikStil(w1.addRow(bas.map(b => b === 'Gelmedi' ? 'GELMEDİ (SEBEP YOK)' : b.toLocaleUpperCase('tr-TR'))));
-  const uz = Math.max(...bas.map(b => s.listeler[b].length), 0);
-  for (let i = 0; i < uz; i++) w1.addRow(bas.map(b => s.listeler[b][i] || ''));
-  w1.addRow(bas.map(b => s.listeler[b].length)).font = { bold:true };
-  w1.columns.forEach((c, i) => c.width = i === 0 ? 30 : 26);
-  const w2 = wb.addWorksheet('Kişiler');
-  baslikStil(w2.addRow(['Sicil','Ad Soyad','Görev','Vardiya','Login Saati','Durum','Açıklama']));
-  s.kisiler.forEach(k => w2.addRow([Number(k.sicil) || k.sicil, k.ad, k.gorev, k.vardiya || k.planVal, k.login, k.durum, k.aciklama]));
-  w2.columns.forEach((c, i) => c.width = [9, 28, 26, 14, 12, 12, 40][i]);
+  const ws = wb.addWorksheet('DÜZENLEME');
+  const MAVI = 'FF00B0F0', TURUNCU = 'FFFFC000', KIRMIZI = 'FFFF0000', YESIL = 'FF92D050';
+  const ince = { style:'thin', color:{ argb:'FF000000' } };
+  const kenar = { top:ince, left:ince, bottom:ince, right:ince };
+  const dolgu = argb => ({ type:'pattern', pattern:'solid', fgColor:{ argb } });
+  const hucre = (adres, deger, o) => {
+    const c = ws.getCell(adres); c.value = deger;
+    c.font = Object.assign({ name:'Calibri', size:11 }, o.font || {});
+    if (o.fill) c.fill = dolgu(o.fill);
+    if (o.border !== false) c.border = kenar;
+    c.alignment = Object.assign({ vertical:'middle' }, o.align || {});
+    if (o.numFmt) c.numFmt = o.numFmt;
+    return c;
+  };
+  const baslik = { fill:MAVI, font:{ bold:true }, align:{ horizontal:'center' } };
+  const sayi = { font:{ bold:true, size:10, color:{ argb:'FF000000' } }, align:{ horizontal:'center' } };
+  // Başlık
+  const m = s.tarih.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  hucre('A1', new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])), Object.assign({}, baslik, { numFmt:'dd.mm.yyyy' }));
+  ws.mergeCells('B1:E1');
+  hucre('B1', 'TARİHLİ VARDİYA RAPORU', { fill:MAVI, font:{ bold:true }, align:{ horizontal:'left' } });
+  ['VARDIYA','PLANLANAN','GERÇEKLEŞEN','EKSİK','ORAN'].forEach((t, i) => hucre(String.fromCharCode(65 + i) + '2', t, baslik));
+  let r = 3;
+  s.satirlar.forEach(x => {
+    hucre('A' + r, ykVardiyaEtiket(x.ad), { fill:MAVI, font:{ bold:true }, align:{ horizontal:'left' } });
+    const izinli = x.ad.startsWith('İzinli');
+    hucre('B' + r, x.planlanan, Object.assign({}, sayi, izinli ? { fill:TURUNCU } : {}));
+    hucre('C' + r, izinli ? null : x.gerceklesen, sayi);
+    hucre('D' + r, izinli ? null : x.eksik, sayi);
+    hucre('E' + r, x.oran, Object.assign({}, sayi, { numFmt:'0.00%' }));
+    r++;
+  });
+  const top = { fill:MAVI, font:{ bold:true }, align:{ horizontal:'center' } };
+  hucre('A' + r, 'Toplam Planlanan', { fill:MAVI, font:{ bold:true }, align:{ horizontal:'left' } });
+  hucre('B' + r, s.toplam.planlanan, top); hucre('C' + r, s.toplam.gerceklesen, top); hucre('D' + r, s.toplam.eksik, top);
+  hucre('E' + r, s.toplam.oran, Object.assign({}, top, { numFmt:'0.00%', font:{ bold:true, size:10 } }));
+  r++;
+  hucre('A' + r, 'ALL', { fill:MAVI, font:{ bold:true }, align:{ horizontal:'left' } });
+  hucre('B' + r, s.kisiler.length, top);
+  const ozetSon = r;
+  // Sebep sütunları (I–L)
+  const sut = [['I','YILLIK İZİN','Yıllık İzin'], ['J','RAPOR','Rapor'], ['K','DİĞER','Diğer'], ['L','Sosyal Medya','Sosyal Medya']];
+  const uz = Math.max(9, ...sut.map(x => s.listeler[x[2]].length));
+  sut.forEach(([c, t, g]) => {
+    hucre(c + '1', t, baslik);
+    for (let i = 0; i < uz; i++){
+      const v = s.listeler[g][i] || null;
+      hucre(c + (2 + i), v ? v.toLocaleUpperCase('tr-TR') : null, { font:{ bold:true, color:{ argb:KIRMIZI } }, align:{ horizontal:'left' } });
+    }
+    hucre(c + (2 + uz), s.listeler[g].length, Object.assign({}, baslik, { font:{ bold:true } }));
+  });
+  // Kişi listesi (17. satırdan; özet uzunsa altından)
+  let k = Math.max(17, ozetSon + 3, 2 + uz + 3);
+  ['ADI SOYADI','Sicil','Görevi','Vardiya','Login Saati','Açıklama','Staff Süresi'].forEach((t, i) => hucre(String.fromCharCode(65 + i) + k, t, baslik));
+  k++;
+  const sira = { 'Yıllık İzin':0, 'Rapor':1, 'Diğer':2 };
+  const turSira = x => x.exTur === 'izin' ? sira[x.sebepGrup] ?? 3 : ({ sm:4, off:5, bilgi:6 }[x.exTur] ?? 7);
+  const liste = s.kisiler.slice().sort((a, b) => turSira(a) - turSira(b) || a.ad.localeCompare(b.ad, 'tr'));
+  const renk = { izin:KIRMIZI, sm:TURUNCU, off:YESIL, bilgi:MAVI };
+  liste.forEach(x => {
+    hucre('A' + k, x.ad, {});
+    hucre('B' + k, Number(x.sicil) || x.sicil, { align:{ horizontal:'center' } });
+    hucre('C' + k, x.gorev, { font:{ name:'Times New Roman' }, align:{ horizontal:'center' } });
+    hucre('D' + k, x.vardiya || x.planVal || x.driveVal || '', { align:{ horizontal:'center' } });
+    if (x.login){
+      const [h, mi, se] = x.login.split(':').map(Number);
+      hucre('E' + k, (h * 3600 + mi * 60 + se) / 86400, { align:{ horizontal:'center' }, numFmt:'h:mm:ss' });
+    } else hucre('E' + k, '#N/A', { align:{ horizontal:'center' } });
+    hucre('F' + k, x.exAciklama || null, Object.assign({ align:{ horizontal:'center' } }, renk[x.exTur] ? { fill:renk[x.exTur], font:{ color:{ argb:'FF000000' } } } : {}));
+    hucre('G' + k, null, {});
+    k++;
+  });
+  // Sütun genişlikleri DÜZENLEME sayfasındaki gibi
+  [27.6, 11.5, 21.5, 11.8, 14.5, 21.1, 15, 9, 30.8, 24.5, 40.4, 38].forEach((w, i) => ws.getColumn(i + 1).width = w);
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));

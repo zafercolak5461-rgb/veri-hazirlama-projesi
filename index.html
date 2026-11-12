@@ -3764,7 +3764,16 @@ async function ykPlanSayfasi(){
     const d = new Date(); const g = (d.getDay() + 6) % 7; d.setDate(d.getDate() - g + 7);   // gelecek pazartesi
     document.getElementById('ykPlanHafta').value = ykTarihToIso(ykTarih(d));
   }
-  ykHaftalariCiz();
+  const kayitli = await ykHaftalariCiz();
+  // Sayfa boş açılmasın: henüz bir şey yapıştırılmamışsa bu haftanın (yoksa en son haftanın) kayıtlı planı gösterilir.
+  if (kayitli && kayitli.size && !ykPlanOnizleme && !document.getElementById('ykPlanMetin').value.trim()){
+    const bugun = ykSira(ykTarih(new Date()));
+    const haftalar = [...kayitli.keys()].sort((a, b) => ykSira(b) - ykSira(a));
+    const h = haftalar.find(x => ykSira(x) <= bugun && bugun <= ykSira(ykTarihEkle(x, 6))) || haftalar[0];
+    const bl = kayitli.get(h);
+    const bolum = bl[ykPlanBolum].size ? ykPlanBolum : YK_BOLUMLER.find(b => bl[b].size);
+    if (bolum) await ykPlanParcaDuzenle(h, bolum, true);
+  }
 }
 // Önizleme tablosu: her gün hücresi seçicili bir kutu (vardiyalar + Vardiya Kodları). Değişen sarı, tanınmayan kırmızı.
 let ykPlanKayitliVardiyalar = [];
@@ -3820,7 +3829,7 @@ document.getElementById('ykPlanOnizleme').addEventListener('change', e => {
   const k = ykPlanOnizleme.kisiler.get(inp.dataset.plans); if (k) inp.value = k.gunler[+inp.dataset.plang];
 });
 // Kayıtlı bir haftanın bir parçasını düzenlemek için önizlemeye açar.
-async function ykPlanParcaDuzenle(hafta, bolum){
+async function ykPlanParcaDuzenle(hafta, bolum, otomatik){
   ykDurum('ykPlanDurum', 'Kayıtlı plan okunuyor…');
   try {
     await ykAyarYukle();
@@ -3845,8 +3854,11 @@ async function ykPlanParcaDuzenle(hafta, bolum){
     await ykPlanOnizlemeCiz();
     document.getElementById('ykPlanUyari').textContent = '';
     document.getElementById('ykPlanKaydetBtn').disabled = false;
-    ykDurum('ykPlanDurum', `${hafta} haftasının kayıtlı ${bolum} planı düzenleniyor (${kisiler.size} kişi). Değiştir, sonra "Planı Kaydet".`, 'ok');
-    document.getElementById('ykPlanOnizlemeWrap').scrollIntoView({ behavior:'smooth', block:'center' });
+    document.getElementById('ykPlanKaydetBtn').disabled = !!otomatik;
+    ykDurum('ykPlanDurum', otomatik
+      ? `Kayıtlı plan gösteriliyor: ${hafta} haftası, ${bolum} (${kisiler.size} kişi). Bir günü değiştirebilirsin; yeni hafta için planı yukarıdaki kutuya yapıştır.`
+      : `${hafta} haftasının kayıtlı ${bolum} planı düzenleniyor (${kisiler.size} kişi). Değiştir, sonra "Planı Kaydet".`, 'ok');
+    if (!otomatik) document.getElementById('ykPlanOnizlemeWrap').scrollIntoView({ behavior:'smooth', block:'center' });
   } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); }
 }
 document.getElementById('ykPlanHaftalar').addEventListener('click', e => {
@@ -3865,7 +3877,8 @@ async function ykHaftalariCiz(){
       h.map(x => { const b = bolumler.get(x), ck = cakisma.get(x);
         return `<tr><td>${x} – ${ykTarihEkle(x, 6)}</td>${hucre(x, 'Personel', b['Personel'].size)}${hucre(x, 'Sosyal Medya', b['Sosyal Medya'].size)}<td class="soluk">${ck.size ? `${ck.size} kişi iki planda da var (Sosyal Medya esas)` : ''}</td></tr>`; }).join('') + '</table>'
       : 'Henüz kayıtlı plan yok.';
-  } catch(err){ el.textContent = '✗ ' + err.message; }
+    return bolumler;
+  } catch(err){ el.textContent = '✗ ' + err.message; return null; }
 }
 document.getElementById('ykPlanOkuBtn').addEventListener('click', async () => {
   ykDurum('ykPlanDurum', 'Okunuyor…');
@@ -3874,6 +3887,7 @@ document.getElementById('ykPlanOkuBtn').addEventListener('click', async () => {
   try {
     const ayar = await ykAyarYukle();
     const p = ykPlanAyristir(document.getElementById('ykPlanMetin').value);
+    if (!document.getElementById('ykPlanMetin').value.trim()){ ykDurum('ykPlanDurum', 'Kutu boş. Kayıtlı plan zaten duruyor; görmek ya da bir günü değiştirmek için Kayıtlı Haftalar\'daki "Düzenle"ye bas. Yeni hafta için planı kutuya yapıştır.', 'warn'); return; }
     if (!p.kisiler.size){ ykDurum('ykPlanDurum', 'Yapıştırılan metinde Sicil içeren satır bulunamadı.', 'err'); return; }
     if (p.hafta) document.getElementById('ykPlanHafta').value = ykTarihToIso(p.hafta);
     const hafta = ykIsoToTarih(document.getElementById('ykPlanHafta').value);

@@ -3717,11 +3717,12 @@ function ykRaporHtml(){
 function ykGrafikCanvas(s){
   const W = 760, olcek = 2, etiketG = 200, yaziG = 190, barG = W - etiketG - yaziG - 20, satH = 26;
   const vSatir = s.satirlar.concat([{ ad:'Toplam', planlanan:s.toplam.planlanan, gerceklesen:s.toplam.gerceklesen, eksik:s.toplam.eksik, oran:s.toplam.oran, toplam:true }]);
-  const smEksik = s.kisiler.filter(k => k.rg === 'SM' && k.durum === 'Gelmedi').length;
-  const dag = [['Yıllık İzin', s.listeler['Yıllık İzin'].length, '#3B7DD8'], ['Rapor', s.listeler['Rapor'].length, '#E07B39'],
-               ['Diğer', s.listeler['Diğer'].length, '#8E6CC9'], ['Sosyal Medya', smEksik, '#E3B23C']];
-  const dagTop = dag.reduce((t, x) => t + x[1], 0);
-  const H = 40 + vSatir.length * satH + 50 + dag.length * satH + 20;
+  // Eksiklerin dağılımı: Rapor / Yıllık İzin / Diğer; yüzdeler o günün Toplam Planlanan'ına göre.
+  const dag = [['Rapor', s.listeler['Rapor'].length, '#E07B39'], ['Yıllık İzin', s.listeler['Yıllık İzin'].length, '#3B7DD8'],
+               ['Diğer', s.listeler['Diğer'].length, '#8E6CC9']];
+  const dagTop = dag.reduce((t, x) => t + x[1], 0), plan = s.toplam.planlanan;
+  const yz = n => '%' + (plan ? n / plan * 100 : 0).toFixed(1).replace('.', ',');
+  const H = 40 + vSatir.length * satH + 50 + (dag.length + 1) * satH + 20;
   const cv = document.createElement('canvas'); cv.width = W * olcek; cv.height = H * olcek;
   const c = cv.getContext('2d'); c.scale(olcek, olcek);
   c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
@@ -3744,14 +3745,15 @@ function ykGrafikCanvas(s){
   // açıklama
   c.fillStyle = '#2E9E5B'; c.fillRect(W - 190, 10, 12, 12); yazi('Gelen', W - 172, 16, { boy:11 });
   c.fillStyle = '#D64545'; c.fillRect(W - 120, 10, 12, 12); yazi('Eksik', W - 102, 16, { boy:11 });
-  yazi(`Eksiklerin dağılımı (toplam ${dagTop})`, 10, y + 8, { kalin:true, boy:14 }); y += 28;
-  const enCok = Math.max(1, ...dag.map(x => x[1]));
-  dag.forEach(([ad, n, renk]) => {
+  yazi(`Eksiklerin dağılımı (planlanan ${plan} kişiye göre)`, 10, y + 8, { kalin:true, boy:14 }); y += 28;
+  // Çubuk uzunluğu yazan yüzdeyle aynı: tam çubuk = planlananın tamamı.
+  dag.concat([['Toplam', dagTop, '#555', true]]).forEach(([ad, n, renk, top]) => {
     const my = y + satH / 2;
-    yazi(ad, 10, my);
+    if (top){ c.strokeStyle = '#999'; c.beginPath(); c.moveTo(10, y + 1); c.lineTo(W - 10, y + 1); c.stroke(); }
+    yazi(ad, 10, my, { kalin: !!top });
     c.fillStyle = '#EEF0F3'; c.fillRect(etiketG, y + 5, barG, satH - 10);
-    c.fillStyle = renk; c.fillRect(etiketG, y + 5, barG * n / enCok, satH - 10);
-    yazi(`${n} · %${(dagTop ? n / dagTop * 100 : 0).toFixed(1).replace('.', ',')}`, etiketG + barG + 10, my);
+    c.fillStyle = renk; c.fillRect(etiketG, y + 5, plan ? barG * Math.min(1, n / plan) : 0, satH - 10);
+    yazi(`${n} kişi · ${yz(n)}`, etiketG + barG + 10, my, { kalin: !!top });
     y += satH;
   });
   return { canvas: cv, en: W, boy: H };

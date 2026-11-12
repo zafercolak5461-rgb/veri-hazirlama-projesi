@@ -293,7 +293,8 @@
           </div>
           <div id="ykPlanDurum" class="status"></div>
           <div id="ykPlanUyari" class="status warn"></div>
-          <div class="hint" id="ykPlanDuzenBilgi" style="display:none; margin:10px 0 0;">Bir günü değiştirmek için hücreye tıkla, listeden seç (ya da yaz). Değişen hücre sarı, tanınmayan değer kırmızı görünür. Bitince "Planı Kaydet".</div>
+          <div class="hint" id="ykPlanDuzenBilgi" style="display:none; margin:10px 0 0;">Bir günü değiştirmek için hücreye tıkla, listeden seç (ya da yaz). Değişen hücre sarı, tanınmayan değer kırmızı görünür. Bitince "Planı Kaydet".
+            <div class="row" style="margin-top:8px;"><input type="text" id="ykPlanAra" placeholder="Kişi ara (ad ya da sicil)…" style="min-width:260px;" autocomplete="off"><span id="ykPlanAraSayi" class="hint" style="margin:0;"></span></div></div>
           <div class="prev-wrap" id="ykPlanOnizlemeWrap" style="display:none;"><table class="prev" id="ykPlanOnizleme"></table></div>
           <datalist id="ykPlanSecenek"></datalist>
         </div>
@@ -3455,7 +3456,8 @@ function ykSonucCiz(){
 function ykSebepKutuCiz(){
   const s = ykSonuc, ayar = ykGirdi.ayar;
   const bilinenKod = new Set(ayar.sebepler.map(x => ykAnahtar(x.deger)));
-  document.getElementById('ykSebepListe').innerHTML = ayar.sebepler.map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.grup)}</option>`).join('');
+  // Çalışmıyor grubundaki kodlar (HT, OFF) yalnız planı okumak içindir; sebep listesinde gösterilmez.
+  document.getElementById('ykSebepListe').innerHTML = ayar.sebepler.filter(x => x.grup !== 'Çalışmıyor').map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.grup)}</option>`).join('');
   const siciller = new Set([...s.sebepsiz.map(k => k.sicil), ...ykManuel.keys(), ...ykSebepEk]);
   const kisiler = s.kisiler.filter(k => siciller.has(k.sicil)).sort((a, b) => (a.exAciklama === 'SEBEP YOK' ? 0 : 1) - (b.exAciklama === 'SEBEP YOK' ? 0 : 1) || a.ad.localeCompare(b.ad, 'tr'));
   const kutu = document.getElementById('ykSebepKutu');
@@ -3781,7 +3783,21 @@ async function ykPlanOnizlemeCiz(){
       k.gunler.map((v, i) => `<td><input type="text" class="${ykPlanHucreSinif(v, k.ilk ? k.ilk[i] : v)} yk-liste-ac" list="ykPlanSecenek" data-plans="${s}" data-plang="${i}" value="${ykEsc(v)}" autocomplete="off"></td>`).join('') + '</tr>').join('');
   document.getElementById('ykPlanOnizlemeWrap').style.display = 'block';
   document.getElementById('ykPlanDuzenBilgi').style.display = 'block';
+  ykPlanSuz();
 }
+// Önizleme tablosunda kişi arama: tabloyu yeniden çizmeden satırları gizler (yapılan düzeltmeler kaybolmaz).
+function ykPlanSuz(){
+  const q = ykAd(document.getElementById('ykPlanAra').value);
+  const satirlar = [...document.querySelectorAll('#ykPlanOnizleme tr')].slice(1);
+  let n = 0;
+  satirlar.forEach(tr => {
+    const c = tr.cells;
+    const uyar = !q || ykAd(c[0].textContent + ' ' + c[1].textContent).includes(q);
+    tr.style.display = uyar ? '' : 'none'; if (uyar) n++;
+  });
+  document.getElementById('ykPlanAraSayi').textContent = q ? `${n} / ${satirlar.length} kişi` : '';
+}
+document.getElementById('ykPlanAra').addEventListener('input', ykPlanSuz);
 function ykPlanHucreSinif(v, ilk){
   const c = ['yk-hucre'];
   if (v && !ykVardiya(v)) c.push(ykAyar && ykAyar.sebepGrup.has(ykAnahtar(v)) ? 'kod' : 'hatali');

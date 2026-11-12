@@ -3716,16 +3716,34 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
 
 // ---------- Haftalık Plan (Personel ve Sosyal Medya ayrı) ----------
 let ykPlanOnizleme = null, ykPlanBolum = 'Personel';
+// Her sekme (Personel / Sosyal Medya) kendi yapıştırılan metnini, önizlemesini ve mesajlarını saklar;
+// sekmeler arasında geçince hiçbiri silinmez.
+const ykPlanSekmeHali = {};
+function ykPlanHaliAl(){
+  const d = document.getElementById('ykPlanDurum');
+  return { metin: document.getElementById('ykPlanMetin').value, onizleme: ykPlanOnizleme,
+           tablo: document.getElementById('ykPlanOnizleme').innerHTML, goster: document.getElementById('ykPlanOnizlemeWrap').style.display,
+           uyari: document.getElementById('ykPlanUyari').textContent, durum: d.textContent, durumSinif: d.className,
+           kaydetKapali: document.getElementById('ykPlanKaydetBtn').disabled, hafta: document.getElementById('ykPlanHafta').value };
+}
+function ykPlanHaliKoy(h){
+  h = h || { metin:'', onizleme:null, tablo:'', goster:'none', uyari:'', durum:'', durumSinif:'status', kaydetKapali:true, hafta:'' };
+  document.getElementById('ykPlanMetin').value = h.metin;
+  ykPlanOnizleme = h.onizleme;
+  document.getElementById('ykPlanOnizleme').innerHTML = h.tablo;
+  document.getElementById('ykPlanOnizlemeWrap').style.display = h.goster;
+  document.getElementById('ykPlanUyari').textContent = h.uyari;
+  const d = document.getElementById('ykPlanDurum'); d.textContent = h.durum; d.className = h.durumSinif;
+  document.getElementById('ykPlanKaydetBtn').disabled = h.kaydetKapali;
+  if (h.hafta) document.getElementById('ykPlanHafta').value = h.hafta;
+}
 document.querySelectorAll('[data-ykbolum]').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.ykbolum === ykPlanBolum) return;
+  ykPlanSekmeHali[ykPlanBolum] = ykPlanHaliAl();
   ykPlanBolum = b.dataset.ykbolum;
   document.querySelectorAll('[data-ykbolum]').forEach(x => x.classList.toggle('aktif', x === b));
-  document.getElementById('ykPlanMetin').value = '';
   document.getElementById('ykPlanMetin').placeholder = `${ykPlanBolum} planını buraya yapıştır (Ctrl+V)…`;
-  document.getElementById('ykPlanOnizlemeWrap').style.display = 'none';
-  document.getElementById('ykPlanUyari').textContent = '';
-  document.getElementById('ykPlanKaydetBtn').disabled = true;
-  ykPlanOnizleme = null;
-  ykDurum('ykPlanDurum', '');
+  ykPlanHaliKoy(ykPlanSekmeHali[ykPlanBolum]);
 }));
 async function ykPlanSayfasi(){
   if (!document.getElementById('ykPlanHafta').value){

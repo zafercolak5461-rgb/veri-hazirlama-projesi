@@ -102,6 +102,11 @@
   .yk-sekme{ background:var(--panel2); border:1px solid var(--line); color:var(--dim); padding:7px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
   .yk-sekme.aktif{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
   #ykSebepKutu{ border-color:var(--danger); }
+  table.prev td input.yk-hucre{ width:104px; padding:3px 5px; font-size:12px; border:1px solid transparent; background:transparent; border-radius:5px; }
+  table.prev td input.yk-hucre:hover, table.prev td input.yk-hucre:focus{ border-color:var(--line); background:#fff; }
+  table.prev td input.yk-hucre.kod{ color:var(--dim); }
+  table.prev td input.yk-hucre.degisti{ background:#FFF3CD; border-color:#F0C36D; color:inherit; }
+  table.prev td input.yk-hucre.hatali{ border-color:var(--danger); color:var(--danger); background:var(--danger-soft); }
   #ykSebepKutu.tamam{ border-color:var(--ok); }
   #ykSebepKutu.vurgu{ box-shadow:0 0 0 3px var(--danger-soft); }
 </style>
@@ -288,7 +293,9 @@
           </div>
           <div id="ykPlanDurum" class="status"></div>
           <div id="ykPlanUyari" class="status warn"></div>
+          <div class="hint" id="ykPlanDuzenBilgi" style="display:none; margin:10px 0 0;">Bir günü değiştirmek için hücreye tıkla, listeden seç (ya da yaz). Değişen hücre sarı, tanınmayan değer kırmızı görünür. Bitince "Planı Kaydet".</div>
           <div class="prev-wrap" id="ykPlanOnizlemeWrap" style="display:none;"><table class="prev" id="ykPlanOnizleme"></table></div>
+          <datalist id="ykPlanSecenek"></datalist>
         </div>
         <div class="card">
           <h2>Kayıtlı Haftalar</h2>
@@ -3730,8 +3737,10 @@ function ykPlanHaliKoy(h){
   h = h || { metin:'', onizleme:null, tablo:'', goster:'none', uyari:'', durum:'', durumSinif:'status', kaydetKapali:true, hafta:'' };
   document.getElementById('ykPlanMetin').value = h.metin;
   ykPlanOnizleme = h.onizleme;
-  document.getElementById('ykPlanOnizleme').innerHTML = h.tablo;
-  document.getElementById('ykPlanOnizlemeWrap').style.display = h.goster;
+  document.getElementById('ykPlanOnizleme').innerHTML = '';
+  document.getElementById('ykPlanOnizlemeWrap').style.display = 'none';
+  document.getElementById('ykPlanDuzenBilgi').style.display = 'none';
+  if (ykPlanOnizleme) ykPlanOnizlemeCiz();
   document.getElementById('ykPlanUyari').textContent = h.uyari;
   const d = document.getElementById('ykPlanDurum'); d.textContent = h.durum; d.className = h.durumSinif;
   document.getElementById('ykPlanKaydetBtn').disabled = h.kaydetKapali;
@@ -3752,15 +3761,89 @@ async function ykPlanSayfasi(){
   }
   ykHaftalariCiz();
 }
+// Önizleme tablosu: her gün hücresi seçicili bir kutu (vardiyalar + Vardiya Kodları). Değişen sarı, tanınmayan kırmızı.
+let ykPlanKayitliVardiyalar = [];
+async function ykPlanOnizlemeCiz(){
+  const o = ykPlanOnizleme; if (!o) return;
+  if (!ykAyar) await ykAyarYukle();
+  const per = new Map(ykAyar.personel.map(x => [x.sicil, x]));
+  const vardiyalar = new Set(ykPlanKayitliVardiyalar);
+  o.kisiler.forEach(k => k.gunler.forEach(v => { const x = ykVardiya(v); if (x) vardiyalar.add(x); }));
+  document.getElementById('ykPlanSecenek').innerHTML =
+    [...vardiyalar].sort().map(v => `<option value="${v}">vardiya</option>`).join('') +
+    ykAyar.sebepler.map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.grup)}</option>`).join('');
+  const gunler = [0,1,2,3,4,5,6].map(i => ykTarihEkle(o.hafta, i));
+  document.getElementById('ykPlanOnizleme').innerHTML = '<tr><th>Sicil</th><th>Ad</th>' + gunler.map(g => `<th>${g.slice(0,5)}</th>`).join('') + '</tr>' +
+    [...o.kisiler.entries()].map(([s, k]) => `<tr><td${per.has(s) ? '' : ' class="yok"'}>${s}</td><td>${ykEsc(per.has(s) ? per.get(s).ad : k.ad)}</td>` +
+      k.gunler.map((v, i) => `<td><input type="text" class="${ykPlanHucreSinif(v, k.ilk ? k.ilk[i] : v)}" list="ykPlanSecenek" data-plans="${s}" data-plang="${i}" value="${ykEsc(v)}" autocomplete="off"></td>`).join('') + '</tr>').join('');
+  document.getElementById('ykPlanOnizlemeWrap').style.display = 'block';
+  document.getElementById('ykPlanDuzenBilgi').style.display = 'block';
+}
+function ykPlanHucreSinif(v, ilk){
+  const c = ['yk-hucre'];
+  if (v && !ykVardiya(v)) c.push(ykAyar && ykAyar.sebepGrup.has(ykAnahtar(v)) ? 'kod' : 'hatali');
+  if (String(v) !== String(ilk == null ? '' : ilk)) c.push('degisti');
+  return c.join(' ');
+}
+document.getElementById('ykPlanOnizleme').addEventListener('input', e => {
+  const inp = e.target.closest('[data-plans]'); if (!inp || !ykPlanOnizleme) return;
+  const k = ykPlanOnizleme.kisiler.get(inp.dataset.plans); if (!k) return;
+  const i = +inp.dataset.plang;
+  // "08.00 - 18.00" gibi yazımı tek biçime çevir
+  const v = inp.value.replace(/\s+/g, ' ').trim();
+  k.gunler[i] = ykVardiya(v) && /^\s*\d{1,2}[:.]\d{2}\s*-\s*\d{1,2}[:.]\d{2}\s*$/.test(v) ? ykVardiya(v) : v;
+  inp.className = ykPlanHucreSinif(k.gunler[i], k.ilk ? k.ilk[i] : k.gunler[i]);
+  if (ykPlanOnizleme.kayitli) document.getElementById('ykPlanKaydetBtn').disabled = false;
+});
+document.getElementById('ykPlanOnizleme').addEventListener('change', e => {
+  const inp = e.target.closest('[data-plans]'); if (!inp || !ykPlanOnizleme) return;
+  const k = ykPlanOnizleme.kisiler.get(inp.dataset.plans); if (k) inp.value = k.gunler[+inp.dataset.plang];
+});
+// Kayıtlı bir haftanın bir parçasını düzenlemek için önizlemeye açar.
+async function ykPlanParcaDuzenle(hafta, bolum){
+  ykDurum('ykPlanDurum', 'Kayıtlı plan okunuyor…');
+  try {
+    await ykAyarYukle();
+    const [rows] = await ykOku([`'${YK_TAB.plan}'!A1:E100000`]);
+    const kisiler = new Map();
+    rows.slice(1).forEach(r => {
+      if (!r || ykTarih(r[0]) !== hafta || ykBolum(r[4]) !== bolum) return;
+      const s = String(r[2] || '').trim(); if (!s) return;
+      const t = ykTarih(r[1]);
+      const i = [0,1,2,3,4,5,6].findIndex(g => ykTarihEkle(hafta, g) === t);
+      if (i < 0) return;
+      if (!kisiler.has(s)) kisiler.set(s, { ad:'', gunler:['','','','','','',''] });
+      kisiler.get(s).gunler[i] = String(r[3] == null ? '' : r[3]).trim();
+    });
+    if (!kisiler.size){ ykDurum('ykPlanDurum', `${hafta} haftasının ${bolum} planı bulunamadı.`, 'err'); return; }
+    kisiler.forEach(k => { k.ilk = k.gunler.slice(); });
+    // İlgili sekmeye geç (o sekmenin yapıştırılmış metni korunur)
+    const b = document.querySelector(`[data-ykbolum="${bolum}"]`);
+    if (bolum !== ykPlanBolum) b.click();
+    ykPlanOnizleme = { hafta, bolum, kisiler, kayitli: true };
+    document.getElementById('ykPlanHafta').value = ykTarihToIso(hafta);
+    await ykPlanOnizlemeCiz();
+    document.getElementById('ykPlanUyari').textContent = '';
+    document.getElementById('ykPlanKaydetBtn').disabled = false;
+    ykDurum('ykPlanDurum', `${hafta} haftasının kayıtlı ${bolum} planı düzenleniyor (${kisiler.size} kişi). Değiştir, sonra "Planı Kaydet".`, 'ok');
+    document.getElementById('ykPlanOnizlemeWrap').scrollIntoView({ behavior:'smooth', block:'center' });
+  } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); }
+}
+document.getElementById('ykPlanHaftalar').addEventListener('click', e => {
+  const b = e.target.closest('[data-plandz]'); if (!b) return;
+  ykPlanParcaDuzenle(b.dataset.plandz, b.dataset.planbl);
+});
 async function ykHaftalariCiz(){
   const el = document.getElementById('ykPlanHaftalar');
   try {
     const { planlar, bolumler, cakisma } = await ykPlanlariOku();
     const h = [...planlar.keys()].sort((a, b) => ykSira(b) - ykSira(a));
-    const hucre = n => n ? `<td class="sayi">${n}</td>` : '<td class="yok">yüklenmedi</td>';
+    const [pr] = await ykOku([`'${YK_TAB.plan}'!D2:D100000`]);
+    ykPlanKayitliVardiyalar = [...new Set(pr.map(r => ykVardiya(r && r[0])).filter(Boolean))];
+    const hucre = (x, bl, n) => n ? `<td class="sayi">${n} <button class="btn y-btn" data-plandz="${x}" data-planbl="${bl}">Düzenle</button></td>` : '<td class="yok">yüklenmedi</td>';
     el.innerHTML = h.length ? '<table class="prev" style="width:auto;"><tr><th>Hafta</th><th class="sayi">Personel</th><th class="sayi">Sosyal Medya</th><th>Not</th></tr>' +
       h.map(x => { const b = bolumler.get(x), ck = cakisma.get(x);
-        return `<tr><td>${x} – ${ykTarihEkle(x, 6)}</td>${hucre(b['Personel'].size)}${hucre(b['Sosyal Medya'].size)}<td class="soluk">${ck.size ? `${ck.size} kişi iki planda da var (Sosyal Medya esas)` : ''}</td></tr>`; }).join('') + '</table>'
+        return `<tr><td>${x} – ${ykTarihEkle(x, 6)}</td>${hucre(x, 'Personel', b['Personel'].size)}${hucre(x, 'Sosyal Medya', b['Sosyal Medya'].size)}<td class="soluk">${ck.size ? `${ck.size} kişi iki planda da var (Sosyal Medya esas)` : ''}</td></tr>`; }).join('') + '</table>'
       : 'Henüz kayıtlı plan yok.';
   } catch(err){ el.textContent = '✗ ' + err.message; }
 }
@@ -3786,12 +3869,10 @@ document.getElementById('ykPlanOkuBtn').addEventListener('click', async () => {
     const tanimsiz = new Set();
     p.kisiler.forEach(k => k.gunler.forEach(v => { if (v && !ykVardiya(v) && !ayar.sebepGrup.has(ykAnahtar(v))) tanimsiz.add(v); }));
     if (tanimsiz.size) uyarilar.push(`Yoklama Ayarları > Vardiya Kodları'nda tanımlı olmayan değer: ${[...tanimsiz].join(', ')}. Yoklamada tanınmaz; oradan eklenebilir.`);
+    p.kisiler.forEach(k => { k.ilk = k.gunler.slice(); });
     ykPlanOnizleme = { hafta, bolum: ykPlanBolum, kisiler: p.kisiler };
     const gunler = [0,1,2,3,4,5,6].map(i => ykTarihEkle(hafta, i));
-    document.getElementById('ykPlanOnizleme').innerHTML = '<tr><th>Sicil</th><th>Ad</th>' + gunler.map(g => `<th>${g.slice(0,5)}</th>`).join('') + '</tr>' +
-      [...p.kisiler.entries()].map(([s, k]) => `<tr><td${per.has(s) ? '' : ' class="yok"'}>${s}</td><td>${ykEsc(per.has(s) ? per.get(s).ad : k.ad)}</td>` +
-        k.gunler.map(v => `<td class="${ykVardiya(v) ? '' : 'soluk'}">${ykEsc(v)}</td>`).join('') + '</tr>').join('');
-    document.getElementById('ykPlanOnizlemeWrap').style.display = 'block';
+    await ykPlanOnizlemeCiz();
     document.getElementById('ykPlanUyari').textContent = uyarilar.map(u => '⚠ ' + u).join('\n');
     ykDurum('ykPlanDurum', `${ykPlanBolum} planı: ${p.kisiler.size} kişi okundu · hafta ${hafta} – ${gunler[6]}. Kontrol et, sonra "Planı Kaydet".`, 'ok');
     document.getElementById('ykPlanKaydetBtn').disabled = false;
@@ -3813,7 +3894,11 @@ document.getElementById('ykPlanKaydetBtn').addEventListener('click', async () =>
     const tum = kalan.concat(yeni).sort((a, b) => ykSira(a[1]) - ykSira(b[1]));
     await ykSekmeYaz(YK_TAB.plan, tum);
     ykDurum('ykPlanDurum', `✓ ${hafta} haftasının ${bolum} planı kaydedildi (${ykPlanOnizleme.kisiler.size} kişi)${tumu.length > kalan.length ? `; bu haftanın eski ${bolum} planının yerine yazıldı` : ''}.`, 'ok');
-    ykHaftalariCiz();
+    // Kaydedilen hal yeni başlangıç: sarı işaretler kalkar, sonraki değişiklikler yine kaydedilebilir.
+    ykPlanOnizleme.kisiler.forEach(k => { k.ilk = k.gunler.slice(); });
+    ykPlanOnizleme.kayitli = true;
+    await ykHaftalariCiz();
+    ykPlanOnizlemeCiz();
   } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); btn.disabled = false; }
 });
 

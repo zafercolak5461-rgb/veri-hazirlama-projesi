@@ -3116,6 +3116,20 @@ function ykPlanAyristir(metin){
     if (kisiler.has(sicil)) uyarilar.push(`Sicil ${sicil} planda iki kez var; son satır alındı.`);
     kisiler.set(sicil, { ad: String(r[si + 1] || '').replace(/ /g, ' ').trim(), gunler });
   }
+  // Hücreler satır satır yapıştırılmışsa (her hücre ayrı satırda, sekme yok): sırayla oku —
+  // 5+ ardışık tarih haftayı verir; 4-6 haneli sayı Sicil, ardından ad ve 7 gün gelir.
+  if (!kisiler.size){
+    const h = String(metin || '').replace(/\r/g, '').split(/[\n\t]/).map(x => x.replace(/ /g, ' ').trim());
+    for (let i = 0; i < h.length; i++){
+      if (ykTarih(h[i]) && h.slice(i, i + 5).every(x => ykTarih(x))){ haftalar.push(ykTarih(h[i])); while (i + 1 < h.length && ykTarih(h[i + 1])) i++; continue; }
+      if (!/^\d{4,6}$/.test(h[i])) continue;
+      const gunler = h.slice(i + 2, i + 9);
+      while (gunler.length < 7) gunler.push('');
+      if (kisiler.has(h[i])) uyarilar.push(`Sicil ${h[i]} planda iki kez var; son satır alındı.`);
+      kisiler.set(h[i], { ad: h[i + 1] || '', gunler });
+      i += 8;
+    }
+  }
   const farkli = [...new Set(haftalar)];
   if (farkli.length > 1) uyarilar.push(`Planda farklı tarih başlıkları var (${farkli.join(', ')}). Hafta başı olarak ilki önerildi; bölümlerden biri eski haftaya ait olabilir.`);
   return { hafta: haftalar[0] || '', kisiler, uyarilar };

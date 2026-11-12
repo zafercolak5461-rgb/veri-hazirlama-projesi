@@ -410,6 +410,8 @@ const AUTH_SHEET_ID = '1PfYdeuiGvuHbHsCx5PTcApepdwdjY-2C491cufssQhU';
 // Yetki tek sekmede (09.11.2026): "YETKİLENDİRME" sekmesi — İsim, Gmail, Erişim, Süper Yetkili.
 // Erişim = tüm projeler ve özellikler. Kişi ekleme/çıkarma panel.html > Yetkilendirme ekranından yapılır.
 const AUTH_TAB = 'YETKİLENDİRME';
+// Program bazlı yetki (12.11.2026): bu programın sütunu. Sütun yoksa eski "Erişim" sütununa bakılır.
+const AUTH_PROGRAM_SUTUN = 'Veri Hazırlama';
 const FIXED_SUPER_ADMIN_EMAIL = 'zafercolak5461@gmail.com';
 
 // "Proje Yönetimi" sekmeleri (Projeler/Kaynaklar/Hesaplamalar/Sablonlar) hep bu TEK Sheet'te
@@ -2085,7 +2087,8 @@ async function loadUserPermissions(){
     if (!rows.length) throw new Error('Yetkilendirme sekmesi boş.');
     const header = rows[0];
     const col = (ad) => header.findIndex(h => trUpper(h) === trUpper(ad));
-    const isimCol = col('İsim'), gmailCol = col('Gmail'), erisimCol = col('Erişim'), superCol = col('Süper Yetkili');
+    const isimCol = col('İsim'), gmailCol = col('Gmail'), progCol = col(AUTH_PROGRAM_SUTUN), superCol = col('Süper Yetkili');
+    const erisimCol = progCol !== -1 ? progCol : col('Erişim');
     if (gmailCol === -1 || erisimCol === -1 || superCol === -1) throw new Error('Başlıklar bulunamadı (İsim, Gmail, Erişim, Süper Yetkili).');
     const myRow = rows.slice(1).find(r => normalizeKey(r[gmailCol]).toLowerCase() === normalizeKey(currentUserEmail).toLowerCase());
     const isTrue = (v) => trUpper(v) === trUpper('true') || trUpper(v) === trUpper('doğru') || trUpper(v) === trUpper('evet');

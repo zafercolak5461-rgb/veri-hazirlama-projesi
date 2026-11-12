@@ -97,6 +97,13 @@
   table.prev td.yaz{ white-space:normal; vertical-align:top; min-width:150px; }
   table.prev td .y-btn{ font-size:11.5px; padding:3px 8px; }
   table.prev td .y-btn.onay{ border-color:var(--danger); color:var(--danger); }
+  table.prev td input[type=text], table.prev td select{ padding:4px 7px; font-size:12px; }
+  .yk-sekmeler{ display:flex; gap:6px; margin:4px 0 2px; }
+  .yk-sekme{ background:var(--panel2); border:1px solid var(--line); color:var(--dim); padding:7px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .yk-sekme.aktif{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); font-weight:600; }
+  #ykSebepKutu{ border-color:var(--danger); }
+  #ykSebepKutu.tamam{ border-color:var(--ok); }
+  #ykSebepKutu.vurgu{ box-shadow:0 0 0 3px var(--danger-soft); }
 </style>
 </head>
 <body>
@@ -203,7 +210,7 @@
     <div id="page-yoklama" style="display:none;">
       <div id="yk-gunluk" class="yk-alt">
         <div class="page-title">Günlük Yoklama</div>
-        <div class="page-sub">Tegsoft'tan aldığın <b>Detaylı Durum</b> dosyasını yükle. Vardiya <b>Haftalık Plan</b>'dan, rapor/izin bilgisi Drive'daki <b>VARDİYA</b> tablosundan, kişiler <b>Personel Listesi</b>'nden gelir.</div>
+        <div class="page-sub">Tegsoft'tan aldığın <b>Detaylı Durum</b> dosyasını yükle. Vardiya <b>Haftalık Plan</b>'dan, rapor/izin bilgisi Drive'daki <b>VARDİYA</b> tablosundan ve buradan elle girdiğin sebeplerden, kişiler <b>Personel Listesi</b>'nden gelir.</div>
         <div class="card">
           <div class="row">
             <label class="btn primary" style="cursor:pointer;">📂 Detaylı Durum Dosyası Seç<input type="file" id="ykLoginDosya" accept=".xlsx,.xls" style="display:none;"></label>
@@ -216,6 +223,16 @@
           <div id="ykGunlukDurum" class="status"></div>
         </div>
         <div id="ykSonuc" style="display:none;">
+          <div class="card" id="ykSebepKutu">
+            <h2 id="ykSebepBaslik">Sebebi Girilmemiş Kişiler</h2>
+            <div class="hint" style="margin-bottom:4px;">VARDİYA tablosuna henüz girilmemiş rapor, izin vb. sebepleri buradan yaz. Kutuya tıklayınca liste açılır; listede olmayan bir şey yazarsan hangi sütuna gideceğini seç. Sebep yazınca rapor hemen yeniden hesaplanır. Kişi listesindeki herkese <b>Sebep</b> düğmesiyle buradan sebep girebilirsin.</div>
+            <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykSebepGiris"></table></div>
+            <div class="row" style="margin-top:12px;">
+              <button class="btn ok" id="ykSebepKaydetBtn">💾 Sebepleri Kaydet</button>
+              <span id="ykSebepDurum" class="status" style="margin:0;"></span>
+            </div>
+            <datalist id="ykSebepListe"></datalist>
+          </div>
           <div class="card">
             <div class="row" style="justify-content:space-between;">
               <h2 id="ykBaslik" style="margin:0;">Tarihli Vardiya Raporu</h2>
@@ -227,9 +244,24 @@
             </div>
             <div id="ykKayitDurum" class="status"></div>
             <div id="ykUyari" class="status warn"></div>
-            <div class="yk-yan">
-              <div><table class="prev" id="ykOzetTablo"></table></div>
-              <div style="flex:1; min-width:0;"><div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykSebepTablo"></table></div></div>
+            <div class="yk-sekmeler" style="margin-top:14px;">
+              <button class="yk-sekme aktif" data-yksonuc="rapor">Rapor</button>
+              <button class="yk-sekme" data-yksonuc="gec" id="ykGecSekme">Geç Girenler</button>
+            </div>
+            <div id="ykSonucRapor">
+              <div class="yk-yan">
+                <div><table class="prev" id="ykOzetTablo"></table></div>
+                <div style="flex:1; min-width:0;"><div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykSebepTablo"></table></div></div>
+              </div>
+            </div>
+            <div id="ykSonucGec" style="display:none;">
+              <div class="hint" id="ykGecBilgi" style="margin:10px 0 0;"></div>
+              <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykGecTablo"></table></div>
+              <datalist id="ykGecDurumListe"></datalist>
+              <div class="row" style="margin-top:12px;">
+                <button class="btn ok" id="ykGecKaydetBtn">💾 Geç Girişleri Kaydet</button>
+                <span id="ykGecDurum" class="status" style="margin:0;"></span>
+              </div>
             </div>
           </div>
           <div class="card">
@@ -242,9 +274,13 @@
 
       <div id="yk-plan" class="yk-alt" style="display:none;">
         <div class="page-title">Haftalık Plan</div>
-        <div class="page-sub">Haftalık çalışma planını Excel'de <b>tarih başlığıyla birlikte</b> seçip kopyala, aşağıya yapıştır. Program her satırda Sicil'i ve 7 günü bulur (UZMANLAR ve Sosyal Medya bölümleri de okunur). Kaydetmeden önce önizleme gösterilir.</div>
+        <div class="page-sub">Personel ve Sosyal Medya planları ayrı dosyalarda geliyor; ikisini ayrı sekmelerden yapıştır, birbirinin üzerine yazmaz. Planı Excel'de <b>tarih başlığıyla birlikte</b> seçip kopyala, aşağıya yapıştır. Program her satırda Sicil'i ve 7 günü bulur. Kaydetmeden önce önizleme gösterilir.</div>
         <div class="card">
-          <textarea id="ykPlanMetin" placeholder="Planı buraya yapıştır (Ctrl+V)…" style="width:100%; height:160px; font-family:Consolas, monospace; font-size:12px; border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
+          <div class="yk-sekmeler" style="margin-bottom:12px;">
+            <button class="yk-sekme aktif" data-ykbolum="Personel">Personel</button>
+            <button class="yk-sekme" data-ykbolum="Sosyal Medya">Sosyal Medya</button>
+          </div>
+          <textarea id="ykPlanMetin" placeholder="Personel planını buraya yapıştır (Ctrl+V)…" style="width:100%; height:160px; font-family:Consolas, monospace; font-size:12px; border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
           <div class="row" style="margin-top:10px;">
             <label>Hafta başı (Pazartesi): <input type="date" id="ykPlanHafta"></label>
             <button class="btn primary" id="ykPlanOkuBtn">▶ Önizle</button>
@@ -262,17 +298,20 @@
 
       <div id="yk-personel" class="yk-alt" style="display:none;">
         <div class="page-title">Personel Listesi</div>
-        <div class="page-sub">Yoklamaya girecek kişiler. <b>Tegsoft Adı</b>, Detaylı Durum dosyasında yazdığı gibi olmalı (eşleşme bununla yapılır). Bu liste başka hiçbir tabloya bağlı değildir; yalnız buradan yönetilir.</div>
+        <div class="page-sub">Yoklamaya girecek kişiler. <b>Tegsoft Adı</b>, Detaylı Durum dosyasında yazdığı gibi olmalı (eşleşme bununla yapılır). Bu liste başka hiçbir tabloya bağlı değildir; yalnız buradan yönetilir. Ad Soyad ya da Sicil kutusuna yazınca listeden kişiyi seçip düzenleyebilirsin.</div>
         <div class="card">
           <h2 id="ykPerFormBaslik">Kişi Ekle</h2>
           <div class="row">
-            <input type="text" id="ykPerSicil" placeholder="Sicil" style="width:90px;">
-            <input type="text" id="ykPerTegsoft" placeholder="Tegsoft adı (ör. AYSE NUR CILDIR)" style="min-width:230px;">
-            <input type="text" id="ykPerAd" placeholder="Ad Soyad" style="min-width:200px;">
+            <input type="text" id="ykPerSicil" placeholder="Sicil" style="width:90px;" autocomplete="off">
+            <input type="text" id="ykPerTegsoft" placeholder="Tegsoft adı (ör. AYSE NUR CILDIR)" style="min-width:230px;" autocomplete="off">
+            <input type="text" id="ykPerAd" placeholder="Ad Soyad (yazınca listeden seç)" style="min-width:240px;" list="ykPerAdListe" autocomplete="off">
+            <datalist id="ykPerAdListe"></datalist>
             <select id="ykPerGorev"></select>
           </div>
           <div class="row" style="margin-top:10px;">
-            <label>Özel durum: <select id="ykPerOzel"></select></label>
+            <label>Özel durum: <input type="text" id="ykPerOzel" list="ykPerOzelListe" placeholder="— yok —" style="min-width:200px;" autocomplete="off"></label>
+            <datalist id="ykPerOzelListe"></datalist>
+            <label id="ykPerOzelTurWrap" style="display:none;">Yeni özel durum türü: <select id="ykPerOzelTur"><option>Bilgi</option><option>İzin</option></select></label>
             <label>Bitiş: <input type="date" id="ykPerBitis"></label>
             <button class="btn ok" id="ykPerKaydetBtn">💾 Kaydet</button>
             <button class="btn" id="ykPerTemizleBtn">Temizle</button>
@@ -285,6 +324,49 @@
             <span id="ykPerSayi" class="hint" style="margin:0;"></span>
           </div>
           <div class="prev-wrap" style="max-height:620px;"><table class="prev" id="ykPerTablo"></table></div>
+        </div>
+      </div>
+
+      <div id="yk-ayar" class="yk-alt" style="display:none;">
+        <div class="page-title">Yoklama Ayarları</div>
+        <div class="page-sub">Yoklamanın kuralları buradan yönetilir; değişiklikler YOKLAMA tablosuna yazılır.</div>
+        <div class="card">
+          <h2>Vardiya Kodları</h2>
+          <div class="hint">Planda ya da VARDİYA tablosunda vardiya yerine yazılan kodlar (Dİ, ÜDİ, Yİ, Rapor, HT…). <b>Grup</b>: kişinin rapordaki hangi listeye gireceği (Çalışmıyor = o gün çalışmıyor, eksik sayılmaz). <b>Sayılacak Vardiya</b>: bu kod görülen kişinin hangi vardiyada sayılacağı; Vardiya sütununa da bu yazılır. Kişinin planda gerçek bir vardiyası varsa o kullanılır.</div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykAyarKodTablo"></table></div>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="ykAyarKodEkle">+ Kod Ekle</button>
+            <button class="btn ok" id="ykAyarKodKaydet">💾 Kaydet</button>
+            <span id="ykAyarKodDurum" class="status" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Özel Durumlar</h2>
+          <div class="hint">Personel listesinde seçilen özel durumlar. <b>İzin</b>: kişi o gün izinli sayılır (Diğer listesine girer). <b>Bilgi</b>: yalnız Açıklama'da görünür.</div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykAyarOzelTablo"></table></div>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="ykAyarOzelEkle">+ Özel Durum Ekle</button>
+            <button class="btn ok" id="ykAyarOzelKaydet">💾 Kaydet</button>
+            <span id="ykAyarOzelDurum" class="status" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Genel</h2>
+          <div class="row">
+            <label>Geç giriş toleransı (dakika): <input type="number" id="ykAyarTolerans" min="0" step="1"></label>
+          </div>
+          <div class="hint" style="margin:6px 0 12px;">Ör. 1 dakika: 09:00 vardiyasında 09:01:00 ve sonrası geç sayılır, 09:00:59 sayılmaz.</div>
+          <div class="row">
+            <label>Geç giriş durumları (virgülle): <input type="text" id="ykAyarGecDurumlar" style="min-width:420px;"></label>
+          </div>
+          <div class="hint" style="margin:6px 0 12px;">İlk yazılan "geç" sayılan durumdur (dakikası yazılır); diğerleri mazerettir (dakika 0).</div>
+          <div class="row">
+            <label>Kodun vardiyası tanımlı değilse sayılacak vardiya: <input type="text" id="ykAyarVarsayilan" style="width:120px;" placeholder="08:00-18:00"></label>
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn ok" id="ykAyarGenelKaydet">💾 Kaydet</button>
+            <span id="ykAyarGenelDurum" class="status" style="margin:0;"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -2843,33 +2925,40 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
 </script>
 <script>
 // ============================================================================
-// ===== YOKLAMA (10.11.2026) =====
-// Kendi tablosu: YOKLAMA (YOKLAMA_SHEET_ID) — PERSONEL, PLAN, KAYIT, GÖREVLER, SEBEPLER, ÖZEL DURUMLAR.
+// ===== YOKLAMA (10.11.2026; 12.11.2026 düzeltmeleri) =====
+// Kendi tablosu: YOKLAMA (YOKLAMA_SHEET_ID) — PERSONEL, PLAN, KAYIT, GÖREVLER, SEBEPLER, ÖZEL DURUMLAR,
+// MANUEL SEBEP, GEÇ GİRİŞ, AYARLAR.
 // Drive'daki VARDİYA tablosu (VARDIYA_SHEET_ID) yalnız OKUNUR: o günün rapor/izin bilgisi oradan gelir.
 // Kişi eşleştirmesi Sicil ile; Tegsoft girişleri PERSONEL'deki "Tegsoft Adı" ile Sicil'e bağlanır.
-// İş kuralları (görev → rapor grubu, değer → sebep grubu, özel durum türü) koda gömülü değil, tablodan okunur.
+// İş kuralları (görev → rapor grubu, kod → grup + sayılacak vardiya, özel durum türü, geç giriş toleransı)
+// koda gömülü değil, tablodan okunur ve "Yoklama Ayarları" sayfasından yönetilir.
 // ============================================================================
 const YOKLAMA_SHEET_ID = '1QqUxdK_A2uTjXCwd9BKkf4SKTxlXsJgxpVhZXIvB010';
 const VARDIYA_SHEET_ID = '1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ';
-const YK_TAB = { personel:'PERSONEL', plan:'PLAN', kayit:'KAYIT', gorev:'GÖREVLER', sebep:'SEBEPLER', ozel:'ÖZEL DURUMLAR' };
+const YK_TAB = { personel:'PERSONEL', plan:'PLAN', kayit:'KAYIT', gorev:'GÖREVLER', sebep:'SEBEPLER', ozel:'ÖZEL DURUMLAR',
+                 manuel:'MANUEL SEBEP', gec:'GEÇ GİRİŞ', ayar:'AYARLAR' };
 const YK_SAYFALAR = [
   { id:'gunluk',   ad:'Günlük Yoklama',   ikon:'✓' },
   { id:'plan',     ad:'Haftalık Plan',    ikon:'📅' },
   { id:'personel', ad:'Personel Listesi', ikon:'👥' },
+  { id:'ayar',     ad:'Yoklama Ayarları', ikon:'⚙' },
 ];
 const YK_AYLAR = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
-const YK_GRUPLAR = ['Yıllık İzin', 'Rapor', 'Diğer'];   // sebep listelerinin sütun sırası (SEBEPLER'deki Grup adları)
+const YK_LISTE_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer'];          // elle girilen yeni sebebin gidebileceği listeler
+const YK_KOD_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer', 'Çalışmıyor'];
+const YK_BOLUMLER = ['Personel', 'Sosyal Medya'];                     // haftalık planın iki parçası
+const YK_AYAR_ANAHTAR = { tolerans:'Geç Giriş Toleransı (dk)', durumlar:'Geç Giriş Durumları', varsayilan:'Varsayılan Sayılacak Vardiya' };
 let ykAktifSayfa = null;
 
 // ---------- Saf yardımcılar (ağ yok; test edilebilir) ----------
 // Tegsoft adlarını karşılaştırmak için: Türkçe harfler sadeleştirilir, boşluklar tekleştirilir.
 function ykAd(v){
-  return String(v == null ? '' : v).replace(/ /g, ' ').trim().toLocaleUpperCase('tr-TR')
+  return String(v == null ? '' : v).replace(/ /g, ' ').trim().toLocaleUpperCase('tr-TR')
     .replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C')
     .replace(/\s+/g, ' ');
 }
 // Değer karşılaştırması (sebep/görev adları): büyük harf + tek boşluk, Türkçe harfler korunur.
-function ykAnahtar(v){ return String(v == null ? '' : v).replace(/ /g, ' ').trim().replace(/\s+/g, ' ').toLocaleUpperCase('tr-TR'); }
+function ykAnahtar(v){ return String(v == null ? '' : v).replace(/ /g, ' ').trim().replace(/\s+/g, ' ').toLocaleUpperCase('tr-TR'); }
 function ykIki(n){ return String(n).padStart(2, '0'); }
 // Tarih → "GG.AA.YYYY". Kabul: Date, "GG.AA.YYYY", "G.A.YYYY", "GG/AA/YYYY", "YYYY-AA-GG", "YYYY/AA/GG", Excel seri no.
 function ykTarih(v){
@@ -2888,7 +2977,7 @@ function ykTarih(v){
 }
 function ykSira(t){ const m = String(t || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? Number(m[3] + m[2] + m[1]) : 0; }
 function ykTarihEkle(t, gun){
-  const m = t.match(/^(\d{2})\.(\d{2})\.(\d{4})$/); if (!m) return '';
+  const m = String(t || '').match(/^(\d{2})\.(\d{2})\.(\d{4})$/); if (!m) return '';
   const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]) + gun);
   return ykTarih(d);
 }
@@ -2905,56 +2994,107 @@ function ykSaat(v){
   const m = String(v == null ? '' : v).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
   return m ? ykIki(m[1]) + ':' + m[2] + ':' + ykIki(m[3] || 0) : '';
 }
+function ykSaniye(s){ const p = String(s || '').split(':').map(Number); return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0); }
 
 // Başlığa göre sütun bulur (Türkçe büyük-küçük harf duyarsız).
 function ykSutun(baslik, ad){ const a = ykAnahtar(ad); return (baslik || []).findIndex(h => ykAnahtar(h) === a); }
 
 // Sheets satırlarından ayar tabloları.
-function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows){
+function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
   const bas = personelRows[0] || [];
   const c = { sicil: ykSutun(bas,'Sicil'), teg: ykSutun(bas,'Tegsoft Adı'), ad: ykSutun(bas,'Ad Soyad'), gorev: ykSutun(bas,'Görev'),
               ozel: ykSutun(bas,'Özel Durum'), bitis: ykSutun(bas,'Özel Durum Bitiş') };
   if (c.sicil < 0 || c.teg < 0) throw new Error('PERSONEL sekmesinde "Sicil" ve "Tegsoft Adı" başlıkları bulunamadı.');
-  const al = (r, i) => i >= 0 ? String(r[i] == null ? '' : r[i]).replace(/ /g, ' ').trim() : '';
+  const temiz = v => String(v == null ? '' : v).replace(/ /g, ' ').trim();
+  const al = (r, i) => i >= 0 ? temiz(r[i]) : '';
   const personel = personelRows.slice(1).map((r, i) => ({
     satir: i + 2, sicil: al(r, c.sicil), tegsoft: al(r, c.teg), ad: al(r, c.ad) || al(r, c.teg),
     gorev: al(r, c.gorev), ozel: al(r, c.ozel), bitis: ykTarih(al(r, c.bitis)),
   })).filter(p => p.sicil);
-  const harita = (rows, a, b) => { const m = new Map(); (rows || []).slice(1).forEach(r => { if (r && r[0]) m.set(ykAnahtar(r[0]), String(r[1] == null ? '' : r[1]).trim()); }); return m; };
+  const harita = rows => { const m = new Map(); (rows || []).slice(1).forEach(r => { if (r && temiz(r[0])) m.set(ykAnahtar(r[0]), temiz(r[1])); }); return m; };
+  // SEBEPLER: Değer | Grup | Sayılacak Vardiya
+  const sb = (sebepRows && sebepRows[0]) || [];
+  const cv = ykSutun(sb, 'Sayılacak Vardiya');
+  const sebepler = (sebepRows || []).slice(1).filter(r => r && temiz(r[0]))
+    .map(r => ({ deger: temiz(r[0]), grup: temiz(r[1]), vardiya: cv >= 0 ? ykVardiya(r[cv]) : '' }));
+  const sebepVardiya = new Map(sebepler.filter(s => s.vardiya).map(s => [ykAnahtar(s.deger), s.vardiya]));
+  // AYARLAR: Ayar | Değer
+  const ayarlar = harita(ayarRows);
+  const tolHam = ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.tolerans));
+  const tolerans = (tolHam !== undefined && tolHam !== '' && !isNaN(Number(tolHam))) ? Number(tolHam) : 1;
+  const gecDurumlar = String(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.durumlar)) || 'Geç Login').split(',').map(s => s.trim()).filter(Boolean);
+  const varsayilanVardiya = ykVardiya(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.varsayilan))) || '';
   return {
     personel,
     gorevGrup: harita(gorevRows),         // GÖREV → Rapor Grubu (Asistan / SM / Uzman)
-    sebepGrup: harita(sebepRows),         // değer → Grup (Rapor / Yıllık İzin / Diğer / Çalışmıyor)
+    sebepGrup: harita(sebepRows),         // kod → Grup (Rapor / Yıllık İzin / Diğer / Çalışmıyor)
+    sebepVardiya,                         // kod → Sayılacak Vardiya
+    sebepler,
     ozelTur:   harita(ozelRows),          // Özel Durum → Tür (İzin / Bilgi)
-    gorevler:  (gorevRows || []).slice(1).map(r => String(r[0] || '').trim()).filter(Boolean),
-    ozeller:   (ozelRows || []).slice(1).map(r => String(r[0] || '').trim()).filter(Boolean),
+    ozelListe: (ozelRows || []).slice(1).filter(r => r && temiz(r[0])).map(r => ({ ad: temiz(r[0]), tur: temiz(r[1]) })),
+    gorevler:  (gorevRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
+    ozeller:   (ozelRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
+    tolerans, gecDurumlar, varsayilanVardiya,
   };
 }
 
-// Detaylı Durum satırları (başlık dahil, 2B dizi) → { tarihler: Map(tarih→adet), girisler: Map(tarih→Map(ykAd→ilk saat)) }
-// Yalnız tarih yazan başlangıç (oturum önceki günden sürüyor) o günün 00:00:00'ı sayılır.
+// Detaylı Durum hücresi → { tarih, saat } ; saat '' ise hücrede yalnız tarih var (oturum önceki günden sürüyor).
+function ykZamanAyir(v){
+  if (v instanceof Date && !isNaN(v)){
+    // ExcelJS tarihleri UTC olarak verir; hücrede ne yazıyorsa onu alalım.
+    const t = ykIki(v.getUTCDate()) + '.' + ykIki(v.getUTCMonth() + 1) + '.' + v.getUTCFullYear();
+    const s = ykIki(v.getUTCHours()) + ':' + ykIki(v.getUTCMinutes()) + ':' + ykIki(v.getUTCSeconds());
+    return { tarih: t, saat: s === '00:00:00' ? '' : s };
+  }
+  const tarih = ykTarih(v);
+  const kalan = String(v == null ? '' : v).trim().replace(/^\S+\s*/, '');
+  return { tarih, saat: kalan ? ykSaat(kalan) : '' };
+}
+
+// Detaylı Durum satırları (başlık dahil, 2B dizi) →
+//  { tarihler: Map(tarih→saatli giriş adedi), girisler: Map(tarih→Map(ykAd→{ ilk, tarihsiz, gece })), adlar }
+//  ilk     : o gün başlayan oturumların EN ERKEN saati (aynı gün birden çok giriş olabilir)
+//  tarihsiz: o gün yalnız tarih yazan başlangıç var (oturum önceki günden sürüyor)
+//  gece    : önceki gün başlayıp bu güne sarkan oturumun başlangıç saati (ör. 23:59:33)
 function ykLoginOku(rows){
   let bi = rows.findIndex(r => (r || []).some(h => ykAnahtar(h) === 'MÜŞTERİ TEMSİLCİSİ'));
   if (bi < 0) throw new Error('Dosyada "Müşteri Temsilcisi" başlığı bulunamadı. Tegsoft Detaylı Durum raporunu seçtiğinden emin ol.');
   const bas = rows[bi];
-  const cAd = ykSutun(bas, 'Müşteri Temsilcisi'), cBas = ykSutun(bas, 'Başlangıç Tarihi'), cTip = ykSutun(bas, 'İşlem Tipi');
+  const cAd = ykSutun(bas, 'Müşteri Temsilcisi'), cBas = ykSutun(bas, 'Başlangıç Tarihi'), cBit = ykSutun(bas, 'Bitiş Tarihi'), cTip = ykSutun(bas, 'İşlem Tipi');
   if (cBas < 0) throw new Error('Dosyada "Başlangıç Tarihi" başlığı bulunamadı.');
   const tarihler = new Map(), girisler = new Map(), adlar = new Map();
+  const kayit = (tarih, ad) => {
+    if (!girisler.has(tarih)) girisler.set(tarih, new Map());
+    const g = girisler.get(tarih);
+    if (!g.has(ad)) g.set(ad, { ilk:'', tarihsiz:false, gece:'' });
+    return g.get(ad);
+  };
   for (const r of rows.slice(bi + 1)){
     if (!r || !r[cAd]) continue;
     if (cTip >= 0 && r[cTip] && ykAnahtar(r[cTip]) !== 'LOGIN') continue;
-    const ham = r[cBas];
-    const tarih = ykTarih(ham);
-    if (!tarih) continue;
-    const saat = (ham instanceof Date) ? ykSaat(ham) : (ykSaat(String(ham).replace(/^\S+\s*/, '')) || '00:00:00');
+    const b = ykZamanAyir(r[cBas]);
+    if (!b.tarih) continue;
     const ad = ykAd(r[cAd]);
     adlar.set(ad, String(r[cAd]).trim());
-    tarihler.set(tarih, (tarihler.get(tarih) || 0) + 1);
-    if (!girisler.has(tarih)) girisler.set(tarih, new Map());
-    const g = girisler.get(tarih);
-    if (!g.has(ad) || saat < g.get(ad)) g.set(ad, saat);
+    const k = kayit(b.tarih, ad);
+    if (!b.saat){ k.tarihsiz = true; continue; }
+    tarihler.set(b.tarih, (tarihler.get(b.tarih) || 0) + 1);
+    if (!k.ilk || b.saat < k.ilk) k.ilk = b.saat;
+    // Oturum ertesi güne sarkıyorsa (bitiş tarihi daha ileri), ertesi gün için "gece" girişi olarak da sakla.
+    const e = cBit >= 0 ? ykZamanAyir(r[cBit]) : { tarih:'' };
+    if (e.tarih && ykSira(e.tarih) > ykSira(b.tarih)){
+      const kn = kayit(ykTarihEkle(b.tarih, 1), ad);
+      if (!kn.gece || b.saat > kn.gece) kn.gece = b.saat;
+    }
   }
   return { tarihler, girisler, adlar };
+}
+// Kişinin o günkü giriş saati. Vardiya 00:00'da başlıyorsa: önceki geceden sarkan oturumun başlangıcı,
+// yoksa yalnız tarihli satır (00:00:00), yoksa günün ilk girişi. Diğer vardiyalarda yalnız o gün başlayan ilk giriş.
+function ykGirisSaati(g, vardiya){
+  if (!g) return '';
+  if (String(vardiya || '').startsWith('00:00')) return g.gece || (g.tarihsiz ? '00:00:00' : '') || g.ilk || '';
+  return g.ilk || '';
 }
 
 // Yapıştırılan plan metni → { hafta, kisiler: Map(sicil→{ad, gunler[7]}), uyarilar[] }
@@ -2971,22 +3111,33 @@ function ykPlanAyristir(metin){
     if (si < 0) continue;
     const sicil = String(r[si]).trim();
     const gunler = [];
-    for (let g = 0; g < 7; g++) gunler.push(String(r[si + 2 + g] == null ? '' : r[si + 2 + g]).replace(/ /g, ' ').trim());
+    for (let g = 0; g < 7; g++) gunler.push(String(r[si + 2 + g] == null ? '' : r[si + 2 + g]).replace(/ /g, ' ').trim());
     if (gunler.every(x => !x)) continue;
     if (kisiler.has(sicil)) uyarilar.push(`Sicil ${sicil} planda iki kez var; son satır alındı.`);
-    kisiler.set(sicil, { ad: String(r[si + 1] || '').replace(/ /g, ' ').trim(), gunler });
+    kisiler.set(sicil, { ad: String(r[si + 1] || '').replace(/ /g, ' ').trim(), gunler });
   }
   const farkli = [...new Set(haftalar)];
   if (farkli.length > 1) uyarilar.push(`Planda farklı tarih başlıkları var (${farkli.join(', ')}). Hafta başı olarak ilki önerildi; bölümlerden biri eski haftaya ait olabilir.`);
   return { hafta: haftalar[0] || '', kisiler, uyarilar };
 }
 
+// Vardiyaya göre geç kalma (saniye). 00:00 vardiyasında 23:59 gibi önceki gece girişi erken sayılır.
+function ykGecikmeSn(vardiya, login){
+  if (!vardiya || !login) return null;
+  let d = ykSaniye(login) - ykSaniye(vardiya.slice(0, 5) + ':00');
+  if (d > 43200) d -= 86400;
+  if (d < -43200) d += 86400;
+  return d;
+}
+
 // Bir günün yoklaması.
 //  ayar: ykAyarlariKur çıktısı · tarih: "GG.AA.YYYY"
 //  planGun: Map(sicil→plandaki değer) ya da null (o hafta plan yok) · driveGun: Map(sicil→VARDİYA değeri) ya da null
-//  giris: Map(ykAd(Tegsoft adı)→ilk saat)
-function ykHesapla(ayar, tarih, planGun, driveGun, giris){
+//  giris: Map(ykAd(Tegsoft adı)→{ilk, tarihsiz, gece}) · manuel: Map(sicil→{sebep, grup}) (panelden elle girilen)
+function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
+  manuel = manuel || new Map();
   const grupOf = v => ayar.sebepGrup.get(ykAnahtar(v)) || '';
+  const kodVardiyasi = v => ayar.sebepVardiya.get(ykAnahtar(v)) || ayar.varsayilanVardiya || '';
   const sira = ykSira(tarih);
   const kisiler = [], uyarilar = [];
   const bilinen = new Set();
@@ -2995,34 +3146,42 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris){
     const rg = ayar.gorevGrup.get(ykAnahtar(p.gorev)) || 'Asistan';
     const planVal = planGun ? (planGun.get(p.sicil) || '') : '';
     const driveVal = driveGun ? (driveGun.get(p.sicil) || '') : '';
+    const man = manuel.get(p.sicil) || null;
     const ozelAktif = p.ozel && (!p.bitis || ykSira(p.bitis) >= sira);
     const ozelIzin = ozelAktif && ykAnahtar(ayar.ozelTur.get(ykAnahtar(p.ozel)) || '') === 'İZİN';
-    const vardiya = ykVardiya(planVal) || ykVardiya(driveVal);
-    const login = giris.get(ykAd(p.tegsoft)) || '';
-    // Sebep önceliği: Drive'daki günlük sebep > plandaki kod > özel durum (İzin türü)
+    // Sebep önceliği: elle girilen > Drive'daki günlük sebep > plandaki kod > özel durum (İzin türü)
+    const gM = man ? (man.grup || grupOf(man.sebep) || 'Diğer') : '';
     const gD = ykVardiya(driveVal) ? '' : grupOf(driveVal);
     const gP = ykVardiya(planVal) ? '' : grupOf(planVal);
-    let sebepGrup = '', sebepAd = '';
-    if (gD && gD !== 'Çalışmıyor'){ sebepGrup = gD; sebepAd = driveVal; }
+    let sebepGrup = '', sebepAd = '', calismiyor = false;
+    if (gM === 'Çalışmıyor') calismiyor = true;
+    else if (gM){ sebepGrup = gM; sebepAd = man.sebep; }
+    else if (gD && gD !== 'Çalışmıyor'){ sebepGrup = gD; sebepAd = driveVal; }
     else if (gP && gP !== 'Çalışmıyor'){ sebepGrup = gP; sebepAd = planVal; }
     else if (ozelIzin){ sebepGrup = 'Diğer'; sebepAd = p.ozel; }
-    const calismiyor = !vardiya && !sebepGrup && (gD === 'Çalışmıyor' || gP === 'Çalışmıyor');
+    // Planda kod (Dİ, HT…) yazıyorsa Drive'daki saat kullanılmaz: kişinin o günkü durumu plandaki koddur.
+    const planKod = !ykVardiya(planVal) && !!grupOf(planVal);
+    const gercekVardiya = calismiyor ? '' : (ykVardiya(planVal) || (planKod ? '' : ykVardiya(driveVal)));
+    if (!calismiyor && !gercekVardiya && !sebepGrup && (gD === 'Çalışmıyor' || gP === 'Çalışmıyor')) calismiyor = true;
+    // Vardiya yerine kod yazılmışsa (Dİ, Rapor…) kişi kodun "Sayılacak Vardiya"sında sayılır.
+    const vardiya = gercekVardiya || (sebepGrup ? kodVardiyasi(sebepAd) : '');
+    const login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), vardiya);
     const planli = !!vardiya || !!sebepGrup;
     let durum, aciklama = [];
     let girisSebep = '';                       // izinli/raporlu göründüğü halde giriş yapmış: geldi sayılır
     if (sebepGrup && login){ girisSebep = sebepAd; sebepGrup = ''; sebepAd = ''; }
     if (sebepGrup){ durum = sebepGrup; aciklama.push(sebepAd); }
-    else if (girisSebep){ durum = 'Geldi'; aciklama.push(`VARDİYA'da: ${girisSebep}`); }
-    else if (calismiyor){ durum = 'Çalışmıyor'; aciklama.push(planVal || driveVal); if (login) aciklama.push('plan dışı giriş'); }
+    else if (girisSebep){ durum = 'Geldi'; aciklama.push(`Sebep: ${girisSebep}`); }
+    else if (calismiyor){ durum = 'Çalışmıyor'; aciklama.push(man ? man.sebep : (planVal || driveVal)); if (login) aciklama.push('plan dışı giriş'); }
     else if (!planli){ durum = 'Plan yok'; if (login) aciklama.push('giriş var'); }
     else if (login) durum = 'Geldi';
     else durum = 'Gelmedi';
+    if (man) aciklama.push('elle girildi');
     if (ozelAktif && !ozelIzin) aciklama.push(p.ozel);
-    const satirAd = vardiya ? `${vardiya} (${rg})` : (planli ? `İzinli (${rg})` : '');
-    kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, gorev: p.gorev, rg, vardiya, planVal, driveVal, login,
-                   durum, sebepGrup, sebepAd, girisSebep, aciklama: aciklama.filter(Boolean).join(' · '), planli: planli || !!girisSebep,
-                   satirAd: satirAd || (girisSebep ? `${vardiya || 'Vardiyasız'} (${rg})` : ''),
-                   geldi: !!login && (planli || !!girisSebep) && !sebepGrup });
+    kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, gorev: p.gorev, rg, vardiya, gercekVardiya, planVal, driveVal, login,
+                   durum, sebepGrup, sebepAd, girisSebep, manuel: man, aciklama: aciklama.filter(Boolean).join(' · '),
+                   planli: planli && !calismiyor, satirAd: vardiya && !calismiyor ? `${vardiya} (${rg})` : '',
+                   geldi: !!login && planli && !calismiyor && !sebepGrup });
   }
   // DÜZENLEME sayfasındaki "Açıklama" sütunu: büyük harf değer + renk türü (izin / sm / off / bilgi).
   for (const k of kisiler){
@@ -3036,24 +3195,19 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris){
     else { k.exAciklama = ''; k.exTur = ''; }
     k.exAciklama = String(k.exAciklama || '').toLocaleUpperCase('tr-TR');
   }
-  // Özet: vardiya satırları (başlangıç saatine göre), İzinli satırları en sonda.
+  // Özet: yalnız o gün gerçekten bulunan vardiyalar, başlangıç saatine göre sıralı.
   const ozet = new Map();
   for (const k of kisiler){
-    if (!k.planli) continue;
+    if (!k.planli || !k.satirAd) continue;
     if (!ozet.has(k.satirAd)) ozet.set(k.satirAd, { ad: k.satirAd, planlanan: 0, gerceklesen: 0 });
-    const o = ozet.get(k.satirAd); o.planlanan++; if (k.login && !k.sebepGrup) o.gerceklesen++;
+    const o = ozet.get(k.satirAd); o.planlanan++; if (k.geldi) o.gerceklesen++;
   }
-  const satirlar = [...ozet.values()].sort((a, b) => {
-    const ia = a.ad.startsWith('İzinli'), ib = b.ad.startsWith('İzinli');
-    if (ia !== ib) return ia ? 1 : -1;
-    return a.ad.localeCompare(b.ad, 'tr');
-  });
+  const satirlar = [...ozet.values()].sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
   satirlar.forEach(s => { s.eksik = s.planlanan - s.gerceklesen; s.oran = s.planlanan ? s.eksik / s.planlanan : 0; });
   const toplam = satirlar.reduce((t, s) => ({ planlanan: t.planlanan + s.planlanan, gerceklesen: t.gerceklesen + s.gerceklesen }), { planlanan: 0, gerceklesen: 0 });
   toplam.eksik = toplam.planlanan - toplam.gerceklesen; toplam.oran = toplam.planlanan ? toplam.eksik / toplam.planlanan : 0;
-  // Sebep listeleri
-  // Listeler eksik sayısıyla birebir tutar: eksik sayılan herkes bir listede, listede olan herkes eksik.
-  // Tek istisna senin DÜZENLEME düzenindeki gibi: Sosyal Medya'da o gün OFF olanlar da yazılır (eksik sayılmaz).
+  // Sebep listeleri — eksik sayısıyla birebir tutar: eksik sayılan herkes bir listede, listede olan herkes eksik.
+  // Tek istisna DÜZENLEME düzenindeki gibi: Sosyal Medya'da o gün OFF olanlar da yazılır (eksik sayılmaz).
   const listeler = { 'Yıllık İzin': [], 'Rapor': [], 'Diğer': [], 'Sosyal Medya': [] };
   let listeEksik = 0;
   for (const k of kisiler){
@@ -3063,23 +3217,28 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris){
     else if (k.rg === 'SM' && k.durum === 'Çalışmıyor' && !k.login) listeler['Sosyal Medya'].push(`${k.ad} (OFF)`);
     else if (k.durum === 'Gelmedi'){ listeler['Diğer'].push(`${k.ad} (SEBEP YOK)`); listeEksik++; }
   }
+  // Geç girenler: gerçek vardiyası olan ve gelenler; vardiya başı + tolerans (dk) ve sonrası geç.
+  const gec = kisiler.filter(k => k.geldi && k.gercekVardiya && k.login)
+    .map(k => ({ k, sn: ykGecikmeSn(k.gercekVardiya, k.login) }))
+    .filter(x => x.sn != null && x.sn >= ayar.tolerans * 60)
+    .map(x => ({ sicil: x.k.sicil, ad: x.k.ad, vardiya: x.k.gercekVardiya, login: x.k.login, dk: Math.floor(x.sn / 60) }))
+    .sort((a, b) => b.dk - a.dk || a.ad.localeCompare(b.ad, 'tr'));
+  const sebepsiz = kisiler.filter(k => k.exAciklama === 'SEBEP YOK');
   // Uyarılar
-  if (!planGun) uyarilar.push(`${tarih} için kayıtlı haftalık plan yok: vardiyalar Drive VARDİYA'dan alındı, rapor/izinli kişilerin vardiyası bilinmiyor. Haftalık Plan sayfasından planı yapıştır.`);
+  if (!planGun) uyarilar.push(`${tarih} için kayıtlı haftalık plan yok: vardiyalar Drive VARDİYA'dan alındı. Haftalık Plan sayfasından planı yapıştır.`);
   else {
     const plansiz = kisiler.filter(k => !planGun.has(k.sicil) && !k.sebepGrup);
     if (plansiz.length) uyarilar.push(`Planda olmayan ${plansiz.length} kişi: ${plansiz.map(k => k.ad).join(', ')}.`);
   }
-  if (!driveGun) uyarilar.push(`Drive VARDİYA'da ${tarih} günü okunamadı: rapor/izin bilgisi yalnız plandan alındı.`);
-  const disari = [...giris.keys()].filter(a => !bilinen.has(a));
+  if (!driveGun) uyarilar.push(`Drive VARDİYA'da ${tarih} günü okunamadı: rapor/izin bilgisi yalnız plandan ve elle girilenden alındı.`);
+  const disari = [...giris.entries()].filter(([a, g]) => g.ilk && !bilinen.has(a)).map(([a]) => a);
   if (disari.length) uyarilar.push(`Personel listesinde olmayan ${disari.length} Tegsoft girişi: ${disari.join(', ')}. Bunlar sayılmadı; kişi listede başka adla kayıtlıysa Tegsoft Adı'nı düzelt.`);
   const plandisi = kisiler.filter(k => k.login && (k.durum === 'Çalışmıyor' || k.durum === 'Plan yok'));
   if (plandisi.length) uyarilar.push(`Planda çalışmadığı halde giriş yapan: ${plandisi.map(k => `${k.ad} (${k.login.slice(0,5)})`).join(', ')}.`);
   const sebepliGiris = kisiler.filter(k => k.girisSebep);
-  if (sebepliGiris.length) uyarilar.push(`VARDİYA'da izinli/raporlu göründüğü halde giriş yapan: ${sebepliGiris.map(k => `${k.ad} (${k.girisSebep}, ${k.login.slice(0,5)})`).join(', ')}. Geldi sayıldı; VARDİYA tablosu kontrol edilmeli.`);
-  const sebepsiz = kisiler.filter(k => k.durum === 'Gelmedi' && k.rg !== 'SM');
-  if (sebepsiz.length) uyarilar.unshift(`Sebebi bilinmeyen ${sebepsiz.length} kişi (DİĞER'de "SEBEP YOK" yazıyor): ${sebepsiz.map(k => k.ad).join(', ')}.`);
+  if (sebepliGiris.length) uyarilar.push(`İzinli/raporlu göründüğü halde giriş yapan: ${sebepliGiris.map(k => `${k.ad} (${k.girisSebep}, ${k.login.slice(0,5)})`).join(', ')}. Geldi sayıldı; VARDİYA tablosu kontrol edilmeli.`);
   if (listeEksik !== toplam.eksik) uyarilar.unshift(`Kontrol: listelerdeki eksik (${listeEksik}) ile tablodaki eksik (${toplam.eksik}) tutmuyor.`);
-  return { tarih, kisiler, satirlar, toplam, listeler, listeEksik, uyarilar };
+  return { tarih, kisiler, satirlar, toplam, listeler, listeEksik, gec, sebepsiz, uyarilar };
 }
 
 // ---------- Sheets okuma/yazma ----------
@@ -3095,27 +3254,43 @@ async function ykSekmeYaz(sekme, satirlar){
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${sekme}'!A2`)}?valueInputOption=RAW`, {
     method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
 }
+// Tarihe göre tutulan bir sekmede (A sütunu Tarih) o günün satırlarını yenileriyle değiştirir; diğer günler korunur.
+async function ykGunSatirlariniYaz(sekme, tarih, yeni, sutun){
+  const [rows] = await ykOku([`'${sekme}'!A1:Z100000`]);
+  const kalan = rows.slice(1).filter(r => r && r.length && ykTarih(r[0]) !== tarih);
+  const tum = kalan.concat(yeni).map(r => { const x = r.slice(0, sutun).map(v => v == null ? '' : v); while (x.length < sutun) x.push(''); return x; });
+  tum.sort((a, b) => ykSira(ykTarih(a[0])) - ykSira(ykTarih(b[0])));
+  await ykSekmeYaz(sekme, tum);
+  return rows.length - 1 > kalan.length;
+}
 let ykAyar = null;
 async function ykAyarYukle(){
-  const [p, g, s, o] = await ykOku([`'${YK_TAB.personel}'!A1:F2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:B500`, `'${YK_TAB.ozel}'!A1:B200`]);
-  ykAyar = ykAyarlariKur(p, g, s, o);
+  const [p, g, s, o, a] = await ykOku([`'${YK_TAB.personel}'!A1:F2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:C500`, `'${YK_TAB.ozel}'!A1:B200`, `'${YK_TAB.ayar}'!A1:B100`]);
+  ykAyar = ykAyarlariKur(p, g, s, o, a);
   return ykAyar;
 }
-// PLAN sekmesi → Map(haftaBaşı→Map(tarih→Map(sicil→değer)))
+// PLAN sekmesi → { planlar: Map(haftaBaşı→Map(tarih→Map(sicil→değer))), bolumler: Map(hafta→{Personel:Set, 'Sosyal Medya':Set}), cakisma: Map(hafta→Set) }
+// Sosyal Medya planı Personel planından sonra işlenir: aynı kişi ikisinde varsa Sosyal Medya esas alınır.
 async function ykPlanlariOku(){
-  const [rows] = await ykOku([`'${YK_TAB.plan}'!A1:D20000`]);
+  const [rows] = await ykOku([`'${YK_TAB.plan}'!A1:E100000`]);
   const bas = rows[0] || [];
-  const c = { h: ykSutun(bas,'Hafta Başı'), t: ykSutun(bas,'Tarih'), s: ykSutun(bas,'Sicil'), v: ykSutun(bas,'Vardiya') };
-  const out = new Map();
-  rows.slice(1).forEach(r => {
-    const h = ykTarih(r[c.h]), t = ykTarih(r[c.t]), s = String(r[c.s] || '').trim();
-    if (!h || !t || !s) return;
-    if (!out.has(h)) out.set(h, new Map());
-    const w = out.get(h); if (!w.has(t)) w.set(t, new Map());
-    w.get(t).set(s, String(r[c.v] == null ? '' : r[c.v]).trim());
-  });
-  return out;
+  const c = { h: ykSutun(bas,'Hafta Başı'), t: ykSutun(bas,'Tarih'), s: ykSutun(bas,'Sicil'), v: ykSutun(bas,'Vardiya'), b: ykSutun(bas,'Bölüm') };
+  const satirlar = rows.slice(1).map(r => ({ h: ykTarih(r[c.h]), t: ykTarih(r[c.t]), s: String(r[c.s] || '').trim(),
+      v: String(r[c.v] == null ? '' : r[c.v]).trim(), b: ykBolum(c.b >= 0 ? r[c.b] : '') }))
+    .filter(x => x.h && x.t && x.s)
+    .sort((a, b) => YK_BOLUMLER.indexOf(a.b) - YK_BOLUMLER.indexOf(b.b));
+  const planlar = new Map(), bolumler = new Map(), cakisma = new Map();
+  for (const x of satirlar){
+    if (!planlar.has(x.h)){ planlar.set(x.h, new Map()); bolumler.set(x.h, { 'Personel': new Set(), 'Sosyal Medya': new Set() }); cakisma.set(x.h, new Set()); }
+    const bl = bolumler.get(x.h);
+    bl[x.b].add(x.s);
+    if (x.b === 'Sosyal Medya' && bl['Personel'].has(x.s)) cakisma.get(x.h).add(x.s);
+    const w = planlar.get(x.h); if (!w.has(x.t)) w.set(x.t, new Map());
+    w.get(x.t).set(x.s, x.v);
+  }
+  return { planlar, bolumler, cakisma };
 }
+function ykBolum(v){ return ykAnahtar(v) === ykAnahtar('Sosyal Medya') ? 'Sosyal Medya' : 'Personel'; }
 // Drive VARDİYA: o ayın sekmesinden o günün sütunu → Map(sicil→değer) ya da null
 async function ykDriveGun(tarih){
   const m = tarih.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
@@ -3131,6 +3306,22 @@ async function ykDriveGun(tarih){
     return out;
   } catch(e){ console.warn('VARDİYA okunamadı:', e.message); return null; }
 }
+// MANUEL SEBEP: o günün elle girilen sebepleri → Map(sicil→{sebep, grup})
+function ykManuelAyristir(rows, tarih){
+  const out = new Map();
+  (rows || []).slice(1).forEach(r => {
+    if (!r || ykTarih(r[0]) !== tarih) return;
+    const s = String(r[1] || '').trim(), sebep = String(r[2] || '').trim();
+    if (s && sebep) out.set(s, { sebep, grup: String(r[3] || '').trim() });
+  });
+  return out;
+}
+// GEÇ GİRİŞ: o gün kaydedilmiş durumlar → Map(sicil→durum)
+function ykGecDurumAyristir(rows, tarih){
+  const out = new Map();
+  (rows || []).slice(1).forEach(r => { if (r && ykTarih(r[0]) === tarih && r[1] && r[6]) out.set(String(r[1]).trim(), String(r[6]).trim()); });
+  return out;
+}
 
 // ---------- Sayfa geçişi ----------
 function ykSayfaAc(id){
@@ -3143,14 +3334,20 @@ function ykSayfaAc(id){
   YK_SAYFALAR.forEach(s => { document.getElementById('yk-' + s.id).style.display = s.id === id ? 'block' : 'none'; });
   if (id === 'plan') ykPlanSayfasi();
   if (id === 'personel') ykPersonelSayfasi();
+  if (id === 'ayar') ykAyarSayfasi();
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
 function ykDurum(id, msg, tur){ const el = document.getElementById(id); el.textContent = msg || ''; el.className = 'status' + (tur ? ' ' + tur : ''); }
 function ykEsc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
 function ykYuzde(x){ return (x * 100).toFixed(1).replace('.', ',') + '%'; }
+function ykKaydeden(){ return currentUserDisplayName || currentUserEmail || ''; }
 
 // ---------- Günlük Yoklama ----------
 let ykLogin = null, ykSonuc = null;
+let ykGirdi = null;                 // son hesaplamanın girdileri (sebep girilince yeniden hesaplamak için)
+let ykManuel = new Map();           // sicil → {sebep, grup} (o gün elle girilen, henüz kaydedilmemiş olabilir)
+let ykSebepEk = new Set();          // Kişi listesinden "Sebep" ile kutuya eklenen siciller
+let ykGecDurumlari = new Map();     // sicil → geç giriş durumu
 document.getElementById('ykLoginDosya').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   ykDurum('ykGunlukDurum', 'Dosya okunuyor…');
@@ -3166,7 +3363,7 @@ document.getElementById('ykLoginDosya').addEventListener('change', async e => {
     ykLogin = ykLoginOku(rows);
     const enCok = [...ykLogin.tarihler.entries()].sort((a, b) => b[1] - a[1])[0];
     if (enCok) document.getElementById('ykTarih').value = ykTarihToIso(enCok[0]);
-    const kisi = enCok ? ykLogin.girisler.get(enCok[0]).size : 0;
+    const kisi = enCok ? [...ykLogin.girisler.get(enCok[0]).values()].filter(g => g.ilk).length : 0;
     document.getElementById('ykLoginBilgi').textContent = `${f.name} · ${enCok ? enCok[0] : '?'} · ${kisi} kişi giriş yapmış`;
     ykDurum('ykGunlukDurum', '');
     await ykGunlukHesapla();
@@ -3181,22 +3378,39 @@ async function ykGunlukHesapla(){
   if (!ykLogin){ ykDurum('ykGunlukDurum', 'Önce Detaylı Durum dosyasını seç.', 'err'); return; }
   ykDurum('ykGunlukDurum', 'Personel, plan ve VARDİYA okunuyor…');
   try {
-    const [ayar, planlar, driveGun] = await Promise.all([ykAyarYukle(), ykPlanlariOku(), ykDriveGun(tarih)]);
-    let planGun = null;
-    for (const w of planlar.values()){ if (w.has(tarih)){ planGun = w.get(tarih); break; } }
+    const [ayar, plan, driveGun, [manRows, gecRows]] = await Promise.all([ykAyarYukle(), ykPlanlariOku(), ykDriveGun(tarih),
+      ykOku([`'${YK_TAB.manuel}'!A1:F100000`, `'${YK_TAB.gec}'!A1:J100000`])]);
+    let planGun = null, hafta = null;
+    for (const [h, w] of plan.planlar){ if (w.has(tarih)){ planGun = w.get(tarih); hafta = h; break; } }
+    const planUyari = [];
+    if (hafta){
+      const bl = plan.bolumler.get(hafta);
+      YK_BOLUMLER.forEach(b => { if (!bl[b].size) planUyari.push(`${hafta} haftasının ${b} planı yüklenmemiş.`); });
+      const ck = plan.cakisma.get(hafta);
+      if (ck.size) planUyari.push(`${ck.size} kişi hem Personel hem Sosyal Medya planında var; Sosyal Medya planı esas alındı (Sicil: ${[...ck].join(', ')}).`);
+    }
     const giris = ykLogin.girisler.get(tarih) || new Map();
-    if (!giris.size) ykDurum('ykGunlukDurum', `Yüklenen dosyada ${tarih} için giriş yok.`, 'warn');
+    if (![...giris.values()].some(g => g.ilk)) ykDurum('ykGunlukDurum', `Yüklenen dosyada ${tarih} için giriş yok.`, 'warn');
     else ykDurum('ykGunlukDurum', '');
-    ykSonuc = ykHesapla(ayar, tarih, planGun, driveGun, giris);
-    ykSonucCiz();
+    ykManuel = ykManuelAyristir(manRows, tarih);
+    ykGecDurumlari = ykGecDurumAyristir(gecRows, tarih);
+    ykSebepEk = new Set();
+    ykGirdi = { ayar, tarih, planGun, driveGun, giris, planUyari };
+    ykYenidenHesapla();
   } catch(err){ ykDurum('ykGunlukDurum', '✗ ' + err.message, 'err'); }
+}
+function ykYenidenHesapla(){
+  const g = ykGirdi;
+  ykDurum('ykKayitDurum', '');
+  ykSonuc = ykHesapla(g.ayar, g.tarih, g.planGun, g.driveGun, g.giris, ykManuel);
+  ykSonuc.uyarilar = g.planUyari.concat(ykSonuc.uyarilar);
+  ykSonucCiz();
 }
 
 function ykSonucCiz(){
   const s = ykSonuc;
   document.getElementById('ykSonuc').style.display = 'block';
   document.getElementById('ykBaslik').textContent = `${s.tarih} Tarihli Vardiya Raporu`;
-  ykDurum('ykKayitDurum', '');
   document.getElementById('ykUyari').textContent = s.uyarilar.map(u => '⚠ ' + u).join('\n');
   document.getElementById('ykOzetTablo').innerHTML =
     '<tr><th>Vardiya</th><th class="sayi">Planlanan</th><th class="sayi">Gerçekleşen</th><th class="sayi">Eksik</th><th class="sayi">Oran</th></tr>' +
@@ -3208,35 +3422,170 @@ function ykSonucCiz(){
   for (let i = 0; i < uz; i++) h += '<tr>' + bas.map(b => { const v = s.listeler[b][i] || ''; return `<td class="yaz${/SEBEP YOK/.test(v) ? ' yok' : ''}">${ykEsc(v)}</td>`; }).join('') + '</tr>';
   h += `<tr class="toplam"><td colspan="${bas.length}">Listelerdeki eksik: ${s.listeEksik} · Tablodaki eksik: ${s.toplam.eksik}${s.listeEksik === s.toplam.eksik ? ' ✓' : ' ✗'}</td></tr>`;
   document.getElementById('ykSebepTablo').innerHTML = h;
+  ykSebepKutuCiz();
+  ykGecCiz();
   ykKisiCiz();
 }
+
+// Sebebi girilmemiş kişiler kutusu: SEBEP YOK olanlar + o gün elle sebep girilenler + Kişi listesinden eklenenler.
+function ykSebepKutuCiz(){
+  const s = ykSonuc, ayar = ykGirdi.ayar;
+  const bilinenKod = new Set(ayar.sebepler.map(x => ykAnahtar(x.deger)));
+  document.getElementById('ykSebepListe').innerHTML = ayar.sebepler.map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.grup)}</option>`).join('');
+  const siciller = new Set([...s.sebepsiz.map(k => k.sicil), ...ykManuel.keys(), ...ykSebepEk]);
+  const kisiler = s.kisiler.filter(k => siciller.has(k.sicil)).sort((a, b) => (a.exAciklama === 'SEBEP YOK' ? 0 : 1) - (b.exAciklama === 'SEBEP YOK' ? 0 : 1) || a.ad.localeCompare(b.ad, 'tr'));
+  const kutu = document.getElementById('ykSebepKutu');
+  kutu.classList.toggle('tamam', !s.sebepsiz.length);
+  document.getElementById('ykSebepBaslik').textContent = s.sebepsiz.length
+    ? `Sebebi Girilmemiş Kişiler (${s.sebepsiz.length})` : 'Sebebi Girilmemiş Kişi Yok ✓';
+  if (!kisiler.length){ document.getElementById('ykSebepGiris').innerHTML = '<tr><td class="soluk">Herkesin sebebi belli. Başka birine sebep girmek için Kişi Listesi\'nde "Sebep" düğmesine bas.</td></tr>'; return; }
+  document.getElementById('ykSebepGiris').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Görev</th><th>Vardiya</th><th>Login</th><th>Sebep</th><th>Liste</th><th></th></tr>' +
+    kisiler.map(k => {
+      const m = ykManuel.get(k.sicil);
+      const deger = m ? m.sebep : '';
+      const yeni = deger && !bilinenKod.has(ykAnahtar(deger));
+      const grup = m ? (m.grup || 'Diğer') : 'Diğer';
+      return `<tr><td>${k.sicil}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.gorev)}</td><td>${ykEsc(k.vardiya || k.planVal || k.driveVal)}</td>` +
+        `<td>${k.login || '<span style="color:var(--danger)">YOK</span>'}</td>` +
+        `<td><input type="text" list="ykSebepListe" data-ykseb="${k.sicil}" value="${ykEsc(deger)}" placeholder="seç ya da yaz" style="min-width:190px;"></td>` +
+        `<td>${yeni ? `<select data-ykgrup="${k.sicil}">${YK_LISTE_GRUPLARI.map(g => `<option${g === grup ? ' selected' : ''}>${g}</option>`).join('')}</select>` : `<span class="soluk">${ykEsc(deger ? (ayar.sebepGrup.get(ykAnahtar(deger)) || '') : '')}</span>`}</td>` +
+        `<td>${m ? `<button class="btn y-btn" data-yksebsil="${k.sicil}">Temizle</button>` : ''}</td></tr>`;
+    }).join('');
+}
+document.getElementById('ykSebepGiris').addEventListener('change', e => {
+  const inp = e.target.closest('[data-ykseb]'), sel = e.target.closest('[data-ykgrup]');
+  if (inp){
+    const v = inp.value.replace(/\s+/g, ' ').trim(), sicil = inp.dataset.ykseb;
+    if (!v) ykManuel.delete(sicil);
+    else {
+      const kod = ykGirdi.ayar.sebepler.find(x => ykAnahtar(x.deger) === ykAnahtar(v));
+      ykManuel.set(sicil, kod ? { sebep: kod.deger, grup: '' } : { sebep: v, grup: (ykManuel.get(sicil) || {}).grup || 'Diğer' });
+    }
+    ykDurum('ykSebepDurum', 'Kaydedilmedi', 'warn');
+    ykYenidenHesapla();
+  }
+  if (sel){
+    const m = ykManuel.get(sel.dataset.ykgrup); if (m) m.grup = sel.value;
+    ykDurum('ykSebepDurum', 'Kaydedilmedi', 'warn');
+    ykYenidenHesapla();
+  }
+});
+document.getElementById('ykSebepGiris').addEventListener('click', e => {
+  const b = e.target.closest('[data-yksebsil]'); if (!b) return;
+  ykManuel.delete(b.dataset.yksebsil);
+  ykDurum('ykSebepDurum', 'Kaydedilmedi', 'warn');
+  ykYenidenHesapla();
+});
+async function ykManuelKaydet(){
+  const t = ykSonuc.tarih, zaman = new Date().toLocaleString('tr-TR');
+  const yeni = [...ykManuel.entries()].map(([s, m]) => [t, s, m.sebep, m.grup || '', ykKaydeden(), zaman]);
+  await ykGunSatirlariniYaz(YK_TAB.manuel, t, yeni, 6);
+  return yeni.length;
+}
+document.getElementById('ykSebepKaydetBtn').addEventListener('click', async () => {
+  if (!ykSonuc) return;
+  const btn = document.getElementById('ykSebepKaydetBtn'); btn.disabled = true;
+  ykDurum('ykSebepDurum', 'Kaydediliyor…');
+  try { const n = await ykManuelKaydet(); ykDurum('ykSebepDurum', `✓ ${ykSonuc.tarih} için ${n} elle girilen sebep kaydedildi.`, 'ok'); }
+  catch(err){ ykDurum('ykSebepDurum', '✗ ' + err.message, 'err'); }
+  btn.disabled = false;
+});
+
+// Geç girenler sekmesi
+document.querySelectorAll('[data-yksonuc]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-yksonuc]').forEach(x => x.classList.toggle('aktif', x === b));
+  document.getElementById('ykSonucRapor').style.display = b.dataset.yksonuc === 'rapor' ? 'block' : 'none';
+  document.getElementById('ykSonucGec').style.display = b.dataset.yksonuc === 'gec' ? 'block' : 'none';
+}));
+function ykGecDakika(durum, dk){
+  const gecDurum = ykGirdi.ayar.gecDurumlar[0] || 'Geç Login';
+  return ykAnahtar(durum) === ykAnahtar(gecDurum) ? dk : 0;
+}
+function ykGecCiz(){
+  const s = ykSonuc, ayar = ykGirdi.ayar;
+  document.getElementById('ykGecSekme').textContent = `Geç Girenler (${s.gec.length})`;
+  document.getElementById('ykGecDurumListe').innerHTML = ayar.gecDurumlar.map(d => `<option value="${ykEsc(d)}">`).join('');
+  document.getElementById('ykGecBilgi').textContent = `Vardiya başlangıcından ${ayar.tolerans} dakika ve daha sonra giriş yapanlar (ör. 09:00 vardiyası → ${ykSaatEkle('09:00:00', ayar.tolerans * 60)} ve sonrası). En geç giren en üstte. Durum varsayılan "${ayar.gecDurumlar[0] || 'Geç Login'}"; mazeret seçilirse dakika 0 yazılır.`;
+  if (!s.gec.length){ document.getElementById('ykGecTablo').innerHTML = '<tr><td class="soluk">Bu gün geç giren yok.</td></tr>'; return; }
+  document.getElementById('ykGecTablo').innerHTML = '<tr><th>Ad Soyad</th><th>Sicil</th><th>Vardiya</th><th>Giriş</th><th class="sayi">Gecikme (dk)</th><th>Durum</th><th class="sayi">Dakika</th></tr>' +
+    s.gec.map(g => {
+      const d = ykGecDurumlari.get(g.sicil) || ayar.gecDurumlar[0] || 'Geç Login';
+      return `<tr><td>${ykEsc(g.ad)}</td><td>${g.sicil}</td><td>${g.vardiya}</td><td>${g.login}</td><td class="sayi">${g.dk}</td>` +
+        `<td><input type="text" list="ykGecDurumListe" data-ykgec="${g.sicil}" value="${ykEsc(d)}" style="min-width:150px;"></td><td class="sayi">${ykGecDakika(d, g.dk)}</td></tr>`;
+    }).join('');
+}
+function ykSaatEkle(saat, sn){ const t = (ykSaniye(saat) + sn) % 86400; return ykIki(Math.floor(t / 3600)) + ':' + ykIki(Math.floor(t % 3600 / 60)) + ':' + ykIki(t % 60); }
+document.getElementById('ykGecTablo').addEventListener('change', e => {
+  const inp = e.target.closest('[data-ykgec]'); if (!inp) return;
+  const v = inp.value.replace(/\s+/g, ' ').trim();
+  if (v) ykGecDurumlari.set(inp.dataset.ykgec, v); else ykGecDurumlari.delete(inp.dataset.ykgec);
+  ykDurum('ykGecDurum', 'Kaydedilmedi', 'warn');
+  ykGecCiz();
+});
+async function ykGecKaydet(){
+  const t = ykSonuc.tarih, zaman = new Date().toLocaleString('tr-TR'), ayar = ykGirdi.ayar;
+  const yeni = ykSonuc.gec.map(g => { const d = ykGecDurumlari.get(g.sicil) || ayar.gecDurumlar[0] || 'Geç Login';
+    return [t, g.sicil, g.ad, g.vardiya, g.login, g.dk, d, ykGecDakika(d, g.dk), ykKaydeden(), zaman]; });
+  await ykGunSatirlariniYaz(YK_TAB.gec, t, yeni, 10);
+  return yeni.length;
+}
+document.getElementById('ykGecKaydetBtn').addEventListener('click', async () => {
+  if (!ykSonuc) return;
+  const btn = document.getElementById('ykGecKaydetBtn'); btn.disabled = true;
+  ykDurum('ykGecDurum', 'Kaydediliyor…');
+  try { const n = await ykGecKaydet(); ykDurum('ykGecDurum', `✓ ${ykSonuc.tarih} için ${n} geç giriş kaydedildi.`, 'ok'); }
+  catch(err){ ykDurum('ykGecDurum', '✗ ' + err.message, 'err'); }
+  btn.disabled = false;
+});
+
 function ykKisiCiz(){
   const q = ykAnahtar(document.getElementById('ykKisiAra').value);
   const sira = { 'Gelmedi':0, 'Yıllık İzin':1, 'Rapor':2, 'Diğer':3, 'Plan yok':4, 'Geldi':5, 'Çalışmıyor':6 };
   const liste = ykSonuc.kisiler.filter(k => !q || ykAnahtar(`${k.ad} ${k.sicil} ${k.aciklama} ${k.durum} ${k.vardiya}`).includes(q))
     .sort((a, b) => (sira[a.durum] ?? 9) - (sira[b.durum] ?? 9) || a.ad.localeCompare(b.ad, 'tr'));
   document.getElementById('ykKisiTablo').innerHTML =
-    '<tr><th>Sicil</th><th>Ad Soyad</th><th>Görev</th><th>Vardiya</th><th>Login</th><th>Durum</th><th>Açıklama</th></tr>' +
+    '<tr><th>Sicil</th><th>Ad Soyad</th><th>Görev</th><th>Vardiya</th><th>Login</th><th>Durum</th><th>Açıklama</th><th></th></tr>' +
     liste.map(k => `<tr><td>${k.sicil}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.gorev)}</td><td>${ykEsc(k.vardiya || k.planVal)}</td>` +
-      `<td>${k.login ? k.login : '<span style="color:var(--dim2)">—</span>'}</td>` +
-      `<td class="${k.durum === 'Gelmedi' ? 'yok' : (k.durum === 'Geldi' ? '' : 'soluk')}">${k.durum}</td><td>${ykEsc(k.aciklama)}</td></tr>`).join('');
+      `<td>${k.login ? k.login : '<span style="color:var(--danger)">YOK</span>'}</td>` +
+      `<td class="${k.durum === 'Gelmedi' ? 'yok' : (k.durum === 'Geldi' ? '' : 'soluk')}">${k.durum}</td><td>${ykEsc(k.aciklama)}</td>` +
+      `<td><button class="btn y-btn" data-yksebek="${k.sicil}">Sebep</button></td></tr>`).join('');
 }
 document.getElementById('ykKisiAra').addEventListener('input', () => ykSonuc && ykKisiCiz());
+document.getElementById('ykKisiTablo').addEventListener('click', e => {
+  const b = e.target.closest('[data-yksebek]'); if (!b) return;
+  ykSebepEk.add(b.dataset.yksebek);
+  ykSebepKutuCiz();
+  const kutu = document.getElementById('ykSebepKutu');
+  kutu.scrollIntoView({ behavior:'smooth', block:'start' });
+  const inp = kutu.querySelector(`[data-ykseb="${b.dataset.yksebek}"]`); if (inp) setTimeout(() => inp.focus(), 300);
+});
+
+// SEBEP YOK varken Excel ve mail üretilmez.
+function ykSebepYokEngeli(){
+  const n = ykSonuc.sebepsiz.length;
+  if (!n) return false;
+  ykDurum('ykKayitDurum', `✗ ${n} kişinin sebebi girilmemiş. Önce yukarıdaki kutudan sebeplerini gir; "SEBEP YOK" ile Excel ve mail hazırlanmaz.`, 'err');
+  const kutu = document.getElementById('ykSebepKutu');
+  kutu.scrollIntoView({ behavior:'smooth', block:'start' });
+  kutu.classList.add('vurgu'); setTimeout(() => kutu.classList.remove('vurgu'), 1800);
+  return true;
+}
 
 document.getElementById('ykKaydetBtn').addEventListener('click', async () => {
   if (!ykSonuc) return;
   const btn = document.getElementById('ykKaydetBtn'); btn.disabled = true;
   ykDurum('ykKayitDurum', 'Kaydediliyor…');
   try {
-    const [rows] = await ykOku([`'${YK_TAB.kayit}'!A1:J100000`]);
-    const kalan = rows.slice(1).filter(r => ykTarih(r[0]) !== ykSonuc.tarih);
     const zaman = new Date().toLocaleString('tr-TR');
     const yeni = ykSonuc.kisiler.filter(k => k.planli || k.login).map(k =>
-      [ykSonuc.tarih, k.sicil, k.ad, k.gorev, k.vardiya || k.planVal || k.driveVal, k.login, k.durum, k.aciklama, zaman, currentUserDisplayName || currentUserEmail]);
-    const tum = kalan.concat(yeni).map(r => { const x = r.slice(0, 10); while (x.length < 10) x.push(''); return x; });
-    tum.sort((a, b) => ykSira(ykTarih(a[0])) - ykSira(ykTarih(b[0])));
-    await ykSekmeYaz(YK_TAB.kayit, tum);
-    ykDurum('ykKayitDurum', `✓ ${ykSonuc.tarih} yoklaması kaydedildi (${yeni.length} kişi)${rows.length - 1 > kalan.length ? '; aynı günün eski kaydının yerine yazıldı' : ''}.`, 'ok');
+      [ykSonuc.tarih, k.sicil, k.ad, k.gorev, k.vardiya || k.planVal || k.driveVal, k.login || 'YOK', k.durum, k.aciklama, zaman, ykKaydeden()]);
+    const eskiVardi = await ykGunSatirlariniYaz(YK_TAB.kayit, ykSonuc.tarih, yeni, 10);
+    const nMan = await ykManuelKaydet();
+    const nGec = await ykGecKaydet();
+    ykDurum('ykSebepDurum', ''); ykDurum('ykGecDurum', '');
+    const sy = ykSonuc.sebepsiz.length;
+    ykDurum('ykKayitDurum', `✓ ${ykSonuc.tarih} yoklaması kaydedildi (${yeni.length} kişi, ${nMan} elle sebep, ${nGec} geç giriş)${eskiVardi ? '; aynı günün eski kaydının yerine yazıldı' : ''}.` +
+      (sy ? ` ${sy} kişinin sebebi hâlâ girilmemiş.` : ''), sy ? 'warn' : 'ok');
   } catch(err){ ykDurum('ykKayitDurum', '✗ ' + err.message, 'err'); }
   btn.disabled = false;
 });
@@ -3256,7 +3605,7 @@ function ykRaporHtml(){
   return h;
 }
 document.getElementById('ykKopyalaBtn').addEventListener('click', async () => {
-  if (!ykSonuc) return;
+  if (!ykSonuc || ykSebepYokEngeli()) return;
   const html = ykRaporHtml();
   const duz = html.replace(/<\/(td|th)>/g, '\t').replace(/<\/tr>/g, '\n').replace(/<br>|<\/p>/g, '\n').replace(/<[^>]+>/g, '');
   try {
@@ -3270,7 +3619,7 @@ document.getElementById('ykKopyalaBtn').addEventListener('click', async () => {
 // ve altında sayıları, 17. satırdan itibaren kişi listesi (izinliler önce, renkli Açıklama).
 function ykVardiyaEtiket(ad){ return String(ad).replace(/^(\d{2}:\d{2})-(\d{2}:\d{2})/, '$1 - $2'); }
 document.getElementById('ykExcelBtn').addEventListener('click', async () => {
-  if (!ykSonuc) return;
+  if (!ykSonuc || ykSebepYokEngeli()) return;
   const s = ykSonuc, wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('DÜZENLEME');
   const MAVI = 'FF00B0F0', TURUNCU = 'FFFFC000', KIRMIZI = 'FFFF0000', YESIL = 'FF92D050';
@@ -3297,10 +3646,9 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
   let r = 3;
   s.satirlar.forEach(x => {
     hucre('A' + r, ykVardiyaEtiket(x.ad), { fill:MAVI, font:{ bold:true }, align:{ horizontal:'left' } });
-    const izinli = x.ad.startsWith('İzinli');
-    hucre('B' + r, x.planlanan, Object.assign({}, sayi, izinli ? { fill:TURUNCU } : {}));
-    hucre('C' + r, izinli ? null : x.gerceklesen, sayi);
-    hucre('D' + r, izinli ? null : x.eksik, sayi);
+    hucre('B' + r, x.planlanan, sayi);
+    hucre('C' + r, x.gerceklesen, sayi);
+    hucre('D' + r, x.eksik, sayi);
     hucre('E' + r, x.oran, Object.assign({}, sayi, { numFmt:'0.00%' }));
     r++;
   });
@@ -3339,7 +3687,7 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
     if (x.login){
       const [h, mi, se] = x.login.split(':').map(Number);
       hucre('E' + k, (h * 3600 + mi * 60 + se) / 86400, { align:{ horizontal:'center' }, numFmt:'h:mm:ss' });
-    } else hucre('E' + k, '#N/A', { align:{ horizontal:'center' } });
+    } else hucre('E' + k, 'YOK', { align:{ horizontal:'center' } });
     hucre('F' + k, x.exAciklama || null, Object.assign({ align:{ horizontal:'center' } }, renk[x.exTur] ? { fill:renk[x.exTur], font:{ color:{ argb:'FF000000' } } } : {}));
     hucre('G' + k, null, {});
     k++;
@@ -3352,8 +3700,19 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
   a.download = `Yoklama_${s.tarih}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
 });
 
-// ---------- Haftalık Plan ----------
-let ykPlanOnizleme = null;
+// ---------- Haftalık Plan (Personel ve Sosyal Medya ayrı) ----------
+let ykPlanOnizleme = null, ykPlanBolum = 'Personel';
+document.querySelectorAll('[data-ykbolum]').forEach(b => b.addEventListener('click', () => {
+  ykPlanBolum = b.dataset.ykbolum;
+  document.querySelectorAll('[data-ykbolum]').forEach(x => x.classList.toggle('aktif', x === b));
+  document.getElementById('ykPlanMetin').value = '';
+  document.getElementById('ykPlanMetin').placeholder = `${ykPlanBolum} planını buraya yapıştır (Ctrl+V)…`;
+  document.getElementById('ykPlanOnizlemeWrap').style.display = 'none';
+  document.getElementById('ykPlanUyari').textContent = '';
+  document.getElementById('ykPlanKaydetBtn').disabled = true;
+  ykPlanOnizleme = null;
+  ykDurum('ykPlanDurum', '');
+}));
 async function ykPlanSayfasi(){
   if (!document.getElementById('ykPlanHafta').value){
     const d = new Date(); const g = (d.getDay() + 6) % 7; d.setDate(d.getDate() - g + 7);   // gelecek pazartesi
@@ -3364,11 +3723,12 @@ async function ykPlanSayfasi(){
 async function ykHaftalariCiz(){
   const el = document.getElementById('ykPlanHaftalar');
   try {
-    const planlar = await ykPlanlariOku();
+    const { planlar, bolumler, cakisma } = await ykPlanlariOku();
     const h = [...planlar.keys()].sort((a, b) => ykSira(b) - ykSira(a));
-    el.innerHTML = h.length ? '<table class="prev" style="width:auto;"><tr><th>Hafta</th><th class="sayi">Kişi</th></tr>' +
-      h.map(x => { const w = planlar.get(x); const kisi = new Set([].concat(...[...w.values()].map(m => [...m.keys()]))).size;
-        return `<tr><td>${x} – ${ykTarihEkle(x, 6)}</td><td class="sayi">${kisi}</td></tr>`; }).join('') + '</table>'
+    const hucre = n => n ? `<td class="sayi">${n}</td>` : '<td class="yok">yüklenmedi</td>';
+    el.innerHTML = h.length ? '<table class="prev" style="width:auto;"><tr><th>Hafta</th><th class="sayi">Personel</th><th class="sayi">Sosyal Medya</th><th>Not</th></tr>' +
+      h.map(x => { const b = bolumler.get(x), ck = cakisma.get(x);
+        return `<tr><td>${x} – ${ykTarihEkle(x, 6)}</td>${hucre(b['Personel'].size)}${hucre(b['Sosyal Medya'].size)}<td class="soluk">${ck.size ? `${ck.size} kişi iki planda da var (Sosyal Medya esas)` : ''}</td></tr>`; }).join('') + '</table>'
       : 'Henüz kayıtlı plan yok.';
   } catch(err){ el.textContent = '✗ ' + err.message; }
 }
@@ -3384,39 +3744,43 @@ document.getElementById('ykPlanOkuBtn').addEventListener('click', async () => {
     const hafta = ykIsoToTarih(document.getElementById('ykPlanHafta').value);
     if (!hafta){ ykDurum('ykPlanDurum', 'Hafta başı tarihini seç.', 'err'); return; }
     const per = new Map(ayar.personel.map(x => [x.sicil, x]));
+    const smMi = x => (ayar.gorevGrup.get(ykAnahtar(x.gorev)) || '') === 'SM';
     const uyarilar = p.uyarilar.slice();
     const yabanci = [...p.kisiler.entries()].filter(([s]) => !per.has(s));
     if (yabanci.length) uyarilar.push(`Personel listesinde olmayan ${yabanci.length} sicil: ${yabanci.map(([s, k]) => `${s} ${k.ad}`).join(', ')}. Kaydedilir ama yoklamaya girmesi için listeye eklenmeli.`);
-    const eksik = ayar.personel.filter(x => !p.kisiler.has(x.sicil));
-    if (eksik.length) uyarilar.push(`Listede olup planda olmayan ${eksik.length} kişi: ${eksik.map(x => x.ad).join(', ')}.`);
+    // Eksik kontrolü bu parçanın kişileriyle: Sosyal Medya sekmesinde SM görevliler, Personel sekmesinde diğerleri.
+    const eksik = ayar.personel.filter(x => (ykPlanBolum === 'Sosyal Medya') === smMi(x) && !p.kisiler.has(x.sicil));
+    if (eksik.length) uyarilar.push(`Listede olup bu planda olmayan ${eksik.length} kişi: ${eksik.map(x => x.ad).join(', ')}.`);
     const tanimsiz = new Set();
     p.kisiler.forEach(k => k.gunler.forEach(v => { if (v && !ykVardiya(v) && !ayar.sebepGrup.has(ykAnahtar(v))) tanimsiz.add(v); }));
-    if (tanimsiz.size) uyarilar.push(`SEBEPLER sekmesinde tanımlı olmayan değer: ${[...tanimsiz].join(', ')}. Yoklamada sebep olarak tanınmaz; SEBEPLER'e eklenebilir.`);
-    ykPlanOnizleme = { hafta, kisiler: p.kisiler };
+    if (tanimsiz.size) uyarilar.push(`Yoklama Ayarları > Vardiya Kodları'nda tanımlı olmayan değer: ${[...tanimsiz].join(', ')}. Yoklamada tanınmaz; oradan eklenebilir.`);
+    ykPlanOnizleme = { hafta, bolum: ykPlanBolum, kisiler: p.kisiler };
     const gunler = [0,1,2,3,4,5,6].map(i => ykTarihEkle(hafta, i));
     document.getElementById('ykPlanOnizleme').innerHTML = '<tr><th>Sicil</th><th>Ad</th>' + gunler.map(g => `<th>${g.slice(0,5)}</th>`).join('') + '</tr>' +
       [...p.kisiler.entries()].map(([s, k]) => `<tr><td${per.has(s) ? '' : ' class="yok"'}>${s}</td><td>${ykEsc(per.has(s) ? per.get(s).ad : k.ad)}</td>` +
         k.gunler.map(v => `<td class="${ykVardiya(v) ? '' : 'soluk'}">${ykEsc(v)}</td>`).join('') + '</tr>').join('');
     document.getElementById('ykPlanOnizlemeWrap').style.display = 'block';
     document.getElementById('ykPlanUyari').textContent = uyarilar.map(u => '⚠ ' + u).join('\n');
-    ykDurum('ykPlanDurum', `${p.kisiler.size} kişi okundu · hafta ${hafta} – ${gunler[6]}. Kontrol et, sonra "Planı Kaydet".`, 'ok');
+    ykDurum('ykPlanDurum', `${ykPlanBolum} planı: ${p.kisiler.size} kişi okundu · hafta ${hafta} – ${gunler[6]}. Kontrol et, sonra "Planı Kaydet".`, 'ok');
     document.getElementById('ykPlanKaydetBtn').disabled = false;
   } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); }
 });
 document.getElementById('ykPlanHafta').addEventListener('change', () => { document.getElementById('ykPlanKaydetBtn').disabled = true; });
 document.getElementById('ykPlanKaydetBtn').addEventListener('click', async () => {
   if (!ykPlanOnizleme) return;
-  const hafta = ykIsoToTarih(document.getElementById('ykPlanHafta').value);
+  const hafta = ykIsoToTarih(document.getElementById('ykPlanHafta').value), bolum = ykPlanOnizleme.bolum;
   const btn = document.getElementById('ykPlanKaydetBtn'); btn.disabled = true;
   ykDurum('ykPlanDurum', 'Kaydediliyor…');
   try {
-    const [rows] = await ykOku([`'${YK_TAB.plan}'!A1:D100000`]);
-    const kalan = rows.slice(1).filter(r => ykTarih(r[0]) !== hafta).map(r => [ykTarih(r[0]), ykTarih(r[1]), String(r[2] || ''), String(r[3] == null ? '' : r[3])]);
+    const [rows] = await ykOku([`'${YK_TAB.plan}'!A1:E100000`]);
+    const tumu = rows.slice(1).filter(r => r && r.length).map(r => [ykTarih(r[0]), ykTarih(r[1]), String(r[2] || ''), String(r[3] == null ? '' : r[3]), ykBolum(r[4])]);
+    // Yalnız bu haftanın bu parçası yenilenir; diğer parça ve diğer haftalar korunur.
+    const kalan = tumu.filter(r => !(r[0] === hafta && r[4] === bolum));
     const yeni = [];
-    ykPlanOnizleme.kisiler.forEach((k, s) => k.gunler.forEach((v, i) => yeni.push([hafta, ykTarihEkle(hafta, i), s, v])));
+    ykPlanOnizleme.kisiler.forEach((k, s) => k.gunler.forEach((v, i) => yeni.push([hafta, ykTarihEkle(hafta, i), s, v, bolum])));
     const tum = kalan.concat(yeni).sort((a, b) => ykSira(a[1]) - ykSira(b[1]));
     await ykSekmeYaz(YK_TAB.plan, tum);
-    ykDurum('ykPlanDurum', `✓ ${hafta} haftasının planı kaydedildi (${ykPlanOnizleme.kisiler.size} kişi)${rows.length - 1 > kalan.length ? '; bu haftanın eski planının yerine yazıldı' : ''}.`, 'ok');
+    ykDurum('ykPlanDurum', `✓ ${hafta} haftasının ${bolum} planı kaydedildi (${ykPlanOnizleme.kisiler.size} kişi)${tumu.length > kalan.length ? `; bu haftanın eski ${bolum} planının yerine yazıldı` : ''}.`, 'ok');
     ykHaftalariCiz();
   } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); btn.disabled = false; }
 });
@@ -3430,8 +3794,18 @@ async function ykPersonelSayfasi(){
 }
 function ykPerFormSecenek(){
   document.getElementById('ykPerGorev').innerHTML = ykAyar.gorevler.map(g => `<option>${ykEsc(g)}</option>`).join('');
-  document.getElementById('ykPerOzel').innerHTML = '<option value="">— yok —</option>' + ykAyar.ozeller.map(g => `<option>${ykEsc(g)}</option>`).join('');
+  document.getElementById('ykPerOzelListe').innerHTML = ykAyar.ozeller.map(g => `<option value="${ykEsc(g)}">`).join('');
+  document.getElementById('ykPerAdListe').innerHTML = ykAyar.personel.slice().sort((a, b) => a.ad.localeCompare(b.ad, 'tr'))
+    .map(p => `<option value="${ykEsc(p.ad)}">${ykEsc(p.sicil)} · ${ykEsc(p.tegsoft)}</option>`).join('');
+  ykPerOzelTurGoster();
 }
+// Özel durum kutusuna listede olmayan bir şey yazılırsa türü sorulur (İzin / Bilgi).
+function ykPerOzelTurGoster(){
+  const v = document.getElementById('ykPerOzel').value.trim();
+  const yeni = v && ykAyar && !ykAyar.ozeller.some(o => ykAnahtar(o) === ykAnahtar(v));
+  document.getElementById('ykPerOzelTurWrap').style.display = yeni ? '' : 'none';
+}
+document.getElementById('ykPerOzel').addEventListener('input', ykPerOzelTurGoster);
 function ykPerCiz(){
   const q = ykAnahtar(document.getElementById('ykPerAra').value);
   const liste = ykAyar.personel.filter(p => !q || ykAnahtar(`${p.sicil} ${p.ad} ${p.tegsoft} ${p.gorev} ${p.ozel}`).includes(q))
@@ -3447,20 +3821,36 @@ function ykPerCiz(){
     }).join('');
 }
 document.getElementById('ykPerAra').addEventListener('input', () => ykAyar && ykPerCiz());
+function ykPerFormaYukle(p){
+  ykPerDuzenlenen = p.sicil;
+  document.getElementById('ykPerFormBaslik').textContent = `Düzenle: ${p.ad}`;
+  document.getElementById('ykPerSicil').value = p.sicil;
+  document.getElementById('ykPerTegsoft').value = p.tegsoft;
+  document.getElementById('ykPerAd').value = p.ad;
+  if (p.gorev && !ykAyar.gorevler.includes(p.gorev)) document.getElementById('ykPerGorev').insertAdjacentHTML('beforeend', `<option>${ykEsc(p.gorev)}</option>`);
+  document.getElementById('ykPerGorev').value = p.gorev;
+  document.getElementById('ykPerOzel').value = p.ozel;
+  document.getElementById('ykPerBitis').value = ykTarihToIso(p.bitis);
+  ykPerOzelTurGoster();
+  ykDurum('ykPerDurum', '');
+}
+// Ad Soyad ya da Sicil kutusuna mevcut bir kişi yazılınca (listeden seçilince) form o kişiyle dolar.
+document.getElementById('ykPerAd').addEventListener('input', e => {
+  if (!ykAyar) return;
+  const a = ykAnahtar(e.target.value);
+  const p = ykAyar.personel.find(x => ykAnahtar(x.ad) === a);
+  if (p && p.sicil !== ykPerDuzenlenen) ykPerFormaYukle(p);
+});
+document.getElementById('ykPerSicil').addEventListener('input', e => {
+  if (!ykAyar) return;
+  const p = ykAyar.personel.find(x => x.sicil === e.target.value.trim());
+  if (p && p.sicil !== ykPerDuzenlenen) ykPerFormaYukle(p);
+});
 document.getElementById('ykPerTablo').addEventListener('click', e => {
   const d = e.target.closest('[data-perduz]'), s = e.target.closest('[data-persil]');
   if (d){
     const p = ykAyar.personel.find(x => x.sicil === d.dataset.perduz); if (!p) return;
-    ykPerDuzenlenen = p.sicil;
-    document.getElementById('ykPerFormBaslik').textContent = `Düzenle: ${p.ad}`;
-    document.getElementById('ykPerSicil').value = p.sicil;
-    document.getElementById('ykPerTegsoft').value = p.tegsoft;
-    document.getElementById('ykPerAd').value = p.ad;
-    if (p.gorev && !ykAyar.gorevler.includes(p.gorev)) document.getElementById('ykPerGorev').insertAdjacentHTML('beforeend', `<option>${ykEsc(p.gorev)}</option>`);
-    document.getElementById('ykPerGorev').value = p.gorev;
-    if (p.ozel && !ykAyar.ozeller.includes(p.ozel)) document.getElementById('ykPerOzel').insertAdjacentHTML('beforeend', `<option>${ykEsc(p.ozel)}</option>`);
-    document.getElementById('ykPerOzel').value = p.ozel;
-    document.getElementById('ykPerBitis').value = ykTarihToIso(p.bitis);
+    ykPerFormaYukle(p);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   if (s){
@@ -3472,21 +3862,33 @@ document.getElementById('ykPerTablo').addEventListener('click', e => {
 function ykPerTemizle(){
   ykPerDuzenlenen = null;
   document.getElementById('ykPerFormBaslik').textContent = 'Kişi Ekle';
-  ['ykPerSicil','ykPerTegsoft','ykPerAd','ykPerBitis'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('ykPerOzel').value = '';
+  ['ykPerSicil','ykPerTegsoft','ykPerAd','ykPerBitis','ykPerOzel'].forEach(id => document.getElementById(id).value = '');
+  ykPerOzelTurGoster();
 }
 document.getElementById('ykPerTemizleBtn').addEventListener('click', ykPerTemizle);
-document.getElementById('ykPerKaydetBtn').addEventListener('click', () => {
+document.getElementById('ykPerKaydetBtn').addEventListener('click', async () => {
+  const ozelHam = document.getElementById('ykPerOzel').value.replace(/\s+/g, ' ').trim();
+  const varOlan = ykAyar.ozeller.find(o => ykAnahtar(o) === ykAnahtar(ozelHam));
   const k = {
     sicil: document.getElementById('ykPerSicil').value.trim(),
     tegsoft: ykAd(document.getElementById('ykPerTegsoft').value),
     ad: document.getElementById('ykPerAd').value.replace(/\s+/g, ' ').trim().toLocaleUpperCase('tr-TR'),
     gorev: document.getElementById('ykPerGorev').value,
-    ozel: document.getElementById('ykPerOzel').value,
+    ozel: varOlan || ozelHam,
     bitis: ykIsoToTarih(document.getElementById('ykPerBitis').value),
   };
   if (!/^\d{4,6}$/.test(k.sicil) || !k.tegsoft){ ykDurum('ykPerDurum', 'Sicil (sayı) ve Tegsoft adı zorunlu.', 'err'); return; }
   if (!k.ad) k.ad = k.tegsoft;
+  // Yeni özel durum: önce ÖZEL DURUMLAR'a eklenir (tablodan yeniden okunup), sonra kişi kaydedilir.
+  if (ozelHam && !varOlan){
+    const tur = document.getElementById('ykPerOzelTur').value;
+    try {
+      ykDurum('ykPerDurum', 'Yeni özel durum ekleniyor…');
+      const [rows] = await ykOku([`'${YK_TAB.ozel}'!A1:B500`]);
+      const mevcut = rows.slice(1).filter(r => r && String(r[0] || '').trim());
+      if (!mevcut.some(r => ykAnahtar(r[0]) === ykAnahtar(ozelHam))) await ykSekmeYaz(YK_TAB.ozel, mevcut.map(r => [r[0], r[1] || '']).concat([[ozelHam, tur]]));
+    } catch(err){ ykDurum('ykPerDurum', '✗ Özel durum eklenemedi: ' + err.message, 'err'); return; }
+  }
   const eski = ykPerDuzenlenen;
   ykPerYaz(liste => {
     if (liste.some(p => p.sicil === k.sicil && p.sicil !== eski)) throw new Error(`Sicil ${k.sicil} listede zaten var.`);
@@ -3505,11 +3907,121 @@ async function ykPerYaz(degistir, mesaj, formuTemizle){
     liste.sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
     await ykSekmeYaz(YK_TAB.personel, liste.map(p => [p.sicil, p.tegsoft, p.ad, p.gorev, p.ozel, p.bitis]));
     await ykAyarYukle();
+    ykPerFormSecenek();
     if (formuTemizle) ykPerTemizle();
     ykPerCiz();
     ykDurum('ykPerDurum', '✓ ' + mesaj, 'ok');
   } catch(err){ ykDurum('ykPerDurum', '✗ ' + err.message, 'err'); }
 }
+
+// ---------- Yoklama Ayarları ----------
+let ykAyarKodlar = [], ykAyarOzeller = [];
+async function ykAyarSayfasi(){
+  document.getElementById('ykAyarKodTablo').innerHTML = '<tr><td class="soluk">Okunuyor…</td></tr>';
+  try {
+    const a = await ykAyarYukle();
+    ykAyarKodlar = a.sebepler.map(x => Object.assign({}, x));
+    ykAyarOzeller = a.ozelListe.map(x => Object.assign({}, x));
+    ykAyarKodCiz(); ykAyarOzelCiz();
+    document.getElementById('ykAyarTolerans').value = a.tolerans;
+    document.getElementById('ykAyarGecDurumlar').value = a.gecDurumlar.join(', ');
+    document.getElementById('ykAyarVarsayilan').value = a.varsayilanVardiya;
+    ['ykAyarKodDurum','ykAyarOzelDurum','ykAyarGenelDurum'].forEach(id => ykDurum(id, ''));
+  } catch(err){ document.getElementById('ykAyarKodTablo').innerHTML = `<tr><td class="yok">✗ ${ykEsc(err.message)}</td></tr>`; }
+}
+function ykAyarKodCiz(){
+  document.getElementById('ykAyarKodTablo').innerHTML = '<tr><th>Kod</th><th>Grup</th><th>Sayılacak Vardiya</th><th></th></tr>' +
+    ykAyarKodlar.map((x, i) => `<tr><td><input type="text" data-kod="${i}" data-alan="deger" value="${ykEsc(x.deger)}" style="min-width:200px;"></td>` +
+      `<td><select data-kod="${i}" data-alan="grup">${YK_KOD_GRUPLARI.map(g => `<option${g === x.grup ? ' selected' : ''}>${g}</option>`).join('')}</select></td>` +
+      `<td><input type="text" data-kod="${i}" data-alan="vardiya" value="${ykEsc(x.vardiya)}" placeholder="${x.grup === 'Çalışmıyor' ? '—' : 'ör. 08:00-18:00'}" style="width:120px;"></td>` +
+      `<td><button class="btn y-btn" data-kodsil="${i}">Sil</button></td></tr>`).join('');
+}
+function ykAyarOzelCiz(){
+  document.getElementById('ykAyarOzelTablo').innerHTML = '<tr><th>Özel Durum</th><th>Tür</th><th></th></tr>' +
+    ykAyarOzeller.map((x, i) => `<tr><td><input type="text" data-ozel="${i}" data-alan="ad" value="${ykEsc(x.ad)}" style="min-width:220px;"></td>` +
+      `<td><select data-ozel="${i}" data-alan="tur">${['Bilgi','İzin'].map(g => `<option${g === x.tur ? ' selected' : ''}>${g}</option>`).join('')}</select></td>` +
+      `<td><button class="btn y-btn" data-ozelsil="${i}">Sil</button></td></tr>`).join('');
+}
+document.getElementById('ykAyarKodTablo').addEventListener('input', e => {
+  const el = e.target.closest('[data-kod]'); if (!el) return;
+  ykAyarKodlar[+el.dataset.kod][el.dataset.alan] = el.value; ykDurum('ykAyarKodDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarKodTablo').addEventListener('change', e => {
+  const el = e.target.closest('[data-kod]'); if (!el) return;
+  ykAyarKodlar[+el.dataset.kod][el.dataset.alan] = el.value; ykDurum('ykAyarKodDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarKodTablo').addEventListener('click', e => {
+  const b = e.target.closest('[data-kodsil]'); if (!b) return;
+  ykAyarKodlar.splice(+b.dataset.kodsil, 1); ykAyarKodCiz(); ykDurum('ykAyarKodDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarKodEkle').addEventListener('click', () => {
+  ykAyarKodlar.push({ deger:'', grup:'Diğer', vardiya: ykAyar ? ykAyar.varsayilanVardiya : '' }); ykAyarKodCiz();
+  const son = document.querySelectorAll('#ykAyarKodTablo [data-alan="deger"]'); if (son.length) son[son.length - 1].focus();
+});
+document.getElementById('ykAyarKodKaydet').addEventListener('click', async () => {
+  const satirlar = [], gorulen = new Set();
+  for (const x of ykAyarKodlar){
+    const d = String(x.deger || '').replace(/\s+/g, ' ').trim(); if (!d) continue;
+    if (gorulen.has(ykAnahtar(d))){ ykDurum('ykAyarKodDurum', `✗ "${d}" iki kez yazılmış.`, 'err'); return; }
+    gorulen.add(ykAnahtar(d));
+    const vHam = String(x.vardiya || '').trim(), v = ykVardiya(vHam);
+    if (vHam && !v){ ykDurum('ykAyarKodDurum', `✗ "${d}" için vardiya saat aralığı olmalı (ör. 08:00-18:00).`, 'err'); return; }
+    satirlar.push([d, x.grup || 'Diğer', x.grup === 'Çalışmıyor' ? '' : v]);
+  }
+  ykDurum('ykAyarKodDurum', 'Kaydediliyor…');
+  try { await ykSekmeYaz(YK_TAB.sebep, satirlar); await ykAyarSayfasi(); ykDurum('ykAyarKodDurum', `✓ ${satirlar.length} kod kaydedildi.`, 'ok'); }
+  catch(err){ ykDurum('ykAyarKodDurum', '✗ ' + err.message, 'err'); }
+});
+document.getElementById('ykAyarOzelTablo').addEventListener('input', e => {
+  const el = e.target.closest('[data-ozel]'); if (!el) return;
+  ykAyarOzeller[+el.dataset.ozel][el.dataset.alan] = el.value; ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarOzelTablo').addEventListener('change', e => {
+  const el = e.target.closest('[data-ozel]'); if (!el) return;
+  ykAyarOzeller[+el.dataset.ozel][el.dataset.alan] = el.value; ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarOzelTablo').addEventListener('click', e => {
+  const b = e.target.closest('[data-ozelsil]'); if (!b) return;
+  ykAyarOzeller.splice(+b.dataset.ozelsil, 1); ykAyarOzelCiz(); ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
+});
+document.getElementById('ykAyarOzelEkle').addEventListener('click', () => {
+  ykAyarOzeller.push({ ad:'', tur:'Bilgi' }); ykAyarOzelCiz();
+  const son = document.querySelectorAll('#ykAyarOzelTablo [data-alan="ad"]'); if (son.length) son[son.length - 1].focus();
+});
+document.getElementById('ykAyarOzelKaydet').addEventListener('click', async () => {
+  const satirlar = [], gorulen = new Set();
+  for (const x of ykAyarOzeller){
+    const d = String(x.ad || '').replace(/\s+/g, ' ').trim(); if (!d) continue;
+    if (gorulen.has(ykAnahtar(d))){ ykDurum('ykAyarOzelDurum', `✗ "${d}" iki kez yazılmış.`, 'err'); return; }
+    gorulen.add(ykAnahtar(d)); satirlar.push([d, x.tur || 'Bilgi']);
+  }
+  ykDurum('ykAyarOzelDurum', 'Kaydediliyor…');
+  try { await ykSekmeYaz(YK_TAB.ozel, satirlar); await ykAyarSayfasi(); ykDurum('ykAyarOzelDurum', `✓ ${satirlar.length} özel durum kaydedildi.`, 'ok'); }
+  catch(err){ ykDurum('ykAyarOzelDurum', '✗ ' + err.message, 'err'); }
+});
+document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () => {
+  const tol = document.getElementById('ykAyarTolerans').value.trim();
+  const dur = document.getElementById('ykAyarGecDurumlar').value.split(',').map(s => s.trim()).filter(Boolean);
+  const vHam = document.getElementById('ykAyarVarsayilan').value.trim(), v = ykVardiya(vHam);
+  if (tol === '' || isNaN(Number(tol)) || Number(tol) < 0){ ykDurum('ykAyarGenelDurum', '✗ Tolerans 0 ya da daha büyük bir sayı olmalı.', 'err'); return; }
+  if (!dur.length){ ykDurum('ykAyarGenelDurum', '✗ En az bir geç giriş durumu yaz.', 'err'); return; }
+  if (vHam && !v){ ykDurum('ykAyarGenelDurum', '✗ Vardiya saat aralığı olmalı (ör. 08:00-18:00).', 'err'); return; }
+  ykDurum('ykAyarGenelDurum', 'Kaydediliyor…');
+  try {
+    // AYARLAR'daki diğer satırlar korunur; yalnız bu üç ayar güncellenir.
+    const [rows] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]);
+    const yeni = new Map([[YK_AYAR_ANAHTAR.tolerans, String(Number(tol))], [YK_AYAR_ANAHTAR.durumlar, dur.join(', ')], [YK_AYAR_ANAHTAR.varsayilan, v]]);
+    const satirlar = rows.slice(1).filter(r => r && String(r[0] || '').trim()).map(r => {
+      const a = [...yeni.keys()].find(k => ykAnahtar(k) === ykAnahtar(r[0]));
+      if (a){ const d = yeni.get(a); yeni.delete(a); return [a, d]; }
+      return [r[0], r[1] == null ? '' : r[1]];
+    });
+    yeni.forEach((d, a) => satirlar.push([a, d]));
+    await ykSekmeYaz(YK_TAB.ayar, satirlar);
+    await ykAyarSayfasi();
+    ykDurum('ykAyarGenelDurum', '✓ Kaydedildi.', 'ok');
+  } catch(err){ ykDurum('ykAyarGenelDurum', '✗ ' + err.message, 'err'); }
+});
 
 /* ===== PANEL KÖPRÜSÜ =====
    Bu program alo-144/panel.html içinde (iframe + ?panel=1) açıldığında devreye girer:

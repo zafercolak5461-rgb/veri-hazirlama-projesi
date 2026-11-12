@@ -316,7 +316,7 @@
             <select id="ykPerGorev"></select>
           </div>
           <div class="row" style="margin-top:10px;">
-            <label>Özel durum: <input type="text" id="ykPerOzel" list="ykPerOzelListe" placeholder="— yok —" style="min-width:200px;" autocomplete="off"></label>
+            <label>Özel durum: <input type="text" id="ykPerOzel" class="yk-liste-ac" list="ykPerOzelListe" placeholder="— yok —" style="min-width:200px;" autocomplete="off"></label>
             <datalist id="ykPerOzelListe"></datalist>
             <label id="ykPerOzelTurWrap" style="display:none;">Yeni özel durum türü: <select id="ykPerOzelTur"><option>Bilgi</option><option>İzin</option></select></label>
             <label>Bitiş: <input type="date" id="ykPerBitis"></label>
@@ -3471,7 +3471,7 @@ function ykSebepKutuCiz(){
       const grup = m ? (m.grup || 'Diğer') : 'Diğer';
       return `<tr><td>${k.sicil}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.gorev)}</td><td>${ykEsc(k.vardiya || k.planVal || k.driveVal)}</td>` +
         `<td>${k.login || '<span style="color:var(--danger)">YOK</span>'}</td>` +
-        `<td><input type="text" list="ykSebepListe" data-ykseb="${k.sicil}" value="${ykEsc(deger)}" placeholder="seç ya da yaz" style="min-width:190px;"></td>` +
+        `<td><input type="text" class="yk-liste-ac" list="ykSebepListe" data-ykseb="${k.sicil}" value="${ykEsc(deger)}" placeholder="seç ya da yaz" style="min-width:190px;"></td>` +
         `<td>${yeni ? `<select data-ykgrup="${k.sicil}">${YK_LISTE_GRUPLARI.map(g => `<option${g === grup ? ' selected' : ''}>${g}</option>`).join('')}</select>` : `<span class="soluk">${ykEsc(deger ? (ayar.sebepGrup.get(ykAnahtar(deger)) || '') : '')}</span>`}</td>` +
         `<td>${m ? `<button class="btn y-btn" data-yksebsil="${k.sicil}">Temizle</button>` : ''}</td></tr>`;
     }).join('');
@@ -3535,7 +3535,7 @@ function ykGecCiz(){
     s.gec.map(g => {
       const d = ykGecDurumlari.get(g.sicil) || ayar.gecDurumlar[0] || 'Geç Login';
       return `<tr><td>${ykEsc(g.ad)}</td><td>${g.sicil}</td><td>${g.vardiya}</td><td>${g.login}</td><td class="sayi">${g.dk}</td>` +
-        `<td><input type="text" list="ykGecDurumListe" data-ykgec="${g.sicil}" value="${ykEsc(d)}" style="min-width:150px;"></td><td class="sayi">${ykGecDakika(d, g.dk)}</td></tr>`;
+        `<td><input type="text" class="yk-liste-ac" list="ykGecDurumListe" data-ykgec="${g.sicil}" value="${ykEsc(d)}" style="min-width:150px;"></td><td class="sayi">${ykGecDakika(d, g.dk)}</td></tr>`;
     }).join('');
 }
 function ykSaatEkle(saat, sn){ const t = (ykSaniye(saat) + sn) % 86400; return ykIki(Math.floor(t / 3600)) + ':' + ykIki(Math.floor(t % 3600 / 60)) + ':' + ykIki(t % 60); }
@@ -3778,7 +3778,7 @@ async function ykPlanOnizlemeCiz(){
   const gunler = [0,1,2,3,4,5,6].map(i => ykTarihEkle(o.hafta, i));
   document.getElementById('ykPlanOnizleme').innerHTML = '<tr><th>Sicil</th><th>Ad</th>' + gunler.map(g => `<th>${g.slice(0,5)}</th>`).join('') + '</tr>' +
     [...o.kisiler.entries()].map(([s, k]) => `<tr><td${per.has(s) ? '' : ' class="yok"'}>${s}</td><td>${ykEsc(per.has(s) ? per.get(s).ad : k.ad)}</td>` +
-      k.gunler.map((v, i) => `<td><input type="text" class="${ykPlanHucreSinif(v, k.ilk ? k.ilk[i] : v)}" list="ykPlanSecenek" data-plans="${s}" data-plang="${i}" value="${ykEsc(v)}" autocomplete="off"></td>`).join('') + '</tr>').join('');
+      k.gunler.map((v, i) => `<td><input type="text" class="${ykPlanHucreSinif(v, k.ilk ? k.ilk[i] : v)} yk-liste-ac" list="ykPlanSecenek" data-plans="${s}" data-plang="${i}" value="${ykEsc(v)}" autocomplete="off"></td>`).join('') + '</tr>').join('');
   document.getElementById('ykPlanOnizlemeWrap').style.display = 'block';
   document.getElementById('ykPlanDuzenBilgi').style.display = 'block';
 }
@@ -3792,10 +3792,11 @@ document.getElementById('ykPlanOnizleme').addEventListener('input', e => {
   const inp = e.target.closest('[data-plans]'); if (!inp || !ykPlanOnizleme) return;
   const k = ykPlanOnizleme.kisiler.get(inp.dataset.plans); if (!k) return;
   const i = +inp.dataset.plang;
+  if (inp.value === '' && inp.dataset.eski !== undefined) return;   // liste açıkken geçici boşluk
   // "08.00 - 18.00" gibi yazımı tek biçime çevir
   const v = inp.value.replace(/\s+/g, ' ').trim();
   k.gunler[i] = ykVardiya(v) && /^\s*\d{1,2}[:.]\d{2}\s*-\s*\d{1,2}[:.]\d{2}\s*$/.test(v) ? ykVardiya(v) : v;
-  inp.className = ykPlanHucreSinif(k.gunler[i], k.ilk ? k.ilk[i] : k.gunler[i]);
+  inp.className = ykPlanHucreSinif(k.gunler[i], k.ilk ? k.ilk[i] : k.gunler[i]) + ' yk-liste-ac';
   if (ykPlanOnizleme.kayitli) document.getElementById('ykPlanKaydetBtn').disabled = false;
 });
 document.getElementById('ykPlanOnizleme').addEventListener('change', e => {
@@ -4141,6 +4142,22 @@ document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () 
     await ykAyarSayfasi();
     ykDurum('ykAyarGenelDurum', '✓ Kaydedildi.', 'ok');
   } catch(err){ ykDurum('ykAyarGenelDurum', '✗ ' + err.message, 'err'); }
+});
+
+// Açılır listeli kutular: tarayıcı listeyi kutudaki yazıya göre süzdüğü için, tıklanınca kutu geçici boşaltılır
+// (eski değer soluk yazı olarak görünür) ve bütün liste açılır. Bir şey seçilmeden çıkılırsa eski değer geri gelir.
+document.addEventListener('focusin', e => {
+  const inp = e.target.closest && e.target.closest('input.yk-liste-ac'); if (!inp) return;
+  if (inp.value === '') return;
+  inp.dataset.eski = inp.value; inp.dataset.eskiYer = inp.placeholder || '';
+  inp.placeholder = inp.value; inp.value = '';
+});
+document.addEventListener('focusout', e => {
+  const inp = e.target.closest && e.target.closest('input.yk-liste-ac'); if (!inp || inp.dataset.eski === undefined) return;
+  const eski = inp.dataset.eski, yer = inp.dataset.eskiYer;
+  delete inp.dataset.eski; delete inp.dataset.eskiYer;
+  inp.placeholder = yer;
+  if (inp.value === ''){ inp.value = eski; inp.dispatchEvent(new Event('input', { bubbles:true })); }
 });
 
 /* ===== PANEL KÖPRÜSÜ =====

@@ -3690,7 +3690,8 @@ function ykRaporHtml(){
   const uz = Math.max(1, ...bas.map(b => s.listeler[b[1]].length));
   let h = tablo + '<tr>' + bas.map(b => `<td style="${mavi}text-align:center;min-width:150px;">${b[0]}</td>`).join('') + '</tr>';
   for (let i = 0; i < uz; i++) h += '<tr>' + bas.map(b => `<td style="${td}font-weight:bold;">${ykEsc((s.listeler[b[1]][i] || '').toLocaleUpperCase('tr-TR')) || '&nbsp;'}</td>`).join('') + '</tr>';
-  h += '<tr>' + bas.map(b => `<td style="${mavi}text-align:center;">${s.listeler[b[1]].length}</td>`).join('') + '</tr></table><br>';
+  h += '<tr>' + bas.map(b => `<td style="${mavi}text-align:center;">${s.listeler[b[1]].length}</td>`).join('') + '</tr></table>';
+  h = ykYanaGrafik(h, 'dagilim') + '<br>';
   // 2) Tarihli vardiya raporu
   const sayi = `${td}font-weight:bold;text-align:center;`;
   h += tablo + `<tr><td style="${mavi}text-align:center;">${s.tarih}</td><td colspan="4" style="${mavi}">TARİHLİ VARDİYA RAPORU</td></tr>`;
@@ -3699,7 +3700,8 @@ function ykRaporHtml(){
     h += `<tr><td style="${mavi}min-width:160px;">${ykEsc(ykVardiyaEtiket(r.ad))}</td><td style="${sayi}min-width:70px;">${r.planlanan}</td><td style="${sayi}min-width:90px;">${r.gerceklesen}</td><td style="${sayi}min-width:50px;">${r.eksik}</td><td style="${sayi}min-width:60px;">${ykYuzde2(r.oran)}</td></tr>`;
   });
   h += `<tr><td style="${mavi}">Toplam Planlanan</td><td style="${mavi}text-align:center;">${s.toplam.planlanan}</td><td style="${mavi}text-align:center;">${s.toplam.gerceklesen}</td><td style="${mavi}text-align:center;">${s.toplam.eksik}</td><td style="${mavi}text-align:center;">${ykYuzde2(s.toplam.oran)}</td></tr>`;
-  h += `<tr><td style="${mavi}">ALL</td><td style="${mavi}text-align:center;">${s.kisiler.length}</td><td></td><td></td><td></td></tr></table><br>`;
+  h += `<tr><td style="${mavi}">ALL</td><td style="${mavi}text-align:center;">${s.kisiler.length}</td><td></td><td></td><td></td></tr></table>`;
+  h = h.slice(0, h.lastIndexOf('<br>') + 4) + ykYanaGrafik(h.slice(h.lastIndexOf('<br>') + 4), 'doluluk') + '<br>';
   // 3) Kişi listesi
   h += tablo + '<tr>' + ['ADI SOYADI','Sicil','Görevi','Vardiya','Login Saati','Açıklama'].map(x => `<td style="${mavi}text-align:center;">${x}</td>`).join('') + '</tr>';
   ykKisiSirali(s).forEach(x => {
@@ -3712,22 +3714,36 @@ function ykRaporHtml(){
   return h;
 }
 
+// Mailde bir tablonun sağına grafik koyar (iki sütunlu düzen tablosu). Grafik çizilemezse tablo tek başına kalır.
+function ykYanaGrafik(tabloHtml, parca){
+  try {
+    const g = ykGrafikCanvas(ykSonuc, parca), en = g.en, boy = g.boy;
+    return `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;"><tr><td valign="top">${tabloHtml}</td><td style="width:24px;"></td>` +
+      `<td valign="top"><img src="${g.canvas.toDataURL('image/png')}" width="${en}" height="${boy}" alt="Grafik" style="display:block;width:${en}px;height:${boy}px;"></td></tr></table>`;
+  } catch(err){ return tabloHtml; }
+}
 // ---------- Grafik (ekran ve Excel için aynı resim) ----------
 // Üstte vardiya bazında doluluk (yeşil gelen + kırmızı eksik, uçta sayı ve oran), altta eksiklerin dağılımı.
-function ykGrafikCanvas(s){
-  const W = 760, olcek = 2, etiketG = 200, yaziG = 190, barG = W - etiketG - yaziG - 20, satH = 26;
+// parca: 'hepsi' (ekran, Excel) · 'doluluk' / 'dagilim' (mailde tabloların yanına ayrı ayrı)
+function ykGrafikCanvas(s, parca){
+  parca = parca || 'hepsi';
+  const dol = parca !== 'dagilim', dg = parca !== 'doluluk';
+  // Mail parçaları dar çizilir (küçültülünce yazı okunmaz hale gelmesin).
+  const dar = parca !== 'hepsi';
+  const W = dar ? 560 : 760, olcek = 2, etiketG = dar ? 150 : 200, yaziG = dar ? 150 : 190, barG = W - etiketG - yaziG - 20, satH = dar ? 24 : 26;
   const vSatir = s.satirlar.concat([{ ad:'Toplam', planlanan:s.toplam.planlanan, gerceklesen:s.toplam.gerceklesen, eksik:s.toplam.eksik, oran:s.toplam.oran, toplam:true }]);
   // Eksiklerin dağılımı: Rapor / Yıllık İzin / Diğer; yüzdeler o günün Toplam Planlanan'ına göre.
   const dag = [['Rapor', s.listeler['Rapor'].length, '#E07B39'], ['Yıllık İzin', s.listeler['Yıllık İzin'].length, '#3B7DD8'],
                ['Diğer', s.listeler['Diğer'].length, '#8E6CC9']];
   const dagTop = dag.reduce((t, x) => t + x[1], 0), plan = s.toplam.planlanan;
   const yz = n => '%' + (plan ? n / plan * 100 : 0).toFixed(1).replace('.', ',');
-  const H = 40 + vSatir.length * satH + 50 + (dag.length + 1) * satH + 20;
+  const H = (dol ? 40 + vSatir.length * satH + 14 : 0) + (dg ? 36 + (dag.length + 1) * satH : 0) + 16;
   const cv = document.createElement('canvas'); cv.width = W * olcek; cv.height = H * olcek;
   const c = cv.getContext('2d'); c.scale(olcek, olcek);
   c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
   const yazi = (t, x, y, o) => { c.font = `${o && o.kalin ? 'bold ' : ''}${(o && o.boy) || 12}px Arial`; c.fillStyle = (o && o.renk) || '#222'; c.textAlign = (o && o.hiza) || 'left'; c.textBaseline = 'middle'; c.fillText(t, x, y); };
   let y = 18;
+  if (dol){
   yazi(`${s.tarih} · Vardiya bazında doluluk`, 10, y, { kalin:true, boy:14 }); y += 22;
   vSatir.forEach(r => {
     const my = y + satH / 2;
@@ -3745,6 +3761,8 @@ function ykGrafikCanvas(s){
   // açıklama
   c.fillStyle = '#2E9E5B'; c.fillRect(W - 190, 10, 12, 12); yazi('Gelen', W - 172, 16, { boy:11 });
   c.fillStyle = '#D64545'; c.fillRect(W - 120, 10, 12, 12); yazi('Eksik', W - 102, 16, { boy:11 });
+  } else y = 0;
+  if (dg){
   yazi(`Eksiklerin dağılımı (planlanan ${plan} kişiye göre)`, 10, y + 8, { kalin:true, boy:14 }); y += 28;
   // Çubuk uzunluğu yazan yüzdeyle aynı: tam çubuk = planlananın tamamı.
   dag.concat([['Toplam', dagTop, '#555', true]]).forEach(([ad, n, renk, top]) => {
@@ -3756,6 +3774,7 @@ function ykGrafikCanvas(s){
     yazi(`${n} kişi · ${yz(n)}`, etiketG + barG + 10, my, { kalin: !!top });
     y += satH;
   });
+  }
   return { canvas: cv, en: W, boy: H };
 }
 function ykGrafikCiz(){

@@ -5276,6 +5276,7 @@ function gvSebepleriUygula(sonuc, kay){
     if (!v){ const dv = String(kay.drive.get(k.sicil) || '').trim(); if (dv && !ykVardiya(dv)) v = dv; }
     if (!v){ const pv = String(kay.plan.get(k.sicil) || '').trim(); if (pv && !ykVardiya(pv)) v = pv; }
     if (v && !ckod(v)) k.calisanSebep = v;
+    if (k.calisanSebep) k.sistemDisi = [];   // kayıtlı veriden gelen eski aralıklar da düşer
   });
   sonuc.kisiler = sonuc.kisiler.filter(k => !(k.yok && k.calismiyor));
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA

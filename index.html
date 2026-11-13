@@ -3490,7 +3490,7 @@ function ykSayfaAc(id){
   if (id === 'personel') ykPersonelSayfasi();
   if (id === 'ayar') ykAyarSayfasi();
   if (id === 'gvayar') gvAyarSayfasi();
-  if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); }
+  if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
 function ykDurum(id, msg, tur){ const el = document.getElementById(id); el.textContent = msg || ''; el.className = 'status' + (tur ? ' ' + tur : ''); }
@@ -4870,6 +4870,62 @@ async function gvAyarlariYaz(sutunlar){
     method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
 }
 
+// ---------- Son hazırlanan gün (YOKLAMA > GÜNLÜK VERİ SON) ----------
+// Her "Veriyi Hazırla"da sonuç bu sekmeye yazılır (öncekinin yerine). Sayfa yeniden açılınca dosya yüklemeden gelir.
+// Düzen: A1 Tarih | B1 tarih ; A2 Kaydeden | B2 ad + saat ; A3 Uyarılar | B3 metin ; 5. satır başlık ; 6. satırdan veri.
+const GV_SON_TAB = 'GÜNLÜK VERİ SON';
+const GV_SON_SABIT = ['Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri'];
+async function gvSekmeHazir(ad){
+  const adlar = await getSheetTabNames(YOKLAMA_SHEET_ID);
+  if (adlar.includes(ad)) return;
+  await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}:batchUpdate`, { method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: ad } } }] }) });
+}
+async function gvSonKaydet(sonuc){
+  await gvSekmeHazir(GV_SON_TAB);
+  const basliklar = gvSutunlar.map(x => x.baslik);
+  const d = new Date(), zaman = `${ykTarih(d)} ${ykIki(d.getHours())}:${ykIki(d.getMinutes())}`;
+  const satirlar = [['Tarih', sonuc.tarih], ['Kaydeden', `${ykKaydeden()} · ${zaman}`], ['Uyarılar', sonuc.uyarilar.join('\n')], [],
+    GV_SON_SABIT.concat(basliklar)].concat(sonuc.kisiler.map(k =>
+      [k.sicil, k.ad, k.tegsoft, k.grup, k.takim].concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; }))));
+  await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ`)}:clear`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
+  await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1`)}?valueInputOption=RAW`, {
+    method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
+  return zaman;
+}
+// Kayıtlı son günü okur → { tarih, kisiler, uyarilar, kaydeden } ya da null. Değerler biçimsiz (saniye sayı olarak) okunur.
+async function gvSonOku(){
+  let rows;
+  try {
+    const d = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ2000`)}?valueRenderOption=UNFORMATTED_VALUE`);
+    rows = d.values || [];
+  } catch(err){ if (/Unable to parse range|400/.test(err.message)) return null; throw err; }
+  const tarih = rows[0] && ykTarih(String(rows[0][1] || ''));
+  const bas = rows[4] || [];
+  if (!tarih || !bas.length) return null;
+  const n = GV_SON_SABIT.length;
+  const kisiler = rows.slice(5).filter(r => r && r[0] !== '' && r[0] != null).map(r => {
+    const degerler = {};
+    bas.slice(n).forEach((b, i) => { if (b) degerler[b] = r[n + i] == null ? '' : r[n + i]; });
+    return { sicil: String(r[0]), ad: r[1] || '', tegsoft: r[2] || '', grup: r[3] || '', takim: r[4] || '', degerler };
+  });
+  const uyarilar = String((rows[2] && rows[2][1]) || '').split('\n').filter(Boolean);
+  return { tarih, kisiler, uyarilar, kaydeden: (rows[1] && rows[1][1]) || '' };
+}
+async function gvSonuGetir(){
+  if (gvSonuc) return;
+  try {
+    await gvAyarlariOku();
+    const son = await gvSonOku();
+    if (!son || gvSonuc) return;
+    gvSonuc = { tarih: son.tarih, kisiler: son.kisiler, uyarilar: son.uyarilar };
+    if (!gvAktifGrup || (gvAktifGrup !== GV_ANA && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
+    document.getElementById('gvTarih').value = ykTarihToIso(son.tarih);
+    gvSonucCiz();
+    ykDurum('gvDurum', `Kayıtlı son veri gösteriliyor: ${son.tarih} (${son.kaydeden}). Yeni gün için raporları yükle.`, 'ok');
+  } catch(err){ ykDurum('gvDurum', '✗ Kayıtlı veri okunamadı: ' + err.message, 'err'); }
+}
+
 // ---------- Günlük Veri Hazırlama sayfası ----------
 function gvDosyaBilgiCiz(){
   document.getElementById('gvDosyalar').innerHTML = GV_RAPORLAR.map(r => {
@@ -4908,7 +4964,7 @@ document.getElementById('gvHazirlaBtn').addEventListener('click', () => gvHazirl
 async function gvHazirla(){
   const tarih = ykIsoToTarih(document.getElementById('gvTarih').value);
   if (!tarih){ ykDurum('gvDurum', 'Tarih seç.', 'err'); return; }
-  if (!Object.keys(gvDosyalar).length){ ykDurum('gvDurum', 'Önce raporları yükle.', 'err'); return; }
+  if (!Object.keys(gvDosyalar).length){ ykDurum('gvDurum', gvSonuc ? 'Ekrandaki kayıtlı son veri. Yeniden hesaplamak ya da yeni gün için raporları yükle.' : 'Önce raporları yükle.', gvSonuc ? 'warn' : 'err'); return; }
   ykDurum('gvDurum', 'Personel Listesi, sütun ayarları ve plan okunuyor…');
   try {
     const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
@@ -4920,6 +4976,8 @@ async function gvHazirla(){
     ykDurum('gvDurum', '');
     if (!gvAktifGrup || (gvAktifGrup !== GV_ANA && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
     gvSonucCiz();
+    try { const z = await gvSonKaydet(gvSonuc); ykDurum('gvDurum', `✓ ${tarih} verisi kaydedildi (${z}); sayfayı yeniden açınca dosya yüklemeden gelir.`, 'ok'); }
+    catch(err){ ykDurum('gvDurum', '⚠ Tablo hazırlandı ama kaydedilemedi (yeniden açınca dosyaları tekrar yüklemen gerekir): ' + err.message, 'warn'); }
   } catch(err){ ykDurum('gvDurum', '✗ ' + err.message, 'err'); }
 }
 

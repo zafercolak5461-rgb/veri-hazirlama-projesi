@@ -4585,7 +4585,8 @@ const GV_NOT_TUR = { sebep:'Sebep', gecDegil:'Geç Değil', staffKapali:'Vardiya
 const GV_SD = '__sd';   // Sistem Dışı Süreler sekmesi
 // Koşullu biçimlendirme kuralları: Sütun | Koşul | Değer | Değer 2 | Dolgu | Yazı | Kalın | Ana | Asistan | SM | Uzman (boşsa hepsi)
 const GV_KOSUL_TAB = 'GÜNLÜK VERİ KOŞULLAR';
-const GV_KOSULLAR = ['büyüktür', 'küçüktür', 'arası', 'eşittir', 'içerir', 'dolu', 'geç giriş', 'geç değil işaretli', 'vardiyadan az'];
+const GV_KOSULLAR = ['büyüktür', 'küçüktür', 'arası', 'eşittir', 'içerir', 'dolu', 'geç giriş', 'geç değil işaretli', 'vardiyadan az', 'izne göre büyüktür'];
+// "izne göre büyüktür": Değer = izinsiz sınır (1:40:00), Değer 2 = izin saati başına düşülen dakika (14). Yalnız saatlik izin "Kullandı" olanlara uygulanır; oransal.
 let gvKosullar = [];
 let gvTolerans = 1;
 const GV_GEC = '__gec';   // Geç Girenler sekmesi
@@ -4878,6 +4879,10 @@ function gvHucre(k, x){
   return k.degerler[x.baslik];
 }
 function gvIzinleri(k){ const m = gvSonuc && gvSonuc.notlar && gvSonuc.notlar.saatlik && gvSonuc.notlar.saatlik.get(k.sicil); return m ? [...m.entries()].filter(([, d]) => d === 'Kullandı').map(([a]) => a).sort() : []; }
+function gvAralikSn(a){ const m = String(a).match(/^(\d{2}):(\d{2})-(\d{2}):(\d{2})$/); if (!m) return 0; let d = (+m[3] * 60 + +m[4]) - (+m[1] * 60 + +m[2]); if (d < 0) d += 1440; return d * 60; }
+function gvIzinSn(k){ return gvIzinleri(k).reduce((t, a) => t + gvAralikSn(a), 0); }
+// İzinli mola sınırı (saniye): sınır − izin saati × dakika
+function gvIzinliSinir(k, r){ const a = gvKuralSayi(r.d1), dk = gvKuralSayi(r.d2), iz = gvIzinSn(k); if (a == null || dk == null || !iz) return null; return Math.max(0, a - iz / 3600 * dk * 60); }
 function gvIzinYazi(k){ const l = gvIzinleri(k); return l.length ? l.map(a => `Saatlik İzin (${a})`).join(', ') : ''; }
 function gvSebepHucresi(k, x){ return ykAnahtar(x.kaynak) === 'SEBEP' && k.yok && !!k.sebep; }
 // ---------- Koşullu biçimlendirme ----------
@@ -4940,6 +4945,10 @@ function gvStilBul(k, x, gorunum){
       const gec = gvGecDk(k, v) != null, isaret = !!(not.gecDegil && not.gecDegil.has(k.sicil));
       const izinBas = (k.sistemDisi || []).some(a => a.tur === 'bas' && gvIzinleri(k).includes(a.aralik));
       uy = gec && (ko === 'GEÇ GİRİŞ' ? !isaret && !izinBas : isaret);
+    }
+    else if (ko === 'İZNE GÖRE BÜYÜKTÜR'){
+      const sinir = gvIzinliSinir(k, r), n = gvHucreSayi(v, x.bicim);
+      uy = sinir != null && n != null && n > sinir;
     }
     else if (ko === 'VARDİYADAN AZ'){
       const vs = gvVardiyaBasSure(k.vardiya), n = gvHucreSayi(v, x.bicim);
@@ -5360,13 +5369,29 @@ function gvSdCiz(){
   const liste = gvSonuc.kisiler.filter(k => !k.yok && (!tk || k.takim === tk)).flatMap(k => (k.sistemDisi || []).map(a => ({ k, a })));
   const turAd = { bas:'Vardiya başı', orta:'Gün içi', son:'Vardiya sonu' };
   const dd = !!gvDosyalar.dd || gvSonuc.kisiler.some(k => k.sistemDisi && k.sistemDisi.length);
-  document.getElementById('gvTablo').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Nerede</th><th>Aralık</th><th>Süre (dk)</th><th>Saatlik izin?</th></tr>' +
+  // mola kontrolü: KOŞULLAR'daki "izne göre büyüktür" kuralı (ilk bulunan)
+  const mk = gvKosullar.find(r => ykAnahtar(r.kosul) === 'İZNE GÖRE BÜYÜKTÜR');
+  const mx = mk && gvSutunlar.find(x => ykAnahtar(x.baslik) === ykAnahtar(mk.sutun));
+  const sure = sn => { sn = Math.round(sn); return Math.floor(sn / 3600) + ':' + ykIki(Math.floor(sn % 3600 / 60)) + ':' + ykIki(sn % 60); };
+  const molaHucre = (k, ilk) => {
+    if (!mx) return '';
+    if (!ilk) return '<td colspan="3"></td>';
+    const sinir = gvIzinliSinir(k, mk); if (sinir == null) return '<td colspan="3" class="soluk" style="text-align:center;">—</td>';
+    const n = gvHucreSayi(gvHucre(k, mx), mx.bicim); if (n == null) return `<td style="text-align:center;">${sure(sinir)}</td><td colspan="2" class="soluk">${ykEsc(mk.sutun)} yok</td>`;
+    const fark = n - sinir, asim = fark > 0;
+    return `<td style="text-align:center;">${sure(sinir)}</td><td style="text-align:center;${asim ? `background:${mk.dolgu || '#FF0000'};color:${mk.yazi || '#000'};` : ''}">${sure(n)}</td>` +
+      `<td style="text-align:center;font-weight:600;color:${asim ? '#C00000' : '#2E7D32'};">${asim ? '+' + sure(fark) + ' aşım' : sure(-fark) + ' kaldı'}</td>`;
+  };
+  const gorulen = new Set();
+  document.getElementById('gvTablo').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Nerede</th><th>Aralık</th><th>Süre (dk)</th><th>Saatlik izin?</th>' +
+    (mx ? `<th title="${ykEsc(mk.d1)} − izin saati × ${ykEsc(mk.d2)} dk">İzinli ${ykEsc(mk.sutun)} sınırı</th><th>${ykEsc(mk.sutun)}</th><th>Durum</th>` : '') + '</tr>' +
     (liste.length ? liste.map(({ k, a }) => {
+      const ilk = !gorulen.has(k.sicil); gorulen.add(k.sicil);
       const d = gvSdDurum(k, a), renk = d === 'Kullandı' ? '#FFC000' : (d === 'Kullanmadı' ? '#E2EFDA' : '#FFF2CC');
       return `<tr><td>${ykEsc(k.sicil)}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.takim || '')}</td><td style="text-align:center;">${ykEsc(k.vardiya || '—')}</td><td>${turAd[a.tur] || a.tur}</td>` +
         `<td style="text-align:center;background:${renk};">${a.aralik}</td><td style="text-align:center;">${a.dk}</td>` +
-        `<td><select data-gvsd="${ykEsc(k.sicil)}" data-aralik="${a.aralik}"><option value="">Sor…</option><option${d === 'Kullandı' ? ' selected' : ''}>Kullandı</option><option${d === 'Kullanmadı' ? ' selected' : ''}>Kullanmadı</option></select></td></tr>`;
-    }).join('') : `<tr><td colspan="8" class="soluk">${dd ? `${gvStil.sdEsik} dakikayı aşan sistem dışı süre yok.` : 'Sistem dışı süreler için Detaylı Durum yüklenmeli.'}</td></tr>`);
+        `<td><select data-gvsd="${ykEsc(k.sicil)}" data-aralik="${a.aralik}"><option value="">Sor…</option><option${d === 'Kullandı' ? ' selected' : ''}>Kullandı</option><option${d === 'Kullanmadı' ? ' selected' : ''}>Kullanmadı</option></select></td>${molaHucre(k, ilk)}</tr>`;
+    }).join('') : `<tr><td colspan="${mx ? 11 : 8}" class="soluk">${dd ? `${gvStil.sdEsik} dakikayı aşan sistem dışı süre yok.` : 'Sistem dışı süreler için Detaylı Durum yüklenmeli.'}</td></tr>`);
   document.getElementById('gvSayi').textContent = `${liste.length} aralık · eşik ${gvStil.sdEsik} dk · "Kullandı" Açıklama'ya Saatlik İzin yazar`;
 }
 document.getElementById('gvTablo').addEventListener('change', async e => {
@@ -5729,7 +5754,7 @@ function gvKosulCiz(){
       return `<tr><td><select data-kr="${i}" data-alan="sutun">${basliklar.concat(basliklar.some(b => ykAnahtar(b) === ykAnahtar(r.sutun)) || !r.sutun ? [] : [r.sutun]).map(b => `<option${ykAnahtar(b) === ykAnahtar(r.sutun) ? ' selected' : ''}>${ykEsc(b)}</option>`).join('')}</select></td>` +
         `<td><select data-kr="${i}" data-alan="kosul">${GV_KOSULLAR.map(k => `<option${ykAnahtar(k) === ko ? ' selected' : ''}>${k}</option>`).join('')}</select></td>` +
         `<td><input type="text" data-kr="${i}" data-alan="d1" value="${ykEsc(r.d1 || '')}" style="width:80px;"${degerli ? '' : ' disabled placeholder="—"'}></td>` +
-        `<td><input type="text" data-kr="${i}" data-alan="d2" value="${ykEsc(r.d2 || '')}" style="width:80px;"${ko === 'ARASI' ? '' : ' disabled placeholder="—"'}></td>` +
+        `<td><input type="text" data-kr="${i}" data-alan="d2" value="${ykEsc(r.d2 || '')}" style="width:80px;"${['ARASI','İZNE GÖRE BÜYÜKTÜR'].includes(ko) ? '' : ' disabled placeholder="—"'}${ko === 'İZNE GÖRE BÜYÜKTÜR' ? ' title="İzin saati başına düşülen dakika (örn. 14)"' : ''}></td>` +
         `<td style="white-space:nowrap;">${renk(i, 'dolgu', r.dolgu)}</td><td style="white-space:nowrap;">${renk(i, 'yazi', r.yazi)}</td>` +
         `<td style="text-align:center;"><input type="checkbox" data-kr="${i}" data-alan="kalin"${r.kalin ? ' checked' : ''}></td>` +
         gor.map(g => `<td style="text-align:center;"><input type="checkbox" data-kr="${i}" data-gor="${ykEsc(g)}"${r.gorunum.has(g) ? ' checked' : ''}></td>`).join('') +
@@ -5768,6 +5793,7 @@ document.getElementById('gvKosulEkle').addEventListener('click', () => {
 document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
   for (const r of gvKosulSatir){
     const ko = ykAnahtar(r.kosul);
+    if (ko === 'İZNE GÖRE BÜYÜKTÜR' && (gvKuralSayi(r.d1) == null || gvKuralSayi(r.d2) == null)){ ykDurum('gvKosulDurum', `✗ ${r.sutun} · izne göre büyüktür: Değer izinsiz sınır (1:40:00), Değer 2 saat başına düşülen dakika (14) olmalı.`, 'err'); return; }
     if (['BÜYÜKTÜR','KÜÇÜKTÜR','ARASI'].includes(ko) && gvKuralSayi(r.d1) == null){ ykDurum('gvKosulDurum', `✗ ${r.sutun} · ${r.kosul}: değer sayı ya da 1:40:00 gibi süre olmalı.`, 'err'); return; }
     if (ko === 'ARASI' && gvKuralSayi(r.d2) == null){ ykDurum('gvKosulDurum', `✗ ${r.sutun} · arası: Değer 2 eksik.`, 'err'); return; }
     if (['EŞİTTİR','İÇERİR'].includes(ko) && !String(r.d1 || '').trim()){ ykDurum('gvKosulDurum', `✗ ${r.sutun} · ${r.kosul}: değer yaz.`, 'err'); return; }

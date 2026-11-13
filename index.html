@@ -286,6 +286,7 @@
           <div class="yk-sekmeler" style="margin-bottom:12px;">
             <button class="yk-sekme aktif" data-ykbolum="Personel">Personel</button>
             <button class="yk-sekme" data-ykbolum="Sosyal Medya">Sosyal Medya</button>
+            <button class="btn" id="ykPlanVardiyaYok" style="margin-left:auto;" title="Bizim vardiyanın olmadığı hafta: Personel planını hafta içi varsayılan saatlerle, hafta sonu izinli olarak doldurur (Sosyal Medya hariç)">🗓 Vardiya Yok</button>
           </div>
           <textarea id="ykPlanMetin" placeholder="Personel planını buraya yapıştır (Ctrl+V)…" style="width:100%; height:160px; font-family:Consolas, monospace; font-size:12px; border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
           <div class="row" style="margin-top:10px;">
@@ -354,7 +355,7 @@
         </div>
         <div class="card">
           <h2>Özel Durumlar</h2>
-          <div class="hint">Personel listesinde seçilen özel durumlar. <b>İzin</b>: kişi o gün izinli sayılır (Diğer listesine girer). <b>Bilgi</b>: yalnız Açıklama'da görünür.</div>
+          <div class="hint">Personel listesinde seçilen özel durumlar. <b>İzin</b>: kişi o gün izinli sayılır (Diğer listesine girer). <b>Bilgi</b>: yalnız Açıklama'da görünür. <b>Vardiya Yok Saati</b>: Haftalık Plan'daki "Vardiya Yok" düğmesi bu kişilere hafta içi bu saati yazar; boşsa Genel'deki varsayılan yazılır.</div>
           <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykAyarOzelTablo"></table></div>
           <div class="row" style="margin-top:12px;">
             <button class="btn" id="ykAyarOzelEkle">+ Özel Durum Ekle</button>
@@ -375,6 +376,11 @@
           <div class="row">
             <label>Kodun vardiyası tanımlı değilse sayılacak vardiya: <input type="text" id="ykAyarVarsayilan" style="width:120px;" placeholder="08:00-18:00"></label>
           </div>
+          <div class="row" style="margin-top:12px;">
+            <label>"Vardiya Yok" haftasında hafta içi vardiya: <input type="text" id="ykAyarVyVardiya" style="width:120px;" placeholder="08:00-18:00"></label>
+            <label>Hafta sonu kodu: <input type="text" id="ykAyarVyHaftaSonu" style="width:90px;" placeholder="OFF"></label>
+          </div>
+          <div class="hint" style="margin:6px 0 0;">Haftalık Plan'daki "Vardiya Yok" düğmesi Personel planını bunlarla doldurur (Sosyal Medya hariç). Özel durumu olanlar için Özel Durumlar'daki saat kullanılır.</div>
           <div class="row" style="margin-top:12px;">
             <button class="btn ok" id="ykAyarGenelKaydet">💾 Kaydet</button>
             <span id="ykAyarGenelDurum" class="status" style="margin:0;"></span>
@@ -2962,7 +2968,8 @@ const YK_AYLAR = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','A
 const YK_LISTE_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer'];          // elle girilen yeni sebebin gidebileceği listeler
 const YK_KOD_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer', 'Çalışmıyor'];
 const YK_BOLUMLER = ['Personel', 'Sosyal Medya'];                     // haftalık planın iki parçası
-const YK_AYAR_ANAHTAR = { tolerans:'Geç Giriş Toleransı (dk)', durumlar:'Geç Giriş Durumları', varsayilan:'Varsayılan Sayılacak Vardiya' };
+const YK_AYAR_ANAHTAR = { tolerans:'Geç Giriş Toleransı (dk)', durumlar:'Geç Giriş Durumları', varsayilan:'Varsayılan Sayılacak Vardiya',
+                          vyVardiya:'Vardiya Yok Varsayılan Vardiya', vyHaftaSonu:'Vardiya Yok Hafta Sonu' };
 let ykAktifSayfa = null;
 
 // ---------- Saf yardımcılar (ağ yok; test edilebilir) ----------
@@ -3039,6 +3046,14 @@ function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
   const tolerans = (tolHam !== undefined && tolHam !== '' && !isNaN(Number(tolHam))) ? Number(tolHam) : 1;
   const gecDurumlar = String(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.durumlar)) || 'Geç Login').split(',').map(s => s.trim()).filter(Boolean);
   const varsayilanVardiya = ykVardiya(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.varsayilan))) || '';
+  // "Vardiya Yok" haftası: özel durumu olmayanın hafta içi vardiyası ve hafta sonu kodu (AYARLAR)
+  const vyVardiya = ykVardiya(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.vyVardiya))) || '';
+  const vyHaftaSonu = String(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.vyHaftaSonu)) || '').trim();
+  // ÖZEL DURUMLAR: Özel Durum | Tür | Vardiya Yok Saati
+  const ob = (ozelRows && ozelRows[0]) || [];
+  const cvy = ykSutun(ob, 'Vardiya Yok Saati');
+  const ozelListe = (ozelRows || []).slice(1).filter(r => r && temiz(r[0]))
+    .map(r => ({ ad: temiz(r[0]), tur: temiz(r[1]), vySaat: cvy >= 0 ? ykVardiya(r[cvy]) : '' }));
   return {
     personel,
     gorevGrup: harita(gorevRows),         // GÖREV → Rapor Grubu (Asistan / SM / Uzman)
@@ -3046,10 +3061,11 @@ function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
     sebepVardiya,                         // kod → Sayılacak Vardiya
     sebepler,
     ozelTur:   harita(ozelRows),          // Özel Durum → Tür (İzin / Bilgi)
-    ozelListe: (ozelRows || []).slice(1).filter(r => r && temiz(r[0])).map(r => ({ ad: temiz(r[0]), tur: temiz(r[1]) })),
+    ozelListe,
+    ozelVySaat: new Map(ozelListe.filter(o => o.vySaat).map(o => [ykAnahtar(o.ad), o.vySaat])),   // Özel Durum → Vardiya Yok saati
     gorevler:  (gorevRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
     ozeller:   (ozelRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
-    tolerans, gecDurumlar, varsayilanVardiya,
+    tolerans, gecDurumlar, varsayilanVardiya, vyVardiya, vyHaftaSonu,
     takimlar: [...new Set(personel.map(p => p.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')),
   };
 }
@@ -3297,7 +3313,7 @@ async function ykGunSatirlariniYaz(sekme, tarih, yeni, sutun){
 }
 let ykAyar = null;
 async function ykAyarYukle(){
-  const [p, g, s, o, a] = await ykOku([`'${YK_TAB.personel}'!A1:G2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:C500`, `'${YK_TAB.ozel}'!A1:B200`, `'${YK_TAB.ayar}'!A1:B100`]);
+  const [p, g, s, o, a] = await ykOku([`'${YK_TAB.personel}'!A1:G2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:C500`, `'${YK_TAB.ozel}'!A1:C200`, `'${YK_TAB.ayar}'!A1:B100`]);
   ykAyar = ykAyarlariKur(p, g, s, o, a);
   return ykAyar;
 }
@@ -3883,6 +3899,28 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
   a.download = `Yoklama_${s.tarih}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
 });
 
+// "Vardiya Yok" haftası: Personel planını (Sosyal Medya görevlileri hariç) ayarlardan üretir.
+// Hafta içi: kişinin özel durumunun "Vardiya Yok Saati" (bitiş tarihine kadar), yoksa varsayılan; hafta sonu: ayardaki kod.
+// Saf fonksiyon (ağ yok). → { kisiler: Map(sicil→{ad, gunler[7]}), hata }
+function ykVardiyaYokPlan(ayar, hafta){
+  const haftaIci = ayar.vyVardiya || ayar.varsayilanVardiya;
+  if (!haftaIci) return { hata: 'Yoklama Ayarları > Genel\'de "Vardiya Yok" hafta içi vardiyası tanımlı değil.' };
+  if (!ayar.vyHaftaSonu) return { hata: 'Yoklama Ayarları > Genel\'de "Vardiya Yok" hafta sonu kodu tanımlı değil.' };
+  const kisiler = new Map();
+  const gunler = [0,1,2,3,4,5,6].map(i => ykTarihEkle(hafta, i));
+  const haftaSonuMu = t => { const m = t.match(/^(\d{2})\.(\d{2})\.(\d{4})$/); const g = new Date(+m[3], +m[2] - 1, +m[1]).getDay(); return g === 0 || g === 6; };
+  for (const p of ayar.personel){
+    if ((ayar.gorevGrup.get(ykAnahtar(p.gorev)) || '') === 'SM') continue;
+    const ozelSaat = p.ozel ? ayar.ozelVySaat.get(ykAnahtar(p.ozel)) : '';
+    kisiler.set(p.sicil, { ad: p.ad, gunler: gunler.map(t => {
+      if (haftaSonuMu(t)) return ayar.vyHaftaSonu;
+      const aktif = ozelSaat && (!p.bitis || ykSira(p.bitis) >= ykSira(t));
+      return aktif ? ozelSaat : haftaIci;
+    }) });
+  }
+  return { kisiler };
+}
+
 // ---------- Haftalık Plan (Personel ve Sosyal Medya ayrı) ----------
 let ykPlanOnizleme = null, ykPlanBolum = 'Personel';
 // Her sekme (Personel / Sosyal Medya) kendi yapıştırılan metnini, önizlemesini ve mesajlarını saklar;
@@ -4078,6 +4116,36 @@ document.getElementById('ykPlanOkuBtn').addEventListener('click', async () => {
     document.getElementById('ykPlanKaydetBtn').disabled = false;
   } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); }
 });
+document.getElementById('ykPlanVardiyaYok').addEventListener('click', async () => {
+  const hafta = ykIsoToTarih(document.getElementById('ykPlanHafta').value);
+  if (!hafta){ ykDurum('ykPlanDurum', 'Önce hafta başı (Pazartesi) tarihini seç.', 'err'); return; }
+  // Personel sekmesine geç (Sosyal Medya sekmesinin yapıştırılmış metni korunur)
+  if (ykPlanBolum !== 'Personel') document.querySelector('[data-ykbolum="Personel"]').click();
+  document.getElementById('ykPlanHafta').value = ykTarihToIso(hafta);
+  ykDurum('ykPlanDurum', 'Vardiya Yok planı hazırlanıyor…');
+  document.getElementById('ykPlanUyari').textContent = '';
+  document.getElementById('ykPlanKaydetBtn').disabled = true;
+  try {
+    const ayar = await ykAyarYukle();
+    const p = ykVardiyaYokPlan(ayar, hafta);
+    if (p.hata){ ykDurum('ykPlanDurum', '✗ ' + p.hata, 'err'); return; }
+    const uyarilar = [];
+    const pzt = (() => { const m = hafta.match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return new Date(+m[3], +m[2] - 1, +m[1]).getDay() === 1; })();
+    if (!pzt) uyarilar.push(`${hafta} Pazartesi değil; hafta bu günden başlatıldı.`);
+    const { bolumler } = await ykPlanlariOku();
+    const bl = bolumler.get(hafta);
+    if (bl && bl['Personel'].size) uyarilar.push(`Bu haftanın kayıtlı bir Personel planı var (${bl['Personel'].size} kişi); kaydedersen onun yerine yazılır.`);
+    const ozelli = ayar.personel.filter(x => p.kisiler.has(x.sicil) && x.ozel && ayar.ozelVySaat.has(ykAnahtar(x.ozel)));
+    p.kisiler.forEach(k => { k.ilk = k.gunler.slice(); });
+    ykPlanOnizleme = { hafta, bolum: 'Personel', kisiler: p.kisiler };
+    await ykPlanOnizlemeCiz();
+    document.getElementById('ykPlanUyari').textContent = uyarilar.map(u => '⚠ ' + u).join('\n');
+    ykDurum('ykPlanDurum', `Vardiya Yok planı: ${p.kisiler.size} kişi · hafta ${hafta} – ${ykTarihEkle(hafta, 6)}` +
+      (ozelli.length ? ` · özel saatli ${ozelli.length} kişi (${ozelli.map(x => `${x.ad}: ${x.ozel}`).join(', ')})` : '') +
+      '. Kontrol et, gerekirse hücreleri değiştir, sonra "Planı Kaydet".', 'ok');
+    document.getElementById('ykPlanKaydetBtn').disabled = false;
+  } catch(err){ ykDurum('ykPlanDurum', '✗ ' + err.message, 'err'); }
+});
 document.getElementById('ykPlanHafta').addEventListener('change', () => { document.getElementById('ykPlanKaydetBtn').disabled = true; });
 document.getElementById('ykPlanKaydetBtn').addEventListener('click', async () => {
   if (!ykPlanOnizleme) return;
@@ -4204,9 +4272,9 @@ document.getElementById('ykPerKaydetBtn').addEventListener('click', async () => 
     const tur = document.getElementById('ykPerOzelTur').value;
     try {
       ykDurum('ykPerDurum', 'Yeni özel durum ekleniyor…');
-      const [rows] = await ykOku([`'${YK_TAB.ozel}'!A1:B500`]);
+      const [rows] = await ykOku([`'${YK_TAB.ozel}'!A1:C500`]);
       const mevcut = rows.slice(1).filter(r => r && String(r[0] || '').trim());
-      if (!mevcut.some(r => ykAnahtar(r[0]) === ykAnahtar(ozelHam))) await ykSekmeYaz(YK_TAB.ozel, mevcut.map(r => [r[0], r[1] || '']).concat([[ozelHam, tur]]));
+      if (!mevcut.some(r => ykAnahtar(r[0]) === ykAnahtar(ozelHam))) await ykSekmeYaz(YK_TAB.ozel, mevcut.map(r => [r[0], r[1] || '', r[2] || '']).concat([[ozelHam, tur, '']]));
     } catch(err){ ykDurum('ykPerDurum', '✗ Özel durum eklenemedi: ' + err.message, 'err'); return; }
   }
   const eski = ykPerDuzenlenen;
@@ -4246,6 +4314,8 @@ async function ykAyarSayfasi(){
     document.getElementById('ykAyarTolerans').value = a.tolerans;
     document.getElementById('ykAyarGecDurumlar').value = a.gecDurumlar.join(', ');
     document.getElementById('ykAyarVarsayilan').value = a.varsayilanVardiya;
+    document.getElementById('ykAyarVyVardiya').value = a.vyVardiya;
+    document.getElementById('ykAyarVyHaftaSonu').value = a.vyHaftaSonu;
     ['ykAyarKodDurum','ykAyarOzelDurum','ykAyarGenelDurum'].forEach(id => ykDurum(id, ''));
   } catch(err){ document.getElementById('ykAyarKodTablo').innerHTML = `<tr><td class="yok">✗ ${ykEsc(err.message)}</td></tr>`; }
 }
@@ -4257,9 +4327,10 @@ function ykAyarKodCiz(){
       `<td><button class="btn y-btn" data-kodsil="${i}">Sil</button></td></tr>`).join('');
 }
 function ykAyarOzelCiz(){
-  document.getElementById('ykAyarOzelTablo').innerHTML = '<tr><th>Özel Durum</th><th>Tür</th><th></th></tr>' +
+  document.getElementById('ykAyarOzelTablo').innerHTML = '<tr><th>Özel Durum</th><th>Tür</th><th>Vardiya Yok Saati</th><th></th></tr>' +
     ykAyarOzeller.map((x, i) => `<tr><td><input type="text" data-ozel="${i}" data-alan="ad" value="${ykEsc(x.ad)}" style="min-width:220px;"></td>` +
       `<td><select data-ozel="${i}" data-alan="tur">${['Bilgi','İzin'].map(g => `<option${g === x.tur ? ' selected' : ''}>${g}</option>`).join('')}</select></td>` +
+      `<td><input type="text" data-ozel="${i}" data-alan="vySaat" value="${ykEsc(x.vySaat || '')}" placeholder="varsayılan" style="width:120px;"></td>` +
       `<td><button class="btn y-btn" data-ozelsil="${i}">Sil</button></td></tr>`).join('');
 }
 document.getElementById('ykAyarKodTablo').addEventListener('input', e => {
@@ -4305,7 +4376,7 @@ document.getElementById('ykAyarOzelTablo').addEventListener('click', e => {
   ykAyarOzeller.splice(+b.dataset.ozelsil, 1); ykAyarOzelCiz(); ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
 });
 document.getElementById('ykAyarOzelEkle').addEventListener('click', () => {
-  ykAyarOzeller.push({ ad:'', tur:'Bilgi' }); ykAyarOzelCiz();
+  ykAyarOzeller.push({ ad:'', tur:'Bilgi', vySaat:'' }); ykAyarOzelCiz();
   const son = document.querySelectorAll('#ykAyarOzelTablo [data-alan="ad"]'); if (son.length) son[son.length - 1].focus();
 });
 document.getElementById('ykAyarOzelKaydet').addEventListener('click', async () => {
@@ -4313,7 +4384,10 @@ document.getElementById('ykAyarOzelKaydet').addEventListener('click', async () =
   for (const x of ykAyarOzeller){
     const d = String(x.ad || '').replace(/\s+/g, ' ').trim(); if (!d) continue;
     if (gorulen.has(ykAnahtar(d))){ ykDurum('ykAyarOzelDurum', `✗ "${d}" iki kez yazılmış.`, 'err'); return; }
-    gorulen.add(ykAnahtar(d)); satirlar.push([d, x.tur || 'Bilgi']);
+    gorulen.add(ykAnahtar(d));
+    const vHam = String(x.vySaat || '').trim(), v = ykVardiya(vHam);
+    if (vHam && !v){ ykDurum('ykAyarOzelDurum', `✗ "${d}" için Vardiya Yok saati saat aralığı olmalı (ör. 08:00-17:00).`, 'err'); return; }
+    satirlar.push([d, x.tur || 'Bilgi', v]);
   }
   ykDurum('ykAyarOzelDurum', 'Kaydediliyor…');
   try { await ykSekmeYaz(YK_TAB.ozel, satirlar); await ykAyarSayfasi(); ykDurum('ykAyarOzelDurum', `✓ ${satirlar.length} özel durum kaydedildi.`, 'ok'); }
@@ -4326,11 +4400,15 @@ document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () 
   if (tol === '' || isNaN(Number(tol)) || Number(tol) < 0){ ykDurum('ykAyarGenelDurum', '✗ Tolerans 0 ya da daha büyük bir sayı olmalı.', 'err'); return; }
   if (!dur.length){ ykDurum('ykAyarGenelDurum', '✗ En az bir geç giriş durumu yaz.', 'err'); return; }
   if (vHam && !v){ ykDurum('ykAyarGenelDurum', '✗ Vardiya saat aralığı olmalı (ör. 08:00-18:00).', 'err'); return; }
+  const vyHam = document.getElementById('ykAyarVyVardiya').value.trim(), vy = ykVardiya(vyHam);
+  if (vyHam && !vy){ ykDurum('ykAyarGenelDurum', '✗ "Vardiya Yok" hafta içi vardiyası saat aralığı olmalı (ör. 08:00-18:00).', 'err'); return; }
+  const vyHs = document.getElementById('ykAyarVyHaftaSonu').value.replace(/\s+/g, ' ').trim();
   ykDurum('ykAyarGenelDurum', 'Kaydediliyor…');
   try {
-    // AYARLAR'daki diğer satırlar korunur; yalnız bu üç ayar güncellenir.
+    // AYARLAR'daki diğer satırlar korunur; yalnız bu ekrandaki ayarlar güncellenir.
     const [rows] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]);
-    const yeni = new Map([[YK_AYAR_ANAHTAR.tolerans, String(Number(tol))], [YK_AYAR_ANAHTAR.durumlar, dur.join(', ')], [YK_AYAR_ANAHTAR.varsayilan, v]]);
+    const yeni = new Map([[YK_AYAR_ANAHTAR.tolerans, String(Number(tol))], [YK_AYAR_ANAHTAR.durumlar, dur.join(', ')], [YK_AYAR_ANAHTAR.varsayilan, v],
+                         [YK_AYAR_ANAHTAR.vyVardiya, vy], [YK_AYAR_ANAHTAR.vyHaftaSonu, vyHs]]);
     const satirlar = rows.slice(1).filter(r => r && String(r[0] || '').trim()).map(r => {
       const a = [...yeni.keys()].find(k => ykAnahtar(k) === ykAnahtar(r[0]));
       if (a){ const d = yeni.get(a); yeni.delete(a); return [a, d]; }

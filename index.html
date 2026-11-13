@@ -418,10 +418,11 @@
                 <button class="btn" id="gvKopyalaBtn" title="Ekranda görünen tabloyu (sekme + takım lideri) kopyalar">📋 Maile Kopyala</button>
                 <button class="btn" id="gvExcelBtn" title="Ekranda görünen tabloyu Excel'e aktarır">⬇ Excel'e Aktar</button>
                 <button class="btn ok" id="gvExcelTumBtn" title="Herkes, Ana sütunlarıyla (11.11 düzeni)">⬇ Ana Excel (Tümü)</button>
-                <button class="btn" id="gvAylikBtn" title="Ekrandaki sekme + takım lideri, gelmeyenler dahil: aylık dosyana o günün sayfası eklenir, VERİ sayfasının sonuna yazılır">📁 Dosyama Ekle</button>
+                <button class="btn" id="gvAylikBtn" title="Ekrandaki sekme, gelmeyenler dahil: takımın aylık dosyasına o günün sayfası eklenir, VERİ sayfasının sonuna yazılır. O ayın dosyası klasörde yoksa oluşturulur.">📁 Dosyama Ekle</button>
+                <button class="btn" id="gvAylikTumBtn" style="display:none;" title="Ekrandaki sekme: her takım liderinin verisi kendi aylık dosyasına (Süper Yetkili)">📁 Tüm Takımlara Ekle</button>
               </div>
             </div>
-            <div class="hint" style="margin:6px 0 0;">Aylık dosya: <b id="gvAylikAd">seçilmedi</b> · <a href="#" id="gvAylikDegistir">dosyayı değiştir</a> (yalnız .xlsx; dosya Excel'de açıkken kaydedilemez)</div>
+            <div class="hint" style="margin:6px 0 0;">Aylık dosyalar klasörü: <b id="gvKlasorAd">seçilmedi</b> · <a href="#" id="gvKlasorDegistir">klasörü değiştir</a> · Bu ayın dosyası: <b id="gvAylikAd">—</b> (dosya Excel'de açıkken kaydedilemez)</div>
             <div id="gvKayitDurum" class="status"></div>
             <div id="gvUyari" class="status warn"></div>
             <div class="yk-sekmeler" id="gvSekmeler" style="margin-top:14px;"></div>
@@ -469,13 +470,14 @@
           </div>
         </div>
         <div class="card">
-          <h2>Excel, Mail, Gece Vardiyası ve Sistem Dışı Süreler</h2>
+          <h2>Excel, Mail, Aylık Dosya, Gece Vardiyası ve Sistem Dışı Süreler</h2>
           <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.<br><b>Gece vardiyası penceresi</b>: o gün Haftalık Plan'da 00:00'da başlayan vardiyası olanın, önceki akşam gece yarısından bu kadar dakika önce açtığı oturum Staffed'a eklenir (<code>{Detaylı Durum.Gece Eki}</code>); ertesi gün de 00:00 vardiyası varsa bu akşamki aynı kısım bugünden düşülür (<code>{Detaylı Durum.Gece Düşümü}</code>). Yalnız yüklenen Detaylı Durum'daki oturumlar kullanılır.</div>
           <div class="row">
             <label>Başlık rengi: <input type="color" id="gvStilRenk"></label>
             <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
             <label>Gece vardiyası erken giriş penceresi (dk): <input type="number" id="gvStilGece" min="0" step="5" style="width:70px;"></label>
             <label title="Detaylı Durum'da sistemde olunmayan bu süreyi aşan aralıklar Sistem Dışı Süreler sekmesinde sorulur">Sistem dışı süre eşiği (dk): <input type="number" id="gvStilSd" min="1" step="5" style="width:70px;"></label>
+            <label title="{AY} = Kasım, {YIL} = 2026, {TAKIM} = takım lideri (ya da Tümü)">Aylık dosya adı: <input type="text" id="gvStilAylikAd" style="width:300px;"></label>
             <label><input type="checkbox" id="gvStilSdOrta"> gün içi</label><label><input type="checkbox" id="gvStilSdBas"> vardiya başı</label><label><input type="checkbox" id="gvStilSdSon"> vardiya sonu</label>
             <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
             <button class="btn" id="gvStilVarsayilan">Varsayılan</button>
@@ -4613,8 +4615,8 @@ let gvSonuc = null;
 let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
 const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
-  sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, sdEsik:30, sdOrta:true, sdBas:true, sdSon:true };
+  aylikAd:'Aylık Dosya Adı', sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
@@ -4625,7 +4627,8 @@ function gvStilKur(ayarRows){
            sdEsik: (n => n == null || n <= 0 ? GV_STIL_VARSAYILAN.sdEsik : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdEsik)))),
            sdOrta: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdOrta))),
            sdBas: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdBas))),
-           sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))) };
+           sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))),
+           aylikAd: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.aylikAd)) || '').trim() || GV_STIL_VARSAYILAN.aylikAd };
 }
 // Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
 function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
@@ -5542,10 +5545,33 @@ function gvAylikIsle(wb, tarih, sut, kisiler, gorunum){
 function gvHucreDuz(v){ return v && typeof v === 'object' && !(v instanceof Date) ? (v.result != null ? v.result : (v.text != null ? v.text : '')) : v; }
 // Dosya tutamacı: IndexedDB'de saklanır (bir sonraki seferde yeniden seçmek gerekmez; Chrome izin sorar)
 function gvIdb(){ return new Promise((ok, red) => { const r = indexedDB.open('gv-dosya', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => red(r.error); }); }
-// Her takım lideri için ayrı dosya (anahtar: "aylik:<TAKIM>", Tümü için "aylik:TÜMÜ"); yalnız bu bilgisayarın tarayıcısında
-const gvTutAnahtar = tk => 'aylik:' + (tk ? ykAnahtar(tk) : 'TÜMÜ');
-async function gvTutamacOku(tk){ try { const db = await gvIdb(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get(gvTutAnahtar(tk)); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e){ return null; } }
-async function gvTutamacYaz(h, tk){ try { const db = await gvIdb(); await new Promise(ok => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, gvTutAnahtar(tk)); t.oncomplete = ok; t.onerror = ok; }); } catch(e){} }
+// Aylık dosyalar bir klasörde durur; klasör yalnız bu bilgisayarın tarayıcısında hatırlanır (IndexedDB "klasor").
+// Dosya adı AYARLAR'dan: {AY} {YIL} {TAKIM} (takım lideri ya da "Tümü"). O ayın dosyası yoksa boş oluşturulur.
+async function gvKlasorOku(){ try { const db = await gvIdb(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get('klasor'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e){ return null; } }
+async function gvKlasorYaz(h){ try { const db = await gvIdb(); await new Promise(ok => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, 'klasor'); t.oncomplete = ok; t.onerror = ok; }); } catch(e){} }
+async function gvKlasorSec(){
+  if (!window.showDirectoryPicker) throw new Error('Bu tarayıcı klasöre doğrudan yazmayı desteklemiyor; Chrome ya da Edge kullan.');
+  const h = await window.showDirectoryPicker({ id:'gv-aylik', mode:'readwrite' });
+  await gvKlasorYaz(h); return h;
+}
+// Klasör (izinli) — yoksa sorup seçtirir
+async function gvKlasorAl(sor){
+  let h = sor ? null : await gvKlasorOku();
+  if (!h){
+    if (!sor && !confirm('Aylık dosyaların duracağı klasör bu bilgisayarda henüz seçilmedi. Şimdi seçilsin mi?\n(Her ayın dosyası bu klasörde kendiliğinden oluşturulur.)')) return null;
+    h = await gvKlasorSec();
+  }
+  if ((await h.queryPermission({ mode:'readwrite' })) !== 'granted' && (await h.requestPermission({ mode:'readwrite' })) !== 'granted') throw new Error('Klasöre yazma izni verilmedi.');
+  return h;
+}
+function gvDosyaAdi(tarih, tk){
+  const m = String(tarih).match(/^\d{2}\.(\d{2})\.(\d{4})$/), ay = m ? YK_AYLAR[+m[1] - 1] : '';
+  const ayAd = ay ? ay.charAt(0) + ay.slice(1).toLocaleLowerCase('tr-TR') : '';
+  const temiz = v => String(v).replace(/[\\/:*?"<>|]/g, '').trim();
+  let ad = String(gvStil.aylikAd || GV_STIL_VARSAYILAN.aylikAd).replace(/\{AY\}/gi, ayAd).replace(/\{YIL\}/gi, m ? m[2] : '').replace(/\{TAKIM\}/gi, temiz(tk || 'Tümü'));
+  if (!/\.xlsx$/i.test(ad)) ad += '.xlsx';
+  return temiz(ad);
+}
 // Dosyama Ekle'nin yazacağı takım: Süper Yetkili filtredeki seçim ('' = Tümü); diğerleri yalnız kendi takımı (Yetkilendirme İsim = Takım Lideri)
 function gvHedefTakim(){
   if (userPerms.superYetkili) return { takim: document.getElementById('gvTakim').value };
@@ -5555,68 +5581,72 @@ function gvHedefTakim(){
 }
 async function gvAylikEtiket(){
   const el = document.getElementById('gvAylikAd'); if (!el) return;
-  const hd = gvHedefTakim(); if (hd.hata){ el.textContent = '—'; return; }
-  const h = await gvTutamacOku(hd.takim), ad = hd.takim || 'Tümü';
-  el.textContent = (h ? h.name : 'seçilmedi') + ` (${ad})`;
+  document.getElementById('gvAylikTumBtn').style.display = userPerms.superYetkili ? '' : 'none';
+  const k = await gvKlasorOku(); document.getElementById('gvKlasorAd').textContent = k ? k.name : 'seçilmedi';
+  const hd = gvHedefTakim(); el.textContent = hd.hata || !gvSonuc ? '—' : gvDosyaAdi(gvSonuc.tarih, hd.takim);
 }
-// Dosya adındaki ay/yıl verinin ayıyla uyuşmuyorsa açıklama döner
-function gvAyUyumsuz(dosyaAd, tarih){
-  const m = String(tarih).match(/^\d{2}\.(\d{2})\.(\d{4})$/); if (!m) return '';
-  const ad = ykAnahtar(dosyaAd), ay = YK_AYLAR.find(a => ad.includes(a)), yil = (ad.match(/20\d{2}/) || [])[0];
-  const veriAy = YK_AYLAR[+m[1] - 1];
-  if (ay && ay !== veriAy) return `Dosya adı ${ay} ayını gösteriyor, veri ${veriAy} ${m[2]} ayına ait.`;
-  if (yil && yil !== m[2]) return `Dosya adı ${yil} yılını gösteriyor, veri ${m[2]} yılına ait.`;
-  return '';
+// Tek takımı klasördeki aylık dosyasına yazar; sonuç metni döner
+async function gvTakimaYaz(dir, tk, sut, gorunum){
+  const kisiler = gvKisiler(gorunum, tk);
+  if (!kisiler.length) return { ok:false, metin:'bu sekmede kişi yok' };
+  const ad = gvDosyaAdi(gvSonuc.tarih, tk);
+  let h, yeni = false, buf;
+  try { h = await dir.getFileHandle(ad); buf = await (await h.getFile()).arrayBuffer(); }
+  catch(e){
+    if (e.name !== 'NotFoundError') throw e;
+    // Yeni ayın dosyası boş oluşturulur: gün sayfaları + VERİ (biçimler panel ayarlarından yazılır)
+    h = await dir.getFileHandle(ad, { create:true }); yeni = true;
+  }
+  const wb = new ExcelJS.Workbook();
+  if (buf) await wb.xlsx.load(buf);
+  const s = gvAylikIsle(wb, gvSonuc.tarih, sut, kisiler, gorunum);
+  const out = await wb.xlsx.writeBuffer();
+  let w;
+  try { w = await h.createWritable(); }
+  catch(e){ throw new Error(`${ad} yazılamadı; Excel'de açıksa kapatıp tekrar dene`); }
+  await w.write(out); await w.close();
+  return { ok:true, metin:`${ad}${yeni ? ' (yeni dosya oluşturuldu)' : ''}: ${s.yenilendi ? 'gün yenilendi' : 'gün eklendi'}, ${kisiler.length} kişi` };
 }
-async function gvDosyaSecYeni(tk){
-  const [h] = await window.showOpenFilePicker({ types: [{ description:'Excel (.xlsx)', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }], excludeAcceptAllOption: true });
-  if (!/\.xlsx$/i.test(h.name)) throw new Error('Yalnız .xlsx dosyası seçilebilir (makrolu .xlsm dosyasını önce Excel\'de "Farklı Kaydet → .xlsx" ile kaydet).');
-  await gvTutamacYaz(h, tk); return h;
-}
-async function gvAylikDosyayaEkle(degistir){
+async function gvAylikDosyayaEkle(tumu){
   if (!gvSonuc) return;
-  if (!window.showOpenFilePicker){ ykDurum('gvKayitDurum', '✗ Bu tarayıcı dosyaya doğrudan yazmayı desteklemiyor; Chrome ya da Edge kullan.', 'err'); return; }
-  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel) ve takım liderini seç.', 'warn'); return; }
-  const hd = gvHedefTakim();
-  if (hd.hata){ ykDurum('gvKayitDurum', '✗ ' + hd.hata, 'err'); return; }
-  const tk = hd.takim, tkAd = tk || 'Tümü';
+  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel).', 'warn'); return; }
+  let hedefler;
+  if (tumu){
+    if (!userPerms.superYetkili) return;
+    hedefler = [...new Set(gvSonuc.kisiler.map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+  } else {
+    const hd = gvHedefTakim();
+    if (hd.hata){ ykDurum('gvKayitDurum', '✗ ' + hd.hata, 'err'); return; }
+    hedefler = [hd.takim];
+  }
+  const mod = document.getElementById('gvMod'), eskiMod = mod.value;
   try {
-    let h = degistir ? null : await gvTutamacOku(tk);
-    if (!h){
-      if (!degistir && !confirm(`${tkAd} için bu bilgisayarda henüz aylık dosya seçilmedi. Şimdi seçilsin mi?`)) return;
-      h = await gvDosyaSecYeni(tk); gvAylikEtiket();
+    const dir = await gvKlasorAl(false); if (!dir) return;
+    mod.value = 'tumu';                                 // gelmeyenler her zaman dahil (takip için)
+    const sut = gvGorSut(gvAktifGrup);
+    const bos = hedefler.flatMap(tk => gvKisiler(gvAktifGrup, tk).filter(k => k.yok && !k.sebep));
+    if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return;
+    const sonuc = [];
+    for (const tk of hedefler){
+      ykDurum('gvKayitDurum', `${tk || 'Tümü'} yazılıyor…`);
+      try { const r = await gvTakimaYaz(dir, tk, sut, gvAktifGrup); sonuc.push(`${r.ok ? '✓' : '–'} ${tk || 'Tümü'}: ${r.metin}`); }
+      catch(e){ sonuc.push(`✗ ${tk || 'Tümü'}: ${e.message}`); }
     }
-    { const u = gvAyUyumsuz(h.name, gvSonuc.tarih);
-      if (u && !confirm(`${u}\n\nDosya: ${h.name}\nYine de bu dosyaya eklensin mi? (Hayır dersen "dosyayı değiştir" ile yeni ayın dosyasını seçebilirsin.)`)) return; }
-    if ((await h.queryPermission({ mode:'readwrite' })) !== 'granted' && (await h.requestPermission({ mode:'readwrite' })) !== 'granted'){
-      ykDurum('gvKayitDurum', '✗ Dosyaya yazma izni verilmedi.', 'err'); return;
-    }
-    { const mod = document.getElementById('gvMod'), e = mod.value; mod.value = 'tumu';
-      const bos = gvKisiler(gvAktifGrup, tk).filter(k => k.yok && !k.sebep); mod.value = e;
-      if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return; }
-    ykDurum('gvKayitDurum', `${h.name} açılıyor…`);
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(await (await h.getFile()).arrayBuffer());
-    // Gelmeyenler her zaman dahil (takip için)
-    const mod = document.getElementById('gvMod'), eskiMod = mod.value; mod.value = 'tumu';
-    const sut = gvGorSut(gvAktifGrup), kisiler = gvKisiler(gvAktifGrup, tk);
-    if (!kisiler.length){ mod.value = eskiMod; ykDurum('gvKayitDurum', `✗ ${tkAd} için bu sekmede kişi yok.`, 'warn'); return; }
-    mod.value = eskiMod;
-    const s = gvAylikIsle(wb, gvSonuc.tarih, sut, kisiler, gvAktifGrup);
-    const buf = await wb.xlsx.writeBuffer();
-    let w;
-    try { w = await h.createWritable(); }
-    catch(e){ throw new Error('Dosyaya yazılamadı; Excel\'de açıksa kapatıp tekrar dene. (' + e.message + ')'); }
-    await w.write(buf); await w.close();
-    gvAylikEtiket();
-    ykDurum('gvKayitDurum', `✓ ${h.name} (${tkAd}): ${gvSonuc.tarih} sayfası ${s.yenilendi ? 'yenilendi' : 'eklendi'} ve VERİ sayfasının sonuna yazıldı (${kisiler.length} kişi, gelmeyenler dahil).`, 'ok');
+    const hata = sonuc.some(x => x.startsWith('✗'));
+    ykDurum('gvKayitDurum', sonuc.join('\n'), hata ? 'err' : 'ok');
+    document.getElementById('gvKayitDurum').style.whiteSpace = 'pre-line';
   } catch(err){
     if (err && err.name === 'AbortError') return;
     ykDurum('gvKayitDurum', '✗ ' + err.message, 'err');
-  }
+  } finally { mod.value = eskiMod; gvAylikEtiket(); }
 }
 document.getElementById('gvAylikBtn').addEventListener('click', () => gvAylikDosyayaEkle(false));
-document.getElementById('gvAylikDegistir').addEventListener('click', e => { e.preventDefault(); gvAylikDosyayaEkle(true); });
+document.getElementById('gvAylikTumBtn').addEventListener('click', () => gvAylikDosyayaEkle(true));
+document.getElementById('gvKlasorDegistir').addEventListener('click', async e => {
+  e.preventDefault();
+  try { await gvKlasorSec(); gvAylikEtiket(); ykDurum('gvKayitDurum', '✓ Klasör seçildi.', 'ok'); }
+  catch(err){ if (err.name !== 'AbortError') ykDurum('gvKayitDurum', '✗ ' + err.message, 'err'); }
+});
 document.getElementById('gvTakim').addEventListener('change', gvAylikEtiket);
 document.getElementById('gvExcelBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
@@ -5744,6 +5774,7 @@ function gvStilFormu(st){
   document.getElementById('gvStilYazi').value = st.baslikYazi.toLowerCase();
   document.getElementById('gvStilGece').value = st.gecePencere;
   document.getElementById('gvStilSd').value = st.sdEsik;
+  document.getElementById('gvStilAylikAd').value = st.aylikAd;
   document.getElementById('gvStilSdOrta').checked = st.sdOrta; document.getElementById('gvStilSdBas').checked = st.sdBas; document.getElementById('gvStilSdSon').checked = st.sdSon;
   gvStilOrnek();
 }
@@ -5751,7 +5782,7 @@ function gvStilOrnek(){
   const o = document.getElementById('gvStilOrnek');
   o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
 }
-['gvStilRenk','gvStilYazi','gvStilGece','gvStilSd','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+['gvStilRenk','gvStilYazi','gvStilGece','gvStilAylikAd','gvStilSd','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
 document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
 document.getElementById('gvStilKaydet').addEventListener('click', async () => {
   const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
@@ -5760,7 +5791,8 @@ document.getElementById('gvStilKaydet').addEventListener('click', async () => {
                         [GV_STIL_ANAHTAR.sdEsik, String(Math.max(1, Math.round(gvSayi(document.getElementById('gvStilSd').value) ?? GV_STIL_VARSAYILAN.sdEsik)))],
                         [GV_STIL_ANAHTAR.sdOrta, document.getElementById('gvStilSdOrta').checked ? 'EVET' : 'HAYIR'],
                         [GV_STIL_ANAHTAR.sdBas, document.getElementById('gvStilSdBas').checked ? 'EVET' : 'HAYIR'],
-                        [GV_STIL_ANAHTAR.sdSon, document.getElementById('gvStilSdSon').checked ? 'EVET' : 'HAYIR']]);
+                        [GV_STIL_ANAHTAR.sdSon, document.getElementById('gvStilSdSon').checked ? 'EVET' : 'HAYIR'],
+                        [GV_STIL_ANAHTAR.aylikAd, document.getElementById('gvStilAylikAd').value.trim() || GV_STIL_VARSAYILAN.aylikAd]]);
   ykDurum('gvStilDurum', 'Kaydediliyor…');
   try {
     // AYARLAR'daki diğer satırlar (Yoklama ayarları) korunur; yalnız bu iki satır güncellenir.

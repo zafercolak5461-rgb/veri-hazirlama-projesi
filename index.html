@@ -4946,7 +4946,17 @@ async function gvSonuGetir(){
     gvSebepSecenek = ayar.sebepler || [];
     const son = await gvSonOku();
     if (!son || gvSonuc) return;
-    gvSonuc = { tarih: son.tarih, kisiler: son.kisiler, uyarilar: son.uyarilar };
+    // Gelmeyenler ayrıca saklanmaz: Personel Listesi'nde olup kayıtta çalışan olarak bulunmayan herkes gelmeyendir.
+    const calisan = new Map(son.kisiler.filter(k => !k.yok).map(k => [k.sicil, k]));
+    const kisiler = ayar.personel.map(p => calisan.get(p.sicil) || gvGelmeyen(p, son.tarih, ayar));
+    const listede = new Set(ayar.personel.map(p => p.sicil));
+    calisan.forEach((k, sc) => { if (!listede.has(sc)) kisiler.push(k); });   // listeden çıkarılmış ama o gün çalışmış
+    let planGun = null;
+    try { const plan = await ykPlanlariOku(); for (const [, w] of plan.planlar){ if (w.has(son.tarih)){ planGun = w.get(son.tarih); break; } } } catch(err){}
+    const sonuc = { tarih: son.tarih, kisiler, uyarilar: son.uyarilar };
+    gvSebepleriUygula(sonuc, await gvSebepKaynaklari(son.tarih, planGun));
+    if (gvSonuc) return;
+    gvSonuc = sonuc;
     if (!gvAktifGrup || (gvAktifGrup !== GV_ANA && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
     document.getElementById('gvTarih').value = ykTarihToIso(son.tarih);
     gvSonucCiz();
@@ -4965,7 +4975,11 @@ async function gvSebepKaynaklari(tarih, planGun){
   (kayit || []).slice(1).forEach(r => {
     if (!r || ykTarih(r[0]) !== tarih || cS < 0) return;
     const d = String(r[cD] || '').trim(), a = cA >= 0 ? String(r[cA] || '').trim() : '';
-    if (d && ykAnahtar(d) !== 'GELDİ') kayitM.set(String(r[cS]).trim(), a || d);
+    if (!d || ['GELDİ','GELMEDİ','PLAN YOK'].includes(ykAnahtar(d))) return;   // sebep değil
+    // Yoklama Açıklama'sı "Rapor · elle girildi" gibi ek not taşıyabilir: yalnız sebebin kendisi alınır
+    const not = x => /^(ELLE GİRİLDİ|PLAN DIŞI GİRİŞ|GİRİŞ VAR)$/.test(ykAnahtar(x)) || /^SEBEP:/.test(ykAnahtar(x));
+    const sebep = a.split('·').map(x => x.trim()).filter(x => x && !not(x))[0] || d;
+    kayitM.set(String(r[cS]).trim(), sebep);
   });
   return { tarih, elle: elleM, kayit: kayitM, drive: drive || new Map(), plan: planGun || new Map() };
 }
@@ -4978,6 +4992,20 @@ function gvSebepBul(k, kay){
   if (pv && !ykVardiya(pv)) return { sebep: pv, kaynak: 'Plan' };
   if (k.ozel && (!k.bitis || ykSira(k.bitis) >= ykSira(kay.tarih))) return { sebep: k.ozel, kaynak: 'Özel durum' };
   return { sebep: '', kaynak: '' };
+}
+// Raporda verisi olmayan kişi: yalnız Tarih ve Personel Listesi kaynaklı sütunlar dolu
+function gvGelmeyen(p, tarih, ayar){
+  const degerler = {};
+  (gvSutunlar || []).forEach(s => {
+    const k = ykAnahtar(s.kaynak);
+    if (k === 'TARİH') degerler[s.baslik] = tarih;
+    else if (k === 'PERSONEL LİSTESİ'){
+      const f = { 'SİCİL':p.sicil, 'TEGSOFT ADI':p.tegsoft, 'AD SOYAD':p.ad, 'GÖREV':p.gorev, 'TAKIM LİDERİ':p.takim }[ykAnahtar(s.alan)];
+      degerler[s.baslik] = f === undefined ? '' : f;
+    }
+  });
+  return { sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, grup: ayar.gorevGrup.get(ykAnahtar(p.gorev)) || '', takim: p.takim, degerler,
+           yok: true, sebep: '', ozel: p.ozel || '', bitis: p.bitis || '' };
 }
 function gvSebepleriUygula(sonuc, kay){
   sonuc.kisiler.filter(k => k.yok).forEach(k => { const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak; });
@@ -5115,7 +5143,8 @@ function gvTabloCiz(){
     '<tr>' + sut.map(x => `<th>${ykEsc(x.baslik)}</th>`).join('') + '</tr>' +
     kisiler.map(k => '<tr>' + sut.map(x => {
       const st = (sag(x.bicim) ? 'text-align:center;' : '') + (gvSebepHucresi(k, x) ? 'background:#FF0000;color:#000;' : '');
-      return `<td${st ? ` style="${st}"` : ''}>${ykEsc(gvGoster(gvHucre(k, x), x.bicim))}</td>`;
+      const ipucu = gvSebepHucresi(k, x) && k.sebepKaynak ? ` title="Kaynak: ${ykEsc(k.sebepKaynak === 'elle' ? 'Günlük Veri’de elle seçildi' : k.sebepKaynak)}"` : '';
+      return `<td${st ? ` style="${st}"` : ''}${ipucu}>${ykEsc(gvGoster(gvHucre(k, x), x.bicim))}</td>`;
     }).join('') + '</tr>').join('');
   const yokSay = kisiler.filter(k => k.yok).length;
   document.getElementById('gvSayi').textContent = `${kisiler.length} kişi${yokSay ? ` (${yokSay} gelmeyen)` : ''} · ${sut.length} sütun`;

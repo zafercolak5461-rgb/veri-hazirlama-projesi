@@ -5052,7 +5052,9 @@ function gvAlanSecenek(kaynak){
   if (k === 'PERSONEL LİSTESİ') return GV_PERSONEL_ALAN;
   if (k === 'DETAYLI DURUM') return GV_DD_ALAN;
   const id = { 'DURUM RAPORU':'dr', 'MÜŞTERİ TEMSİLCİSİ BAZINDA':'mt' }[k];
+  // Dosya yüklüyse onun başlıkları; değilse ayarlarda bu kaynak için zaten kullanılan başlıklar
   if (id && gvDosyalar[id]) return gvDosyalar[id].baslik.filter(h => h && !['MÜŞTERİ TEMSİLCİSİ','XVALUE'].includes(ykAnahtar(h)));
+  if (id) return [...new Set(gvAyarSatir.filter(x => ykAnahtar(x.kaynak) === k && x.alan).map(x => x.alan))];
   if (k === 'HESAP') return gvAyarSatir.map(x => '{' + x.baslik + '}');
   return [];
 }
@@ -5065,7 +5067,7 @@ function gvAyarCiz(){
       dl.push(`<datalist id="gvAlanListe${i}">${gvAlanSecenek(x.kaynak).map(o => `<option value="${ykEsc(o)}">`).join('')}</datalist>`);
       return `<tr><td><input type="text" data-gv="${i}" data-alan="baslik" value="${ykEsc(x.baslik)}" style="width:150px;"></td>` +
         `<td><select data-gv="${i}" data-alan="kaynak" style="max-width:190px;">${GV_KAYNAKLAR.map(k => `<option${ykAnahtar(k) === ykAnahtar(x.kaynak) ? ' selected' : ''}>${k}</option>`).join('')}</select></td>` +
-        `<td><input type="text" data-gv="${i}" data-alan="alan" value="${ykEsc(x.alan)}" list="gvAlanListe${i}" ${ykAnahtar(x.kaynak) === 'TARİH' ? 'disabled placeholder="—"' : ''} style="width:${ykAnahtar(x.kaynak) === 'HESAP' ? 270 : 200}px;"></td>` +
+        `<td><input type="text" data-gv="${i}" data-alan="alan" value="${ykEsc(x.alan)}" list="gvAlanListe${i}"${ykAnahtar(x.kaynak) === 'HESAP' ? '' : ' class="yk-liste-ac"'} ${ykAnahtar(x.kaynak) === 'TARİH' ? 'disabled placeholder="—"' : ''} style="width:${ykAnahtar(x.kaynak) === 'HESAP' ? 270 : 200}px;"></td>` +
         `<td><select data-gv="${i}" data-alan="bicim">${GV_BICIMLER.map(b => `<option${ykAnahtar(b) === ykAnahtar(x.bicim) ? ' selected' : ''}>${b}</option>`).join('')}</select></td>` +
         gor.map(g => `<td><input type="number" min="1" step="1" data-gv="${i}" data-gor="${ykEsc(g)}" value="${x.sira[g] != null ? x.sira[g] : ''}" style="width:50px;"></td>`).join('') +
         `<td style="white-space:nowrap;"><button class="btn y-btn" data-gvyukari="${i}" title="Yukarı">↑</button><button class="btn y-btn" data-gvasagi="${i}" title="Aşağı">↓</button><button class="btn y-btn" data-gvsatsil="${i}">Sil</button></td></tr>`;

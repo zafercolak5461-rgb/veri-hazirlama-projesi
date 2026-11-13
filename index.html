@@ -5303,7 +5303,7 @@ function gvSonucCiz(){
   gvAylikEtiket();
   document.getElementById('gvBaslik').textContent = `${s.tarih} Günlük Operasyon Verileri`;
   document.getElementById('gvUyari').textContent = s.uyarilar.map(u => '⚠ ' + u).join('\n');
-  const gor = gvGruplar.concat(GV_ANA);
+  const gor = [GV_ANA].concat(gvGruplar);
   const gecSay = gvGecListe(true).length;   // diğer sekmeler gibi takım lideri filtresinden bağımsız
   const sdHep = s.kisiler.filter(k => !k.yok).flatMap(k => (k.sistemDisi || []).map(a => ({ k, a })));
   const sdBekleyen = sdHep.filter(o => !gvSdDurum(o.k, o.a)).length;

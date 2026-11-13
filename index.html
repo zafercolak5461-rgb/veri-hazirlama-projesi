@@ -404,7 +404,7 @@
         <div class="card">
           <div class="row">
             <label class="btn primary" style="cursor:pointer;">📂 Raporları Seç<input type="file" id="gvDosyaSec" accept=".xlsx" multiple style="display:none;"></label>
-            <label>Tarih: <input type="date" id="gvTarih"></label>
+            <label title="Tek gün için ikisine aynı tarihi seç; aralıkta her gün ayrı hesaplanır">Tarih: <input type="date" id="gvTarih"> – <input type="date" id="gvTarih2"></label>
             <button class="btn primary" id="gvHazirlaBtn">▶ Veriyi Hazırla</button>
           </div>
           <div id="gvDosyalar" class="gv-dosyalar"></div>
@@ -418,13 +418,14 @@
                 <button class="btn" id="gvKopyalaBtn" title="Ekranda görünen tabloyu (sekme + takım lideri) kopyalar">📋 Maile Kopyala</button>
                 <button class="btn" id="gvExcelBtn" title="Ekranda görünen tabloyu Excel'e aktarır">⬇ Excel'e Aktar</button>
                 <button class="btn ok" id="gvExcelTumBtn" title="Herkes, Ana sütunlarıyla (11.11 düzeni)">⬇ Ana Excel (Tümü)</button>
-                <button class="btn" id="gvAylikBtn" title="Takımın bütün personeli (Personel, SM, Uzman; gelmeyenler dahil), Ana Tablo sütunlarıyla: aylık dosyaya o günün sayfası eklenir, VERİ sayfasının sonuna yazılır. O ayın dosyası klasörde yoksa oluşturulur.">📁 Dosyama Ekle</button>
+                <button class="btn" id="gvAylikBtn" title="Seçilen tarih aralığındaki her gün; takımın bütün personeli (Personel, SM, Uzman; gelmeyenler dahil), Ana Tablo sütunlarıyla: aylık dosyaya günün sayfası eklenir, VERİ sayfasının sonuna yazılır. O ayın dosyası klasörde yoksa oluşturulur.">📁 Dosyama Ekle</button>
                 <button class="btn" id="gvAylikTumBtn" style="display:none;" title="Her takım liderinin bütün personeli kendi aylık dosyasına, Ana Tablo sütunlarıyla (Süper Yetkili)">📁 Tüm Takımlara Ekle</button>
               </div>
             </div>
             <div class="hint" style="margin:6px 0 0;">Aylık dosyalar klasörü: <b id="gvKlasorAd">seçilmedi</b> · <a href="#" id="gvKlasorDegistir">klasörü değiştir</a> · Bu ayın dosyası: <b id="gvAylikAd">—</b> (dosya Excel'de açıkken kaydedilemez)</div>
             <div id="gvKayitDurum" class="status"></div>
             <div id="gvUyari" class="status warn"></div>
+            <div class="yk-sekmeler" id="gvGunSec" style="margin-top:14px;display:none;"></div>
             <div class="yk-sekmeler" id="gvSekmeler" style="margin-top:14px;"></div>
             <div class="row" style="margin-top:10px;">
               <select id="gvMod" title="Gelmeyenler dahil: Personel Listesi'ndeki herkes; gelmeyenlere YOK ve sebep yazılır">
@@ -4611,7 +4612,8 @@ const GV_GRUP_AD = { 'ASİSTAN':'Personel', 'SM':'Sosyal Medya', 'UZMAN':'Uzman'
 let gvDosyalar = {};        // id → { ad, rows, baslik }
 let gvSutunlar = null;      // ayar satırları
 let gvGruplar = [];         // Rapor Grupları (GÖREVLER B sütunu) sırasıyla
-let gvSonuc = null;
+let gvSonuc = null;          // ekranda seçili günün sonucu
+let gvGunler = new Map();    // tarih → sonuc (tarih aralığı)
 let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
 const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
@@ -4694,19 +4696,30 @@ function gvGorunumSutun(sutunlar, gorunum){
 }
 
 // Durum Raporu / Müşteri Temsilcisi: seçilen günün satırları → Map(ykAd → { başlık anahtarı → değer }), atlanan sayısı
-function gvRaporOku(dosya, tarih){
+function gvRaporOku(dosya, tarih, aralik){
   const out = new Map(); let atlanan = 0, cift = [];
   if (!dosya) return { veri: out, atlanan, cift };
   const bas = dosya.baslik, cAd = ykSutun(bas, 'Müşteri Temsilcisi'), cT = ykSutun(bas, 'XVALUE');
   for (const r of dosya.rows.slice(dosya.bi + 1)){
     if (!r || !r[cAd]) continue;
-    if (cT >= 0 && r[cT] && ykTarih(String(r[cT]).trim()) !== tarih){ atlanan++; continue; }
+    if (cT >= 0 && r[cT] && ykTarih(String(r[cT]).trim()) !== tarih){ if (!aralik || !aralik.has(ykTarih(String(r[cT]).trim()))) atlanan++; continue; }
     const ad = ykAd(r[cAd]);
     if (out.has(ad)){ cift.push(String(r[cAd]).trim()); continue; }
     const m = {}; bas.forEach((h, i) => { if (h) m[ykAnahtar(h)] = r[i]; });
     out.set(ad, m);
   }
   return { veri: out, atlanan, cift };
+}
+// Rapordaki gün aralığı (XVALUE). Tegsoft, aralığın başına taşan oturumların gününü de rapora koyar (ör. 09–12 aralığında 08'in
+// birkaç satırı): raporda birden çok gün varsa ilk gün bu artıktır, aralığa alınmaz. Gerekirse başlangıç elle değiştirilir.
+function gvRaporAraligi(dosya){
+  if (!dosya) return null;
+  const cT = ykSutun(dosya.baslik, 'XVALUE'); if (cT < 0) return null;
+  const say = new Map();
+  dosya.rows.slice(dosya.bi + 1).forEach(r => { const t = r && r[cT] ? ykTarih(String(r[cT]).trim()) : ''; if (t) say.set(t, (say.get(t) || 0) + 1); });
+  const gunler = [...say.keys()].sort((a, b) => ykSira(a) - ykSira(b)); if (!gunler.length) return null;
+  if (gunler.length > 1) gunler.shift();
+  return [gunler[0], gunler[gunler.length - 1]];
 }
 // Rapordaki en çok geçen tarih (XVALUE)
 function gvRaporTarihi(dosya){
@@ -4774,7 +4787,7 @@ function gvFormul(formul, deger){
 function gvHesapla(g){
   const { tarih, ayar, sutunlar, dosyalar } = g;
   const uyarilar = [];
-  const dr = gvRaporOku(dosyalar.dr, tarih), mt = gvRaporOku(dosyalar.mt, tarih);
+  const dr = gvRaporOku(dosyalar.dr, tarih, g.aralik), mt = gvRaporOku(dosyalar.mt, tarih, g.aralik);
   const dd = dosyalar.dd ? ykLoginOku(dosyalar.dd.rows) : null;
   const giris = dd ? (dd.girisler.get(tarih) || new Map()) : new Map();
   const cikis = gvCikislar(dosyalar.dd, tarih);
@@ -4782,7 +4795,7 @@ function gvHesapla(g){
   const dun = pencere.get(ykTarihEkle(tarih, -1)) || new Map(), bu = pencere.get(tarih) || new Map();
   const geceDuzeltme = [];
   GV_RAPORLAR.forEach(r => { if (!dosyalar[r.id]) uyarilar.push(`${r.ad} yüklenmedi; ondan gelen sütunlar boş.`); });
-  if (dr.atlanan + mt.atlanan) uyarilar.push(`${tarih} dışındaki tarihe ait ${dr.atlanan + mt.atlanan} satır alınmadı (önceki günden sarkan oturumlar).`);
+  if (dr.atlanan + mt.atlanan) uyarilar.push(`${g.aralik && g.aralik.size > 1 ? 'Seçilen aralık' : tarih} dışındaki tarihe ait ${dr.atlanan + mt.atlanan} satır alınmadı (önceki günden sarkan oturumlar).`);
   [...new Set(dr.cift.concat(mt.cift))].forEach(a => uyarilar.push(`${a} raporda aynı gün iki kez var; ilk satır alındı.`));
   // Kişiler: Personel Listesi (Tegsoft Adı ile). Aynı sicil iki kişide yazılıysa uyar.
   const sicilSay = new Map(); ayar.personel.forEach(p => sicilSay.set(p.sicil, (sicilSay.get(p.sicil) || []).concat(p.ad)));
@@ -5024,47 +5037,59 @@ async function gvAyarlariYaz(sutunlar){
 // Her "Veriyi Hazırla"da sonuç bu sekmeye yazılır (öncekinin yerine). Sayfa yeniden açılınca dosya yüklemeden gelir.
 // Düzen: A1 Tarih | B1 tarih ; A2 Kaydeden | B2 ad + saat ; A3 Uyarılar | B3 metin ; 5. satır başlık ; 6. satırdan veri.
 const GV_SON_TAB = 'GÜNLÜK VERİ SON';
-const GV_SON_SABIT = ['Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep', 'Sistem Dışı'];
+const GV_SON_SABIT = ['Gün', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep', 'Sistem Dışı'];
 async function gvSekmeHazir(ad){
   const adlar = await getSheetTabNames(YOKLAMA_SHEET_ID);
   if (adlar.includes(ad)) return;
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}:batchUpdate`, { method:'POST', headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({ requests: [{ addSheet: { properties: { title: ad } } }] }) });
 }
-async function gvSonKaydet(sonuc){
+async function gvSonKaydet(gunler){
   await gvSekmeHazir(GV_SON_TAB);
   const basliklar = gvSutunlar.map(x => x.baslik);
+  const liste = [...gunler.values()].sort((x, y) => ykSira(x.tarih) - ykSira(y.tarih));
   const d = new Date(), zaman = `${ykTarih(d)} ${ykIki(d.getHours())}:${ykIki(d.getMinutes())}`;
-  const satirlar = [['Tarih', sonuc.tarih], ['Kaydeden', `${ykKaydeden()} · ${zaman}`], ['Uyarılar', sonuc.uyarilar.join('\n')], [],
-    GV_SON_SABIT.concat(basliklar)].concat(sonuc.kisiler.map(k =>
-      [k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : '', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : ''].concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; }))));
+  const aralik = liste.length > 1 ? `${liste[0].tarih} – ${liste[liste.length - 1].tarih}` : liste[0].tarih;
+  const uyari = liste.flatMap(s => s.uyarilar.map(u => liste.length > 1 ? `[${s.tarih}] ${u}` : u));
+  const satirlar = [['Tarih', aralik], ['Kaydeden', `${ykKaydeden()} · ${zaman}`], ['Uyarılar', uyari.join('\n')], [], GV_SON_SABIT.concat(basliklar)];
+  liste.forEach(s => s.kisiler.forEach(k => satirlar.push(
+    [s.tarih, k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : '', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : '']
+      .concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; })))));
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ`)}:clear`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1`)}?valueInputOption=RAW`, {
     method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
   return zaman;
 }
-// Kayıtlı son günü okur → { tarih, kisiler, uyarilar, kaydeden } ya da null. Değerler biçimsiz (saniye sayı olarak) okunur.
+// Kayıtlı günleri okur → { gunler: [{ tarih, kisiler, uyarilar }], kaydeden } ya da null. Değerler biçimsiz (saniye sayı olarak) okunur.
 async function gvSonOku(){
   let rows;
   try {
-    const d = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ2000`)}?valueRenderOption=UNFORMATTED_VALUE`);
+    const d = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ`)}?valueRenderOption=UNFORMATTED_VALUE`);
     rows = d.values || [];
   } catch(err){ if (/Unable to parse range|400/.test(err.message)) return null; throw err; }
-  const tarih = rows[0] && ykTarih(String(rows[0][1] || ''));
+  const ust = String((rows[0] && rows[0][1]) || '');
+  const ilkTarih = ykTarih(ust.split('–')[0].trim());
   const bas = rows[4] || [];
-  if (!tarih || !bas.length) return null;
-  let n = 0; while (n < bas.length && GV_SON_SABIT.includes(bas[n])) n++;   // eski kayıtta Gelmedi/Sebep yok
-  const cG = bas.indexOf('Gelmedi'), cS = bas.indexOf('Sebep'), cSD = bas.indexOf('Sistem Dışı');
-  const kisiler = rows.slice(5).filter(r => r && r[0] !== '' && r[0] != null).map(r => {
+  if (!ilkTarih || !bas.length) return null;
+  let n = 0; while (n < bas.length && GV_SON_SABIT.includes(bas[n])) n++;   // eski kayıtta Gün/Gelmedi/Sebep olmayabilir
+  const ix = a => bas.indexOf(a);
+  const cGun = ix('Gün'), cSc = ix('Sicil'), cAd = ix('Ad Soyad'), cTg = ix('Tegsoft Adı'), cRg = ix('Rapor Grubu'), cTk = ix('Takım Lideri'), cG = ix('Gelmedi'), cS = ix('Sebep'), cSD = ix('Sistem Dışı');
+  const al = (r, c, v) => c >= 0 && r[c] != null ? r[c] : v;
+  const gunler = new Map();
+  rows.slice(5).filter(r => r && al(r, cSc, '') !== '').forEach(r => {
+    const t = cGun >= 0 ? ykTarih(String(r[cGun])) : ilkTarih; if (!t) return;
     const degerler = {};
     bas.slice(n).forEach((b, i) => { if (b) degerler[b] = r[n + i] == null ? '' : r[n + i]; });
     const yok = cG >= 0 && ykAnahtar(r[cG]) === 'EVET';
-    return { sicil: String(r[0]), ad: r[1] || '', tegsoft: r[2] || '', grup: r[3] || '', takim: r[4] || '', degerler,
-             yok, sebep: yok && cS >= 0 ? String(r[cS] || '') : '',
-             sistemDisi: (() => { try { return cSD >= 0 && r[cSD] ? JSON.parse(r[cSD]) : []; } catch(e){ return []; } })() };
+    if (!gunler.has(t)) gunler.set(t, []);
+    gunler.get(t).push({ sicil: String(al(r, cSc, '')), ad: al(r, cAd, ''), tegsoft: al(r, cTg, ''), grup: al(r, cRg, ''), takim: al(r, cTk, ''), degerler,
+             yok, sebep: yok ? String(al(r, cS, '')) : '',
+             sistemDisi: (() => { try { return cSD >= 0 && r[cSD] ? JSON.parse(r[cSD]) : []; } catch(e){ return []; } })() });
   });
-  const uyarilar = String((rows[2] && rows[2][1]) || '').split('\n').filter(Boolean);
-  return { tarih, kisiler, uyarilar, kaydeden: (rows[1] && rows[1][1]) || '' };
+  const uyariSatir = String((rows[2] && rows[2][1]) || '').split('\n').filter(Boolean);
+  const uyariGun = t => uyariSatir.filter(u => !/^\[\d{2}\.\d{2}\.\d{4}\]/.test(u) || u.startsWith(`[${t}]`)).map(u => u.replace(/^\[\d{2}\.\d{2}\.\d{4}\]\s*/, ''));
+  return { gunler: [...gunler.entries()].sort((a, b) => ykSira(a[0]) - ykSira(b[0])).map(([tarih, kisiler]) => ({ tarih, kisiler, uyarilar: uyariGun(tarih) })),
+           kaydeden: (rows[1] && rows[1][1]) || '' };
 }
 async function gvSonuGetir(){
   if (gvSonuc) return;
@@ -5072,30 +5097,54 @@ async function gvSonuGetir(){
     const { ayar } = await gvAyarlariOku();
     gvSebepSecenek = ayar.sebepler || [];
     const son = await gvSonOku();
-    if (!son || gvSonuc) return;
-    // Gelmeyenler ayrıca saklanmaz: Personel Listesi'nde olup kayıtta çalışan olarak bulunmayan herkes gelmeyendir.
-    const calisan = new Map(son.kisiler.filter(k => !k.yok).map(k => [k.sicil, k]));
-    const kisiler = ayar.personel.map(p => calisan.get(p.sicil) || gvGelmeyen(p, son.tarih, ayar));
-    const listede = new Set(ayar.personel.map(p => p.sicil));
-    calisan.forEach((k, sc) => { if (!listede.has(sc)) kisiler.push(k); });   // listeden çıkarılmış ama o gün çalışmış
-    let planGun = null;
-    try { const plan = await ykPlanlariOku(); for (const [, w] of plan.planlar){ if (w.has(son.tarih)){ planGun = w.get(son.tarih); break; } } } catch(err){}
-    const sonuc = { tarih: son.tarih, kisiler, uyarilar: son.uyarilar };
-    gvSebepleriUygula(sonuc, await gvSebepKaynaklari(son.tarih, planGun));
+    if (!son || !son.gunler.length || gvSonuc) return;
+    let planlar = null;
+    try { planlar = (await ykPlanlariOku()).planlar; } catch(err){}
+    const ob = {}, yeni = new Map();
+    for (const g of son.gunler){
+      // Gelmeyenler ayrıca saklanmaz: Personel Listesi'nde olup kayıtta çalışan olarak bulunmayan herkes gelmeyendir.
+      const calisan = new Map(g.kisiler.filter(k => !k.yok).map(k => [k.sicil, k]));
+      const kisiler = ayar.personel.map(p => calisan.get(p.sicil) || gvGelmeyen(p, g.tarih, ayar));
+      const listede = new Set(ayar.personel.map(p => p.sicil));
+      calisan.forEach((k, sc) => { if (!listede.has(sc)) kisiler.push(k); });   // listeden çıkarılmış ama o gün çalışmış
+      let planGun = null;
+      if (planlar) for (const [, w] of planlar){ if (w.has(g.tarih)){ planGun = w.get(g.tarih); break; } }
+      const sonuc = { tarih: g.tarih, kisiler, uyarilar: g.uyarilar };
+      gvSebepleriUygula(sonuc, await gvSebepKaynaklari(g.tarih, planGun, ob));
+      yeni.set(g.tarih, sonuc);
+    }
     if (gvSonuc) return;
-    gvSonuc = sonuc;
-    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
-    document.getElementById('gvTarih').value = ykTarihToIso(son.tarih);
-    gvSonucCiz();
-    ykDurum('gvDurum', `Kayıtlı son veri gösteriliyor: ${son.tarih} (${son.kaydeden}). Yeni gün için raporları yükle.`, 'ok');
+    gvGunler = yeni;
+    const tl = [...yeni.keys()];
+    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = GV_ANA;
+    document.getElementById('gvTarih').value = ykTarihToIso(tl[0]); document.getElementById('gvTarih2').value = ykTarihToIso(tl[tl.length - 1]);
+    gvGunSec(tl[tl.length - 1]);
+    ykDurum('gvDurum', `Kayıtlı son veri gösteriliyor: ${tl.length > 1 ? `${tl[0]} – ${tl[tl.length - 1]} (${tl.length} gün)` : tl[0]} (${son.kaydeden}). Yeni gün için raporları yükle.`, 'ok');
   } catch(err){ ykDurum('gvDurum', '✗ Kayıtlı veri okunamadı: ' + err.message, 'err'); }
 }
+// Gün seçici (aralıkta birden çok gün varsa)
+const GV_GUN_ADI = ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'];
+function gvGunAdi(t){ const m = String(t).match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? GV_GUN_ADI[new Date(+m[3], +m[2] - 1, +m[1]).getDay()] : ''; }
+function gvGunSec(t){
+  if (!gvGunler.has(t)) return;
+  gvSonuc = gvGunler.get(t);
+  const el = document.getElementById('gvGunSec');
+  el.style.display = gvGunler.size > 1 ? '' : 'none';
+  el.innerHTML = gvGunler.size > 1 ? [...gvGunler.values()].map(s => {
+    const n = s.kisiler.filter(k => !k.yok).length;
+    return `<button class="yk-sekme${s.tarih === t ? ' aktif' : ''}" data-gvgun="${s.tarih}" title="${n} kişi çalıştı">${s.tarih.slice(0, 5)} ${gvGunAdi(s.tarih)} <span class="soluk">(${n})</span></button>`;
+  }).join('') : '';
+  gvSonucCiz(); gvSebepKutuCiz();
+}
+document.getElementById('gvGunSec').addEventListener('click', e => { const b = e.target.closest('[data-gvgun]'); if (b) gvGunSec(b.dataset.gvgun); });
 
 // ---------- Gelmeyenlerin sebebi ----------
 // Kaynaklar: GÜNLÜK VERİ SEBEP (elle) · KAYIT (o günün yoklaması, varsa) · Drive VARDİYA · Haftalık Plan · özel durum
-async function gvSebepKaynaklari(tarih, planGun){
+async function gvSebepKaynaklari(tarih, planGun, onbellek){
   const oku = async aralik => { try { const [r] = await ykOku([aralik]); return r; } catch(err){ return []; } };
-  const [notlar, kayit, drive] = await Promise.all([oku(`'${GV_NOT_TAB}'!A1:G10000`), oku(`'${YK_TAB.kayit}'!A1:H20000`), ykDriveGun(tarih)]);
+  const ob = onbellek || {};
+  if (!ob.ortak) ob.ortak = Promise.all([oku(`'${GV_NOT_TAB}'!A1:G10000`), oku(`'${YK_TAB.kayit}'!A1:H20000`)]);
+  const [[notlar, kayit], drive] = await Promise.all([ob.ortak, ykDriveGun(tarih)]);
   const elleM = new Map(), kayitM = new Map(), gecDegil = new Set(), saatlik = new Map(); let staffKapali = false;
   (notlar || []).slice(1).forEach(r => {
     if (!r || ykTarih(r[0]) !== tarih || !r[1] || !String(r[4] || '').trim()) return;
@@ -5117,13 +5166,13 @@ async function gvSebepKaynaklari(tarih, planGun){
     // Yoklama Açıklama'sı "Rapor · elle girildi" gibi ek not taşıyabilir: yalnız sebebin kendisi alınır
     const not = x => /^(ELLE GİRİLDİ|PLAN DIŞI GİRİŞ|GİRİŞ VAR)$/.test(ykAnahtar(x)) || /^SEBEP:/.test(ykAnahtar(x));
     const sebep = a.split('·').map(x => x.trim()).filter(x => x && !not(x))[0] || d;
-    kayitM.set(String(r[cS]).trim(), sebep);
+    kayitM.set(String(r[cS]).trim(), ykAnahtar(d) === 'ÇALIŞMIYOR' ? { calismiyor: true, sebep } : sebep);
   });
   return { tarih, elle: elleM, kayit: kayitM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, staffKapali, saatlik, planVar: !!planGun };
 }
 function gvSebepBul(k, kay){
   if (kay.elle.has(k.sicil)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
-  if (kay.kayit.has(k.sicil)) return { sebep: kay.kayit.get(k.sicil), kaynak: 'Yoklama' };
+  if (kay.kayit.has(k.sicil)){ const v = kay.kayit.get(k.sicil); return typeof v === 'object' ? { sebep: v.sebep, kaynak: 'Yoklama', calismiyor: true } : { sebep: v, kaynak: 'Yoklama' }; }
   const dv = String(kay.drive.get(k.sicil) || '').trim();
   if (dv && !ykVardiya(dv)) return { sebep: dv, kaynak: 'VARDİYA' };
   const pv = String(kay.plan.get(k.sicil) || '').trim();
@@ -5184,7 +5233,10 @@ function gvSistemDisiHesapla(sonuc, dosya){
   });
 }
 function gvSebepleriUygula(sonuc, kay){
-  sonuc.kisiler.filter(k => k.yok).forEach(k => { const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak; });
+  // SEBEPLER'de "Çalışmıyor" grubundaki kod (HT, OFF…) ya da Yoklama'da "Çalışmıyor": o gün çalışması beklenmiyor → gelmeyen sayılmaz
+  const calismiyorKod = new Set((gvSebepSecenek || []).filter(x => ykAnahtar(x.grup) === 'ÇALIŞMIYOR').map(x => ykAnahtar(x.deger)));
+  sonuc.kisiler.filter(k => k.yok).forEach(k => { const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak; k.calismiyor = !!b.calismiyor || (!!b.sebep && calismiyorKod.has(ykAnahtar(b.sebep))); });
+  sonuc.kisiler = sonuc.kisiler.filter(k => !(k.yok && k.calismiyor));
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA
   sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ykVardiya(kay.drive.get(k.sicil)) || ''; });
   sonuc.notlar = { gecDegil: kay.gecDegil, staffKapali: kay.staffKapali, saatlik: kay.saatlik, planVar: kay.planVar };
@@ -5227,7 +5279,7 @@ document.getElementById('gvSebepKutu').addEventListener('change', async e => {
     k.sebep = el.value; k.sebepKaynak = 'elle';
     gvSonucCiz();
     ykDurum('gvKayitDurum', `✓ ${k.ad}: ${el.value} kaydedildi.`, 'ok');
-    try { await gvSonKaydet(gvSonuc); } catch(err){ /* son gün kaydı ikinci planda */ }
+    try { await gvSonKaydet(gvGunler); } catch(err){ /* son gün kaydı ikinci planda */ }
   } catch(err){ el.disabled = false; ykDurum('gvKayitDurum', '✗ Sebep kaydedilemedi: ' + err.message, 'err'); }
 });
 function gvMod(){ return document.getElementById('gvMod').value; }
@@ -5259,8 +5311,8 @@ document.getElementById('gvDosyaSec').addEventListener('change', async e => {
   }
   e.target.value = '';
   gvDosyaBilgiCiz();
-  const t = gvRaporTarihi(gvDosyalar.dr) || gvRaporTarihi(gvDosyalar.mt);
-  if (t) document.getElementById('gvTarih').value = ykTarihToIso(t);
+  const ar = gvRaporAraligi(gvDosyalar.dr) || gvRaporAraligi(gvDosyalar.mt);
+  if (ar){ document.getElementById('gvTarih').value = ykTarihToIso(ar[0]); document.getElementById('gvTarih2').value = ykTarihToIso(ar[1]); }
   ykDurum('gvDurum', bilinmeyen.length ? `✗ Tanınmayan dosya: ${bilinmeyen.join(', ')}. Durum Raporu, Müşteri Temsilcisi Bazında ya da Detaylı Durum olmalı.` : '', bilinmeyen.length ? 'err' : '');
   if (GV_RAPORLAR.every(r => gvDosyalar[r.id])) gvHazirla();
 });
@@ -5271,24 +5323,37 @@ document.getElementById('gvDosyalar').addEventListener('click', e => {
 document.getElementById('gvHazirlaBtn').addEventListener('click', () => gvHazirla());
 
 async function gvHazirla(){
-  const tarih = ykIsoToTarih(document.getElementById('gvTarih').value);
-  if (!tarih){ ykDurum('gvDurum', 'Tarih seç.', 'err'); return; }
+  const t1 = ykIsoToTarih(document.getElementById('gvTarih').value);
+  let t2 = ykIsoToTarih(document.getElementById('gvTarih2').value) || t1;
+  if (!t1){ ykDurum('gvDurum', 'Tarih seç.', 'err'); return; }
+  if (ykSira(t2) < ykSira(t1)){ ykDurum('gvDurum', 'Bitiş tarihi başlangıçtan önce olamaz.', 'err'); return; }
+  const tarihler = []; for (let t = t1; ykSira(t) <= ykSira(t2) && tarihler.length < 63; t = ykTarihEkle(t, 1)) tarihler.push(t);
+  if (ykSira(tarihler[tarihler.length - 1]) < ykSira(t2)){ ykDurum('gvDurum', 'En çok 62 günlük aralık seçilebilir.', 'err'); return; }
   if (!Object.keys(gvDosyalar).length){ ykDurum('gvDurum', gvSonuc ? 'Ekrandaki kayıtlı son veri. Yeniden hesaplamak ya da yeni gün için raporları yükle.' : 'Önce raporları yükle.', gvSonuc ? 'warn' : 'err'); return; }
   ykDurum('gvDurum', 'Personel Listesi, sütun ayarları ve plan okunuyor…');
   try {
     const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
     if (!gvSutunlar.length){ ykDurum('gvDurum', 'Sütun ayarı yok. "Günlük Veri Ayarları" sayfasından sütunları tanımla.', 'err'); return; }
-    let planGun = null, planYarin = null; const yarin = ykTarihEkle(tarih, 1);
-    for (const [, w] of plan.planlar){ if (!planGun && w.has(tarih)) planGun = w.get(tarih); if (!planYarin && w.has(yarin)) planYarin = w.get(yarin); }
-    gvSonuc = gvHesapla({ tarih, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
     gvSebepSecenek = ayar.sebepler || [];
-    gvSebepleriUygula(gvSonuc, await gvSebepKaynaklari(tarih, planGun));
-    gvSistemDisiHesapla(gvSonuc, gvDosyalar.dd);
-    if (!planGun) gvSonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı).`);
+    const aralik = new Set(tarihler), ob = {}, yeni = new Map();
+    for (const tarih of tarihler){
+      if (tarihler.length > 1) ykDurum('gvDurum', `${tarih} hesaplanıyor… (${yeni.size + 1}/${tarihler.length})`);
+      let planGun = null, planYarin = null; const yarin = ykTarihEkle(tarih, 1);
+      for (const [, w] of plan.planlar){ if (!planGun && w.has(tarih)) planGun = w.get(tarih); if (!planYarin && w.has(yarin)) planYarin = w.get(yarin); }
+      const sonuc = gvHesapla({ tarih, aralik, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
+      gvSebepleriUygula(sonuc, await gvSebepKaynaklari(tarih, planGun, ob));
+      gvSistemDisiHesapla(sonuc, gvDosyalar.dd);
+      if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
+      if (!sonuc.kisiler.some(k => !k.yok)) sonuc.uyarilar.unshift(`${tarih}: raporlarda bu güne ait veri yok.`);
+      yeni.set(tarih, sonuc);
+    }
+    gvGunler = yeni;
     ykDurum('gvDurum', '');
-    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
-    gvSonucCiz();
-    try { const z = await gvSonKaydet(gvSonuc); ykDurum('gvDurum', `✓ ${tarih} verisi kaydedildi (${z}); sayfayı yeniden açınca dosya yüklemeden gelir.`, 'ok'); }
+    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = GV_ANA;
+    const secili = gvSonuc && yeni.has(gvSonuc.tarih) ? gvSonuc.tarih : tarihler[tarihler.length - 1];
+    gvGunSec(secili);
+    const ad = tarihler.length > 1 ? `${t1} – ${t2} (${tarihler.length} gün)` : t1;
+    try { const z = await gvSonKaydet(gvGunler); ykDurum('gvDurum', `✓ ${ad} verisi kaydedildi (${z}); sayfayı yeniden açınca dosya yüklemeden gelir.`, 'ok'); }
     catch(err){ ykDurum('gvDurum', '⚠ Tablo hazırlandı ama kaydedilemedi (yeniden açınca dosyaları tekrar yüklemen gerekir): ' + err.message, 'warn'); }
   } catch(err){ ykDurum('gvDurum', '✗ ' + err.message, 'err'); }
 }
@@ -5576,61 +5641,79 @@ function gvDosyaAdi(tarih, tk){
 function gvHedefTakim(){
   if (userPerms.superYetkili) return { takim: document.getElementById('gvTakim').value };
   const isim = ykAnahtar(userPerms.isim || '');
-  const tk = isim && gvSonuc && (gvSonuc.kisiler.find(k => ykAnahtar(k.takim) === isim) || {}).takim;
+  const tk = isim && gvSonuc && gvTumTakimlar().concat(gvSonuc.kisiler.map(k => k.takim)).find(t => ykAnahtar(t) === isim);
   return tk ? { takim: tk } : { hata: `Dosyama Ekle yalnız takım liderleri içindir; "${userPerms.isim || currentUserEmail}" personel listesinde takım lideri olarak geçmiyor (Yetkilendirme'deki İsim, PERSONEL'deki Takım Lideri yazılışıyla aynı olmalı).` };
 }
 async function gvAylikEtiket(){
   const el = document.getElementById('gvAylikAd'); if (!el) return;
   document.getElementById('gvAylikTumBtn').style.display = userPerms.superYetkili ? '' : 'none';
   const k = await gvKlasorOku(); document.getElementById('gvKlasorAd').textContent = k ? k.name : 'seçilmedi';
-  const hd = gvHedefTakim(); el.textContent = hd.hata || !gvSonuc ? '—' : gvDosyaAdi(gvSonuc.tarih, hd.takim);
+  const hd = gvHedefTakim();
+  el.textContent = hd.hata || !gvSonuc ? '—' : [...new Set([...gvGunler.values()].concat(gvGunler.size ? [] : [gvSonuc]).map(g => gvDosyaAdi(g.tarih, hd.takim)))].join(', ');
 }
 // Tek takımı klasördeki aylık dosyasına yazar; sonuç metni döner
-async function gvTakimaYaz(dir, tk, sut, gorunum){
-  const kisiler = gvKisiler(gorunum, tk);
-  if (!kisiler.length) return { ok:false, metin:'kişi yok' };
-  const ad = gvDosyaAdi(gvSonuc.tarih, tk);
-  let h, yeni = false, buf;
-  try { h = await dir.getFileHandle(ad); buf = await (await h.getFile()).arrayBuffer(); }
-  catch(e){
-    if (e.name !== 'NotFoundError') throw e;
-    // Yeni ayın dosyası boş oluşturulur: gün sayfaları + VERİ (biçimler panel ayarlarından yazılır)
-    h = await dir.getFileHandle(ad, { create:true }); yeni = true;
-  }
-  const wb = new ExcelJS.Workbook();
-  if (buf) await wb.xlsx.load(buf);
-  const s = gvAylikIsle(wb, gvSonuc.tarih, sut, kisiler, gorunum);
-  const out = await wb.xlsx.writeBuffer();
-  let w;
-  try { w = await h.createWritable(); }
-  catch(e){ throw new Error(`${ad} yazılamadı; Excel'de açıksa kapatıp tekrar dene`); }
-  await w.write(out); await w.close();
-  return { ok:true, metin:`${ad}${yeni ? ' (yeni dosya oluşturuldu)' : ''}: ${s.yenilendi ? 'gün yenilendi' : 'gün eklendi'}, ${kisiler.length} kişi` };
+// Bir takımın aralıktaki günlerini aylık dosyalarına yazar (her ayın dosyası bir kez açılıp kaydedilir); satır metinleri döner
+async function gvTakimaYaz(dir, tk, sut, gunler){
+  const dosyalar = new Map();   // dosya adı → [sonuc]
+  gunler.forEach(g => { const ad = gvDosyaAdi(g.tarih, tk); if (!dosyalar.has(ad)) dosyalar.set(ad, []); dosyalar.get(ad).push(g); });
+  const eski = gvSonuc, out = [];
+  try {
+    for (const [ad, gl] of dosyalar){
+      try {
+        const yazilacak = gl.map(g => { gvSonuc = g; return { g, kisiler: gvKisiler(GV_ANA, tk) }; }).filter(x => x.kisiler.length);
+        if (!yazilacak.length){ out.push(`– ${tk || 'Tümü'}: ${ad} — bu günlerde kişi yok`); continue; }
+        let h, yeni = false, buf;
+        try { h = await dir.getFileHandle(ad); buf = await (await h.getFile()).arrayBuffer(); }
+        catch(e){
+          if (e.name !== 'NotFoundError') throw e;
+          // Yeni ayın dosyası boş oluşturulur: gün sayfaları + VERİ (biçimler panel ayarlarından yazılır)
+          h = await dir.getFileHandle(ad, { create:true }); yeni = true;
+        }
+        const wb = new ExcelJS.Workbook();
+        if (buf && buf.byteLength) await wb.xlsx.load(buf);
+        let eklendi = 0, yenilendi = 0, kisi = 0;
+        yazilacak.forEach(({ g, kisiler }) => { gvSonuc = g; const r = gvAylikIsle(wb, g.tarih, sut, kisiler, GV_ANA); r.yenilendi ? yenilendi++ : eklendi++; kisi += kisiler.length; });
+        const b = await wb.xlsx.writeBuffer();
+        let w;
+        try { w = await h.createWritable(); }
+        catch(e){ throw new Error(`${ad} yazılamadı; Excel'de açıksa kapatıp tekrar dene`); }
+        await w.write(b); await w.close();
+        const gunMetin = yazilacak.length === 1 ? yazilacak[0].g.tarih : `${yazilacak.length} gün`;
+        out.push(`✓ ${tk || 'Tümü'}: ${ad}${yeni ? ' (yeni dosya)' : ''} — ${gunMetin}${eklendi ? `, ${eklendi} eklendi` : ''}${yenilendi ? `, ${yenilendi} yenilendi` : ''} (${kisi} satır)`);
+      } catch(e){ out.push(`✗ ${tk || 'Tümü'}: ${e.message}`); }
+    }
+  } finally { gvSonuc = eski; }
+  return out;
 }
+// Aralıktaki her günde görünen takım liderleri
+function gvTumTakimlar(){ return [...new Set([...gvGunler.values()].flatMap(g => g.kisiler.map(k => k.takim)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')); }
 async function gvAylikDosyayaEkle(tumu){
   if (!gvSonuc) return;
   let hedefler;
   if (tumu){
     if (!userPerms.superYetkili) return;
-    hedefler = [...new Set(gvSonuc.kisiler.map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+    hedefler = gvTumTakimlar();
   } else {
     const hd = gvHedefTakim();
     if (hd.hata){ ykDurum('gvKayitDurum', '✗ ' + hd.hata, 'err'); return; }
     hedefler = [hd.takim];
   }
-  const mod = document.getElementById('gvMod'), eskiMod = mod.value;
+  const gunler = [...gvGunler.values()].sort((a, b) => ykSira(a.tarih) - ykSira(b.tarih));
+  if (!gunler.length) gunler.push(gvSonuc);
+  const mod = document.getElementById('gvMod'), eskiMod = mod.value, eskiSonuc = gvSonuc;
   try {
     const dir = await gvKlasorAl(false); if (!dir) return;
     mod.value = 'tumu';                                 // gelmeyenler her zaman dahil (takip için)
     // Aylık dosyaya her zaman Ana Tablo yazılır: takımın bütün personeli (Personel, SM, Uzman), Ana sütunlarıyla
     const sut = gvGorSut(GV_ANA);
-    const bos = hedefler.flatMap(tk => gvKisiler(GV_ANA, tk).filter(k => k.yok && !k.sebep));
-    if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return;
+    const bos = [];
+    gunler.forEach(g => { gvSonuc = g; hedefler.forEach(tk => gvKisiler(GV_ANA, tk).filter(k => k.yok && !k.sebep).forEach(k => bos.push(gunler.length > 1 ? `${k.ad} (${g.tarih.slice(0, 5)})` : k.ad))); });
+    gvSonuc = eskiSonuc;
+    if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.slice(0, 30).join(', ')}${bos.length > 30 ? ', …' : ''}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce ilgili günü seçip "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return;
     const sonuc = [];
     for (const tk of hedefler){
       ykDurum('gvKayitDurum', `${tk || 'Tümü'} yazılıyor…`);
-      try { const r = await gvTakimaYaz(dir, tk, sut, GV_ANA); sonuc.push(`${r.ok ? '✓' : '–'} ${tk || 'Tümü'}: ${r.metin}`); }
-      catch(e){ sonuc.push(`✗ ${tk || 'Tümü'}: ${e.message}`); }
+      sonuc.push(...await gvTakimaYaz(dir, tk, sut, gunler));
     }
     const hata = sonuc.some(x => x.startsWith('✗'));
     ykDurum('gvKayitDurum', sonuc.join('\n'), hata ? 'err' : 'ok');
@@ -5638,7 +5721,7 @@ async function gvAylikDosyayaEkle(tumu){
   } catch(err){
     if (err && err.name === 'AbortError') return;
     ykDurum('gvKayitDurum', '✗ ' + err.message, 'err');
-  } finally { mod.value = eskiMod; gvAylikEtiket(); }
+  } finally { gvSonuc = eskiSonuc; mod.value = eskiMod; gvAylikEtiket(); }
 }
 document.getElementById('gvAylikBtn').addEventListener('click', () => gvAylikDosyayaEkle(false));
 document.getElementById('gvAylikTumBtn').addEventListener('click', () => gvAylikDosyayaEkle(true));

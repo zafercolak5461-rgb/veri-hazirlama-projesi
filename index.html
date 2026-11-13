@@ -469,12 +469,14 @@
           </div>
         </div>
         <div class="card">
-          <h2>Excel, Mail ve Gece Vardiyası</h2>
+          <h2>Excel, Mail, Gece Vardiyası ve Sistem Dışı Süreler</h2>
           <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.<br><b>Gece vardiyası penceresi</b>: o gün Haftalık Plan'da 00:00'da başlayan vardiyası olanın, önceki akşam gece yarısından bu kadar dakika önce açtığı oturum Staffed'a eklenir (<code>{Detaylı Durum.Gece Eki}</code>); ertesi gün de 00:00 vardiyası varsa bu akşamki aynı kısım bugünden düşülür (<code>{Detaylı Durum.Gece Düşümü}</code>). Yalnız yüklenen Detaylı Durum'daki oturumlar kullanılır.</div>
           <div class="row">
             <label>Başlık rengi: <input type="color" id="gvStilRenk"></label>
             <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
             <label>Gece vardiyası erken giriş penceresi (dk): <input type="number" id="gvStilGece" min="0" step="5" style="width:70px;"></label>
+            <label title="Detaylı Durum'da sistemde olunmayan bu süreyi aşan aralıklar Sistem Dışı Süreler sekmesinde sorulur">Sistem dışı süre eşiği (dk): <input type="number" id="gvStilSd" min="1" step="5" style="width:70px;"></label>
+            <label><input type="checkbox" id="gvStilSdOrta"> gün içi</label><label><input type="checkbox" id="gvStilSdBas"> vardiya başı</label><label><input type="checkbox" id="gvStilSdSon"> vardiya sonu</label>
             <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
             <button class="btn" id="gvStilVarsayilan">Varsayılan</button>
             <button class="btn ok" id="gvStilKaydet">💾 Kaydet</button>
@@ -4578,7 +4580,9 @@ const GV_KAYNAKLAR = ['Tarih', 'Personel Listesi', 'Durum Raporu', 'Müşteri Te
 // Günlük veriye özel notlar (Yoklama'yı etkilemez): Tarih | Sicil | Ad Soyad | Tür | Değer | Kaydeden | Zaman
 // Tür: Sebep (gelmeyenin elle seçilen sebebi) · Geç Değil (geç giriş sistem sorunu, yeşil) · Vardiya Süresi Kontrolü Kapalı (Sicil GENEL)
 const GV_NOT_TAB = 'GÜNLÜK VERİ NOTLAR';
-const GV_NOT_TUR = { sebep:'Sebep', gecDegil:'Geç Değil', staffKapali:'Vardiya Süresi Kontrolü Kapalı' };
+const GV_NOT_TUR = { sebep:'Sebep', gecDegil:'Geç Değil', staffKapali:'Vardiya Süresi Kontrolü Kapalı', saatlik:'Saatlik İzin' };
+// Saatlik İzin notunun değeri: "Kullandı 13:10-14:05" ya da "Kullanmadı 13:10-14:05" (her aralık ayrı satır)
+const GV_SD = '__sd';   // Sistem Dışı Süreler sekmesi
 // Koşullu biçimlendirme kuralları: Sütun | Koşul | Değer | Değer 2 | Dolgu | Yazı | Kalın | Ana | Asistan | SM | Uzman (boşsa hepsi)
 const GV_KOSUL_TAB = 'GÜNLÜK VERİ KOŞULLAR';
 const GV_KOSULLAR = ['büyüktür', 'küçüktür', 'arası', 'eşittir', 'içerir', 'dolu', 'geç giriş', 'geç değil işaretli', 'vardiyadan az'];
@@ -4606,15 +4610,20 @@ let gvGruplar = [];         // Rapor Grupları (GÖREVLER B sütunu) sırasıyla
 let gvSonuc = null;
 let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
-const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60 };
+const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
+  sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, sdEsik:30, sdOrta:true, sdBas:true, sdSon:true };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
   const m = new Map((ayarRows || []).slice(1).filter(r => r && r[0]).map(r => [ykAnahtar(r[0]), r[1]]));
   return { baslikRenk: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikRenk)), GV_STIL_VARSAYILAN.baslikRenk),
            baslikYazi: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikYazi)), GV_STIL_VARSAYILAN.baslikYazi),
-           gecePencere: (n => n == null || n < 0 ? GV_STIL_VARSAYILAN.gecePencere : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.gecePencere)))) };
+           gecePencere: (n => n == null || n < 0 ? GV_STIL_VARSAYILAN.gecePencere : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.gecePencere)))),
+           sdEsik: (n => n == null || n <= 0 ? GV_STIL_VARSAYILAN.sdEsik : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdEsik)))),
+           sdOrta: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdOrta))),
+           sdBas: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdBas))),
+           sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))) };
 }
 // Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
 function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
@@ -4864,10 +4873,12 @@ function gvHesapla(g){
 // Bir kişinin bir sütundaki ham değeri: gelmeyende kimlik sütunları dolu, Sebep sütununda sebep, diğerlerinde YOK
 function gvHucre(k, x){
   const kay = ykAnahtar(x.kaynak);
-  if (kay === 'SEBEP') return k.yok ? (k.sebep || '') : '';
+  if (kay === 'SEBEP') return k.yok ? (k.sebep || '') : gvIzinYazi(k);
   if (k.yok && !['TARİH','PERSONEL LİSTESİ'].includes(kay)) return GV_YOK;
   return k.degerler[x.baslik];
 }
+function gvIzinleri(k){ const m = gvSonuc && gvSonuc.notlar && gvSonuc.notlar.saatlik && gvSonuc.notlar.saatlik.get(k.sicil); return m ? [...m.entries()].filter(([, d]) => d === 'Kullandı').map(([a]) => a).sort() : []; }
+function gvIzinYazi(k){ const l = gvIzinleri(k); return l.length ? l.map(a => `Saatlik İzin (${a})`).join(', ') : ''; }
 function gvSebepHucresi(k, x){ return ykAnahtar(x.kaynak) === 'SEBEP' && k.yok && !!k.sebep; }
 // ---------- Koşullu biçimlendirme ----------
 function gvKosullarKur(rows, gorunumler){
@@ -4927,7 +4938,8 @@ function gvStilBul(k, x, gorunum){
     else if (ko === 'İÇERİR') uy = !!r.d1 && ykAnahtar(v).includes(ykAnahtar(r.d1));
     else if (ko === 'GEÇ GİRİŞ' || ko === 'GEÇ DEĞİL İŞARETLİ'){
       const gec = gvGecDk(k, v) != null, isaret = !!(not.gecDegil && not.gecDegil.has(k.sicil));
-      uy = gec && (ko === 'GEÇ GİRİŞ' ? !isaret : isaret);
+      const izinBas = (k.sistemDisi || []).some(a => a.tur === 'bas' && gvIzinleri(k).includes(a.aralik));
+      uy = gec && (ko === 'GEÇ GİRİŞ' ? !isaret && !izinBas : isaret);
     }
     else if (ko === 'VARDİYADAN AZ'){
       const vs = gvVardiyaBasSure(k.vardiya), n = gvHucreSayi(v, x.bicim);
@@ -4999,7 +5011,7 @@ async function gvAyarlariYaz(sutunlar){
 // Her "Veriyi Hazırla"da sonuç bu sekmeye yazılır (öncekinin yerine). Sayfa yeniden açılınca dosya yüklemeden gelir.
 // Düzen: A1 Tarih | B1 tarih ; A2 Kaydeden | B2 ad + saat ; A3 Uyarılar | B3 metin ; 5. satır başlık ; 6. satırdan veri.
 const GV_SON_TAB = 'GÜNLÜK VERİ SON';
-const GV_SON_SABIT = ['Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep'];
+const GV_SON_SABIT = ['Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep', 'Sistem Dışı'];
 async function gvSekmeHazir(ad){
   const adlar = await getSheetTabNames(YOKLAMA_SHEET_ID);
   if (adlar.includes(ad)) return;
@@ -5012,7 +5024,7 @@ async function gvSonKaydet(sonuc){
   const d = new Date(), zaman = `${ykTarih(d)} ${ykIki(d.getHours())}:${ykIki(d.getMinutes())}`;
   const satirlar = [['Tarih', sonuc.tarih], ['Kaydeden', `${ykKaydeden()} · ${zaman}`], ['Uyarılar', sonuc.uyarilar.join('\n')], [],
     GV_SON_SABIT.concat(basliklar)].concat(sonuc.kisiler.map(k =>
-      [k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : ''].concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; }))));
+      [k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : '', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : ''].concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; }))));
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ`)}:clear`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1`)}?valueInputOption=RAW`, {
     method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
@@ -5029,13 +5041,14 @@ async function gvSonOku(){
   const bas = rows[4] || [];
   if (!tarih || !bas.length) return null;
   let n = 0; while (n < bas.length && GV_SON_SABIT.includes(bas[n])) n++;   // eski kayıtta Gelmedi/Sebep yok
-  const cG = bas.indexOf('Gelmedi'), cS = bas.indexOf('Sebep');
+  const cG = bas.indexOf('Gelmedi'), cS = bas.indexOf('Sebep'), cSD = bas.indexOf('Sistem Dışı');
   const kisiler = rows.slice(5).filter(r => r && r[0] !== '' && r[0] != null).map(r => {
     const degerler = {};
     bas.slice(n).forEach((b, i) => { if (b) degerler[b] = r[n + i] == null ? '' : r[n + i]; });
     const yok = cG >= 0 && ykAnahtar(r[cG]) === 'EVET';
     return { sicil: String(r[0]), ad: r[1] || '', tegsoft: r[2] || '', grup: r[3] || '', takim: r[4] || '', degerler,
-             yok, sebep: yok && cS >= 0 ? String(r[cS] || '') : '' };
+             yok, sebep: yok && cS >= 0 ? String(r[cS] || '') : '',
+             sistemDisi: (() => { try { return cSD >= 0 && r[cSD] ? JSON.parse(r[cSD]) : []; } catch(e){ return []; } })() };
   });
   const uyarilar = String((rows[2] && rows[2][1]) || '').split('\n').filter(Boolean);
   return { tarih, kisiler, uyarilar, kaydeden: (rows[1] && rows[1][1]) || '' };
@@ -5058,7 +5071,7 @@ async function gvSonuGetir(){
     gvSebepleriUygula(sonuc, await gvSebepKaynaklari(son.tarih, planGun));
     if (gvSonuc) return;
     gvSonuc = sonuc;
-    if (!gvAktifGrup || (![GV_ANA, GV_GEC].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
+    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
     document.getElementById('gvTarih').value = ykTarihToIso(son.tarih);
     gvSonucCiz();
     ykDurum('gvDurum', `Kayıtlı son veri gösteriliyor: ${son.tarih} (${son.kaydeden}). Yeni gün için raporları yükle.`, 'ok');
@@ -5070,13 +5083,18 @@ async function gvSonuGetir(){
 async function gvSebepKaynaklari(tarih, planGun){
   const oku = async aralik => { try { const [r] = await ykOku([aralik]); return r; } catch(err){ return []; } };
   const [notlar, kayit, drive] = await Promise.all([oku(`'${GV_NOT_TAB}'!A1:G10000`), oku(`'${YK_TAB.kayit}'!A1:H20000`), ykDriveGun(tarih)]);
-  const elleM = new Map(), kayitM = new Map(), gecDegil = new Set(); let staffKapali = false;
+  const elleM = new Map(), kayitM = new Map(), gecDegil = new Set(), saatlik = new Map(); let staffKapali = false;
   (notlar || []).slice(1).forEach(r => {
     if (!r || ykTarih(r[0]) !== tarih || !r[1] || !String(r[4] || '').trim()) return;
     const sc = String(r[1]).trim(), tur = ykAnahtar(r[3]), v = String(r[4]).trim();
     if (tur === ykAnahtar(GV_NOT_TUR.sebep)) elleM.set(sc, v);
     else if (tur === ykAnahtar(GV_NOT_TUR.gecDegil)) gecDegil.add(sc);
     else if (tur === ykAnahtar(GV_NOT_TUR.staffKapali)) staffKapali = true;
+    else if (tur === ykAnahtar(GV_NOT_TUR.saatlik)){
+      const m = v.match(/^(\S+)\s+(\d{2}:\d{2}-\d{2}:\d{2})$/); if (!m) return;
+      if (!saatlik.has(sc)) saatlik.set(sc, new Map());
+      saatlik.get(sc).set(m[2], ykAnahtar(m[1]) === 'KULLANDI' ? 'Kullandı' : 'Kullanmadı');
+    }
   });
   const kb = (kayit && kayit[0]) || [], cS = ykSutun(kb, 'Sicil'), cD = ykSutun(kb, 'Durum'), cA = ykSutun(kb, 'Açıklama');
   (kayit || []).slice(1).forEach(r => {
@@ -5088,7 +5106,7 @@ async function gvSebepKaynaklari(tarih, planGun){
     const sebep = a.split('·').map(x => x.trim()).filter(x => x && !not(x))[0] || d;
     kayitM.set(String(r[cS]).trim(), sebep);
   });
-  return { tarih, elle: elleM, kayit: kayitM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, staffKapali, planVar: !!planGun };
+  return { tarih, elle: elleM, kayit: kayitM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, staffKapali, saatlik, planVar: !!planGun };
 }
 function gvSebepBul(k, kay){
   if (kay.elle.has(k.sicil)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
@@ -5114,18 +5132,57 @@ function gvGelmeyen(p, tarih, ayar){
   return { sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, grup: ayar.gorevGrup.get(ykAnahtar(p.gorev)) || '', takim: p.takim, degerler,
            yok: true, sebep: '', ozel: p.ozel || '', bitis: p.bitis || '' };
 }
+// Detaylı Durum oturumları → Map(ykAd → [[bas, son]] saniye, o güne kırpılmış, birleştirilmiş)
+function gvOturumlar(dosya, tarih){
+  const out = new Map(); if (!dosya) return out;
+  const bas = dosya.baslik, cAd = ykSutun(bas,'Müşteri Temsilcisi'), cB = ykSutun(bas,'Başlangıç Tarihi'), cE = ykSutun(bas,'Bitiş Tarihi'), cTip = ykSutun(bas,'İşlem Tipi');
+  if (cB < 0 || cE < 0) return out;
+  const dun = ykTarihEkle(tarih, -1), yarin = ykTarihEkle(tarih, 1);
+  for (const r of dosya.rows.slice(dosya.bi + 1)){
+    if (!r || !r[cAd]) continue;
+    if (cTip >= 0 && r[cTip] && ykAnahtar(r[cTip]) !== 'LOGIN') continue;
+    const b = ykZamanAyir(r[cB]), e = ykZamanAyir(r[cE]);
+    let sb, se;
+    if (b.tarih === tarih) sb = b.saat ? ykSaniye(b.saat) : 0; else if (b.tarih === dun) sb = 0; else continue;
+    if (e.tarih === tarih) se = e.saat ? ykSaniye(e.saat) : 0; else if (e.tarih === yarin || (e.tarih && ykSira(e.tarih) > ykSira(tarih))) se = 86400; else continue;
+    if (se <= sb) continue;
+    const ad = ykAd(r[cAd]); if (!out.has(ad)) out.set(ad, []); out.get(ad).push([sb, se]);
+  }
+  out.forEach((l, ad) => {
+    l.sort((x, y) => x[0] - y[0]);
+    const m = []; l.forEach(([a, z]) => { if (m.length && a <= m[m.length - 1][1]) m[m.length - 1][1] = Math.max(m[m.length - 1][1], z); else m.push([a, z]); });
+    out.set(ad, m);
+  });
+  return out;
+}
+// Vardiya içinde sistemde olunmayan aralıklar (eşikten uzun): gün içi / vardiya başı / vardiya sonu
+function gvSistemDisiHesapla(sonuc, dosya){
+  const otr = gvOturumlar(dosya, sonuc.tarih), esik = (gvStil.sdEsik || 30) * 60;
+  const hm = sn => ykIki(Math.floor(sn / 3600) % 24) + ':' + ykIki(Math.floor(sn % 3600 / 60));
+  sonuc.kisiler.forEach(k => {
+    k.sistemDisi = [];
+    const l = k.yok ? null : otr.get(ykAd(k.tegsoft)); if (!l || !l.length) return;
+    const vs = gvVardiyaBasSure(k.vardiya);
+    const ekle = (tur, a, z) => { if (z - a > esik) k.sistemDisi.push({ tur, bas: a, son: z, dk: Math.round((z - a) / 60), aralik: `${hm(a)}-${hm(z)}` }); };
+    let pb = vs ? vs.bas : l[0][0], ps = vs ? Math.min(vs.bas + vs.sure, 86400) : l[l.length - 1][1];
+    if (vs && gvStil.sdBas) ekle('bas', pb, Math.min(l[0][0], ps));
+    if (gvStil.sdOrta) for (let i = 1; i < l.length; i++){ const a = Math.max(l[i - 1][1], pb), z = Math.min(l[i][0], ps); if (z > a) ekle('orta', a, z); }
+    if (vs && gvStil.sdSon) ekle('son', Math.max(l[l.length - 1][1], pb), ps);
+  });
+}
 function gvSebepleriUygula(sonuc, kay){
   sonuc.kisiler.filter(k => k.yok).forEach(k => { const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak; });
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA
   sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ykVardiya(kay.drive.get(k.sicil)) || ''; });
-  sonuc.notlar = { gecDegil: kay.gecDegil, staffKapali: kay.staffKapali, planVar: kay.planVar };
+  sonuc.notlar = { gecDegil: kay.gecDegil, staffKapali: kay.staffKapali, saatlik: kay.saatlik, planVar: kay.planVar };
 }
 // Elle seçilen sebebi yazar (boş = siler). Yalnız GÜNLÜK VERİ SEBEP sekmesi.
 // Not yazar (değer boşsa siler). Yalnız GÜNLÜK VERİ NOTLAR sekmesi.
-async function gvNotYaz(tarih, sicil, ad, tur, deger){
+// anahtar verilirse (saatlik izin aralığı) aynı tür içinde değeri bu anahtarla biten satır değiştirilir
+async function gvNotYaz(tarih, sicil, ad, tur, deger, anahtar){
   await gvSekmeHazir(GV_NOT_TAB);
   const [rows] = await ykOku([`'${GV_NOT_TAB}'!A1:G10000`]);
-  const ayni = r => ykTarih(r[0]) === tarih && String(r[1]).trim() === sicil && ykAnahtar(r[3]) === ykAnahtar(tur);
+  const ayni = r => ykTarih(r[0]) === tarih && String(r[1]).trim() === sicil && ykAnahtar(r[3]) === ykAnahtar(tur) && (!anahtar || String(r[4] || '').trim().endsWith(anahtar));
   const kalan = (rows || []).slice(1).filter(r => r && r[0] && !ayni(r));
   if (deger) kalan.push([tarih, sicil, ad, tur, deger, ykKaydeden(), new Date().toLocaleString('tr-TR')]);
   kalan.sort((a, b) => ykSira(ykTarih(a[0])) - ykSira(ykTarih(b[0])));
@@ -5140,7 +5197,7 @@ async function gvSekmeYazTam(tab, satirlar, aralik){
 }
 function gvSebepKutuCiz(){
   const kutu = document.getElementById('gvSebepKutu');
-  const liste = gvMod() === 'tumu' && gvAktifGrup !== GV_GEC ? gvKisiler(gvAktifGrup).filter(k => k.yok && !k.sebep) : [];
+  const liste = gvMod() === 'tumu' && ![GV_GEC, GV_SD].includes(gvAktifGrup) ? gvKisiler(gvAktifGrup).filter(k => k.yok && !k.sebep) : [];
   if (!liste.length){ kutu.style.display = 'none'; kutu.innerHTML = ''; return; }
   kutu.style.display = 'block';
   const sec = gvSebepSecenek.map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.deger)}${x.grup && ykAnahtar(x.grup) !== ykAnahtar(x.deger) ? ' (' + ykEsc(x.grup) + ')' : ''}</option>`).join('');
@@ -5162,7 +5219,7 @@ document.getElementById('gvSebepKutu').addEventListener('change', async e => {
 });
 function gvMod(){ return document.getElementById('gvMod').value; }
 // Görünümün sütunları; Sebep sütunu yalnız 'Gelmeyenler dahil' seçiliyken
-function gvGorSut(gorunum){ const tumu = gvMod() === 'tumu'; return gvGorunumSutun(gvSutunlar, gorunum).filter(x => tumu || ykAnahtar(x.kaynak) !== 'SEBEP'); }
+function gvGorSut(gorunum){ return gvGorunumSutun(gvSutunlar, gorunum); }   // Açıklama (Sebep) iki görünümde de var: çalışanlarda saatlik izin
 document.getElementById('gvMod').addEventListener('change', () => gvSonuc && gvSonucCiz());
 
 // ---------- Günlük Veri Hazırlama sayfası ----------
@@ -5213,9 +5270,10 @@ async function gvHazirla(){
     gvSonuc = gvHesapla({ tarih, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
     gvSebepSecenek = ayar.sebepler || [];
     gvSebepleriUygula(gvSonuc, await gvSebepKaynaklari(tarih, planGun));
+    gvSistemDisiHesapla(gvSonuc, gvDosyalar.dd);
     if (!planGun) gvSonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı).`);
     ykDurum('gvDurum', '');
-    if (!gvAktifGrup || (![GV_ANA, GV_GEC].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
+    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
     gvSonucCiz();
     try { const z = await gvSonKaydet(gvSonuc); ykDurum('gvDurum', `✓ ${tarih} verisi kaydedildi (${z}); sayfayı yeniden açınca dosya yüklemeden gelir.`, 'ok'); }
     catch(err){ ykDurum('gvDurum', '⚠ Tablo hazırlandı ama kaydedilemedi (yeniden açınca dosyaları tekrar yüklemen gerekir): ' + err.message, 'warn'); }
@@ -5236,14 +5294,17 @@ function gvSonucCiz(){
   document.getElementById('gvUyari').textContent = s.uyarilar.map(u => '⚠ ' + u).join('\n');
   const gor = gvGruplar.concat(GV_ANA);
   const gecSay = gvGecListe(true).length;   // diğer sekmeler gibi takım lideri filtresinden bağımsız
-  document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).map(g => {
+  const sdHep = s.kisiler.filter(k => !k.yok).flatMap(k => (k.sistemDisi || []).map(a => ({ k, a })));
+  const sdBekleyen = sdHep.filter(o => !gvSdDurum(o.k, o.a)).length;
+  document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).concat([GV_SD]).map(g => {
+    if (g === GV_SD) return `<button class="yk-sekme${gvAktifGrup === GV_SD ? ' aktif' : ''}" data-gvgrup="${GV_SD}">Sistem Dışı Süreler (${sdHep.length}${sdBekleyen ? ` · ${sdBekleyen} bekleyen` : ''})</button>`;
     if (g === GV_GEC) return `<button class="yk-sekme${gvAktifGrup === GV_GEC ? ' aktif' : ''}" data-gvgrup="${GV_GEC}">Geç Girenler (${gecSay})</button>`;
     const tumu = gvMod() === 'tumu';
     const n = s.kisiler.filter(k => (tumu || !k.yok) && (g === GV_ANA || k.grup === g)).length;
     return `<button class="yk-sekme${g === gvAktifGrup ? ' aktif' : ''}" data-gvgrup="${ykEsc(g)}">${ykEsc(g === GV_ANA ? 'Ana Tablo' : gvGrupAd(g))} (${n})</button>`;
   }).join('');
   const sel = document.getElementById('gvTakim'), v = sel.value;
-  const takimlar = [...new Set(s.kisiler.filter(k => [GV_ANA, GV_GEC].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const takimlar = [...new Set(s.kisiler.filter(k => [GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
   const sk = document.getElementById('gvStaffKapali'); sk.checked = !!(s.notlar && s.notlar.staffKapali);
   sel.innerHTML = '<option value="">Tüm takım liderleri</option>' + takimlar.map(t => `<option value="${ykEsc(t)}">${ykEsc(t)}</option>`).join('');
   sel.value = takimlar.includes(v) ? v : '';
@@ -5293,8 +5354,38 @@ document.getElementById('gvStaffKapali').addEventListener('change', async e => {
   } catch(err){ el.checked = !el.checked; ykDurum('gvKayitDurum', '✗ Kaydedilemedi: ' + err.message, 'err'); }
   el.disabled = false;
 });
+function gvSdDurum(k, a){ const m = gvSonuc && gvSonuc.notlar && gvSonuc.notlar.saatlik && gvSonuc.notlar.saatlik.get(k.sicil); return m ? (m.get(a.aralik) || '') : ''; }
+function gvSdCiz(){
+  const tk = document.getElementById('gvTakim').value;
+  const liste = gvSonuc.kisiler.filter(k => !k.yok && (!tk || k.takim === tk)).flatMap(k => (k.sistemDisi || []).map(a => ({ k, a })));
+  const turAd = { bas:'Vardiya başı', orta:'Gün içi', son:'Vardiya sonu' };
+  const dd = !!gvDosyalar.dd || gvSonuc.kisiler.some(k => k.sistemDisi && k.sistemDisi.length);
+  document.getElementById('gvTablo').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Nerede</th><th>Aralık</th><th>Süre (dk)</th><th>Saatlik izin?</th></tr>' +
+    (liste.length ? liste.map(({ k, a }) => {
+      const d = gvSdDurum(k, a), renk = d === 'Kullandı' ? '#FFC000' : (d === 'Kullanmadı' ? '#E2EFDA' : '#FFF2CC');
+      return `<tr><td>${ykEsc(k.sicil)}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.takim || '')}</td><td style="text-align:center;">${ykEsc(k.vardiya || '—')}</td><td>${turAd[a.tur] || a.tur}</td>` +
+        `<td style="text-align:center;background:${renk};">${a.aralik}</td><td style="text-align:center;">${a.dk}</td>` +
+        `<td><select data-gvsd="${ykEsc(k.sicil)}" data-aralik="${a.aralik}"><option value="">Sor…</option><option${d === 'Kullandı' ? ' selected' : ''}>Kullandı</option><option${d === 'Kullanmadı' ? ' selected' : ''}>Kullanmadı</option></select></td></tr>`;
+    }).join('') : `<tr><td colspan="8" class="soluk">${dd ? `${gvStil.sdEsik} dakikayı aşan sistem dışı süre yok.` : 'Sistem dışı süreler için Detaylı Durum yüklenmeli.'}</td></tr>`);
+  document.getElementById('gvSayi').textContent = `${liste.length} aralık · eşik ${gvStil.sdEsik} dk · "Kullandı" Açıklama'ya Saatlik İzin yazar`;
+}
+document.getElementById('gvTablo').addEventListener('change', async e => {
+  const el = e.target.closest('[data-gvsd]'); if (!el || !gvSonuc) return;
+  const k = gvSonuc.kisiler.find(x => x.sicil === el.dataset.gvsd); if (!k) return;
+  const aralik = el.dataset.aralik, d = el.value;
+  el.disabled = true;
+  try {
+    await gvNotYaz(gvSonuc.tarih, k.sicil, k.ad, GV_NOT_TUR.saatlik, d ? `${d} ${aralik}` : '', aralik);
+    const n = gvSonuc.notlar = gvSonuc.notlar || {}; n.saatlik = n.saatlik || new Map();
+    if (!n.saatlik.has(k.sicil)) n.saatlik.set(k.sicil, new Map());
+    if (d) n.saatlik.get(k.sicil).set(aralik, d); else n.saatlik.get(k.sicil).delete(aralik);
+    ykDurum('gvKayitDurum', `✓ ${k.ad} ${aralik}: ${d || 'işaret kaldırıldı'}.`, 'ok');
+    gvSonucCiz();
+  } catch(err){ el.disabled = false; ykDurum('gvKayitDurum', '✗ Kaydedilemedi: ' + err.message, 'err'); }
+});
 function gvTabloCiz(){
   if (gvAktifGrup === GV_GEC) return gvGecCiz();
+  if (gvAktifGrup === GV_SD) return gvSdCiz();
   const sut = gvGorSut(gvAktifGrup);
   const kisiler = gvKisiler(gvAktifGrup);
   const sag = b => gvOrtala(b);
@@ -5328,7 +5419,7 @@ function gvMailHtml(gorunum){
 }
 document.getElementById('gvKopyalaBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
-  if (gvAktifGrup === GV_GEC){ ykDurum('gvKayitDurum', 'Geç Girenler yalnız işaretleme içindir; mail için bir tablo sekmesi seç.', 'warn'); return; }
+  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bu sekme yalnız işaretleme içindir; mail için bir tablo sekmesi seç.', 'warn'); return; }
   const html = gvMailHtml(gvAktifGrup);
   const duz = html.replace(/&nbsp;/g, ' ').replace(/<\/td>/g, '\t').replace(/<\/tr>/g, '\n').replace(/<[^>]+>/g, '');
   try {
@@ -5434,7 +5525,7 @@ async function gvDosyaSecYeni(){
 async function gvAylikDosyayaEkle(degistir){
   if (!gvSonuc) return;
   if (!window.showOpenFilePicker){ ykDurum('gvKayitDurum', '✗ Bu tarayıcı dosyaya doğrudan yazmayı desteklemiyor; Chrome ya da Edge kullan.', 'err'); return; }
-  if ([GV_GEC].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel) ve takım liderini seç.', 'warn'); return; }
+  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel) ve takım liderini seç.', 'warn'); return; }
   try {
     let h = degistir ? null : await gvTutamacOku();
     if (!h) h = await gvDosyaSecYeni();
@@ -5469,7 +5560,7 @@ document.getElementById('gvAylikDegistir').addEventListener('click', e => { e.pr
 gvTutamacOku().then(h => { if (h) document.getElementById('gvAylikAd').textContent = h.name; });
 document.getElementById('gvExcelBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
-  if (gvAktifGrup === GV_GEC){ ykDurum('gvKayitDurum', 'Geç Girenler yalnız işaretleme içindir; Excel için bir tablo sekmesi seç.', 'warn'); return; }
+  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bu sekme yalnız işaretleme içindir; Excel için bir tablo sekmesi seç.', 'warn'); return; }
   const tk = document.getElementById('gvTakim').value;
   const ad = gvAktifGrup === GV_ANA ? 'Operasyon Verileri' : (gvGrupAd(gvAktifGrup) + ' Verileri');
   try { await gvExcel(gvAktifGrup, `${gvSonuc.tarih} ${ad}${tk ? ' - ' + tk : ''}.xlsx`); }
@@ -5592,18 +5683,24 @@ function gvStilFormu(st){
   document.getElementById('gvStilRenk').value = st.baslikRenk.toLowerCase();
   document.getElementById('gvStilYazi').value = st.baslikYazi.toLowerCase();
   document.getElementById('gvStilGece').value = st.gecePencere;
+  document.getElementById('gvStilSd').value = st.sdEsik;
+  document.getElementById('gvStilSdOrta').checked = st.sdOrta; document.getElementById('gvStilSdBas').checked = st.sdBas; document.getElementById('gvStilSdSon').checked = st.sdSon;
   gvStilOrnek();
 }
 function gvStilOrnek(){
   const o = document.getElementById('gvStilOrnek');
   o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
 }
-['gvStilRenk','gvStilYazi','gvStilGece'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+['gvStilRenk','gvStilYazi','gvStilGece','gvStilSd','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
 document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
 document.getElementById('gvStilKaydet').addEventListener('click', async () => {
   const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
                         [GV_STIL_ANAHTAR.baslikYazi, gvRenk(document.getElementById('gvStilYazi').value, GV_STIL_VARSAYILAN.baslikYazi)],
-                        [GV_STIL_ANAHTAR.gecePencere, String(Math.max(0, Math.round(gvSayi(document.getElementById('gvStilGece').value) ?? GV_STIL_VARSAYILAN.gecePencere)))]]);
+                        [GV_STIL_ANAHTAR.gecePencere, String(Math.max(0, Math.round(gvSayi(document.getElementById('gvStilGece').value) ?? GV_STIL_VARSAYILAN.gecePencere)))],
+                        [GV_STIL_ANAHTAR.sdEsik, String(Math.max(1, Math.round(gvSayi(document.getElementById('gvStilSd').value) ?? GV_STIL_VARSAYILAN.sdEsik)))],
+                        [GV_STIL_ANAHTAR.sdOrta, document.getElementById('gvStilSdOrta').checked ? 'EVET' : 'HAYIR'],
+                        [GV_STIL_ANAHTAR.sdBas, document.getElementById('gvStilSdBas').checked ? 'EVET' : 'HAYIR'],
+                        [GV_STIL_ANAHTAR.sdSon, document.getElementById('gvStilSdSon').checked ? 'EVET' : 'HAYIR']]);
   ykDurum('gvStilDurum', 'Kaydediliyor…');
   try {
     // AYARLAR'daki diğer satırlar (Yoklama ayarları) korunur; yalnız bu iki satır güncellenir.

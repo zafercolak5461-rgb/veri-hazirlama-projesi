@@ -453,11 +453,12 @@
           </div>
         </div>
         <div class="card">
-          <h2>Excel ve Mail Görünümü</h2>
-          <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.</div>
+          <h2>Excel, Mail ve Gece Vardiyası</h2>
+          <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.<br><b>Gece vardiyası penceresi</b>: o gün Haftalık Plan'da 00:00'da başlayan vardiyası olanın, önceki akşam gece yarısından bu kadar dakika önce açtığı oturum Staffed'a eklenir (<code>{Detaylı Durum.Gece Eki}</code>); ertesi gün de 00:00 vardiyası varsa bu akşamki aynı kısım bugünden düşülür (<code>{Detaylı Durum.Gece Düşümü}</code>). Yalnız yüklenen Detaylı Durum'daki oturumlar kullanılır.</div>
           <div class="row">
             <label>Başlık rengi: <input type="color" id="gvStilRenk"></label>
             <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
+            <label>Gece vardiyası erken giriş penceresi (dk): <input type="number" id="gvStilGece" min="0" step="5" style="width:70px;"></label>
             <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
             <button class="btn" id="gvStilVarsayilan">Varsayılan</button>
             <button class="btn ok" id="gvStilKaydet">💾 Kaydet</button>
@@ -4556,7 +4557,13 @@ const GV_RAPORLAR = [
 ];
 const GV_KAYNAKLAR = ['Tarih', 'Personel Listesi', 'Durum Raporu', 'Müşteri Temsilcisi Bazında', 'Detaylı Durum', 'Hesap'];
 const GV_PERSONEL_ALAN = ['Sicil', 'Tegsoft Adı', 'Ad Soyad', 'Görev', 'Takım Lideri'];
-const GV_DD_ALAN = ['Giriş Saati', 'Çıkış Saati'];
+const GV_DD_ALAN = ['Giriş Saati', 'Çıkış Saati', 'Gece Eki', 'Gece Düşümü'];
+// Gece vardiyası (00:00'da başlayan) düzeltmesi, yalnız yüklenen Detaylı Durum'dan (önceki günün dosyası istenmez):
+//  Gece Eki   : o gün 00:00 vardiyası olanın önceki akşam, gece yarısından önceki pencerede (AYARLAR, 60 dk)
+//               açtığı oturumların 00:00'a kadarki saniyesi (Tegsoft bunu önceki günün satırına yazar).
+//  Gece Düşümü: ertesi gün de 00:00 vardiyası olanın bu akşam aynı pencerede açtığı oturumların bu güne düşen saniyesi
+//               (ertesi günün vardiyasına ait; ertesi günün Gece Eki'ne girer, iki kez sayılmasın diye bugünden düşülür).
+//  Plan yoksa ya da vardiya 00:00'da başlamıyorsa ikisi de 0. Staffed formülünde kullanılır.
 // Biçim: Süre = rapordaki saniye → s:dd:ss ; Saat = s:dd:ss metni (giriş/çıkış) ; Ondalık = 0.0
 const GV_BICIMLER = ['Metin', 'Sayı', 'Ondalık', 'Süre', 'Saat', 'Tarih'];
 const GV_SABIT_BASLIK = ['Başlık', 'Kaynak', 'Kaynak Sütun / Formül', 'Biçim'];
@@ -4568,14 +4575,15 @@ let gvGruplar = [];         // Rapor Grupları (GÖREVLER B sütunu) sırasıyla
 let gvSonuc = null;
 let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
-const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF' };
+const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60 };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
   const m = new Map((ayarRows || []).slice(1).filter(r => r && r[0]).map(r => [ykAnahtar(r[0]), r[1]]));
   return { baslikRenk: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikRenk)), GV_STIL_VARSAYILAN.baslikRenk),
-           baslikYazi: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikYazi)), GV_STIL_VARSAYILAN.baslikYazi) };
+           baslikYazi: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikYazi)), GV_STIL_VARSAYILAN.baslikYazi),
+           gecePencere: (n => n == null || n < 0 ? GV_STIL_VARSAYILAN.gecePencere : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.gecePencere)))) };
 }
 // Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
 function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
@@ -4664,6 +4672,27 @@ function gvRaporTarihi(dosya){
   const en = [...say.entries()].sort((a, b) => b[1] - a[1])[0];
   return en ? en[0] : '';
 }
+// Detaylı Durum: gece yarısından önceki pencerede başlayan oturumların, başladığı güne düşen saniyesi
+// → Map(tarih → Map(ykAd → sn)). Bitişi ertesi güne geçen (ya da saatsiz ertesi gün yazan) oturum 24:00'te kesilir.
+function gvGecePencere(dosya, dk){
+  const out = new Map(); if (!dosya || !(dk > 0)) return out;
+  const bas = dosya.baslik, cAd = ykSutun(bas,'Müşteri Temsilcisi'), cBas = ykSutun(bas,'Başlangıç Tarihi'), cBit = ykSutun(bas,'Bitiş Tarihi'), cTip = ykSutun(bas,'İşlem Tipi');
+  if (cBas < 0) return out;
+  const esik = 86400 - dk * 60;
+  for (const r of dosya.rows.slice(dosya.bi + 1)){
+    if (!r || !r[cAd]) continue;
+    if (cTip >= 0 && r[cTip] && ykAnahtar(r[cTip]) !== 'LOGIN') continue;
+    const b = ykZamanAyir(r[cBas]); if (!b.tarih || !b.saat) continue;
+    const sb = ykSaniye(b.saat); if (sb < esik) continue;
+    const e = cBit >= 0 ? ykZamanAyir(r[cBit]) : { tarih:'' };
+    const son = (e.tarih === b.tarih && e.saat) ? ykSaniye(e.saat) : 86400;
+    if (son <= sb) continue;
+    if (!out.has(b.tarih)) out.set(b.tarih, new Map());
+    const m = out.get(b.tarih), ad = ykAd(r[cAd]);
+    m.set(ad, (m.get(ad) || 0) + (son - sb));
+  }
+  return out;
+}
 // Detaylı Durum: o gün biten oturumların en geç bitişi → Map(ykAd → 'SS:DD:ss')
 function gvCikislar(dosya, tarih){
   const out = new Map(); if (!dosya) return out;
@@ -4704,6 +4733,9 @@ function gvHesapla(g){
   const dd = dosyalar.dd ? ykLoginOku(dosyalar.dd.rows) : null;
   const giris = dd ? (dd.girisler.get(tarih) || new Map()) : new Map();
   const cikis = gvCikislar(dosyalar.dd, tarih);
+  const pencere = gvGecePencere(dosyalar.dd, g.gecePencere == null ? 60 : g.gecePencere);
+  const dun = pencere.get(ykTarihEkle(tarih, -1)) || new Map(), bu = pencere.get(tarih) || new Map();
+  const geceDuzeltme = [];
   GV_RAPORLAR.forEach(r => { if (!dosyalar[r.id]) uyarilar.push(`${r.ad} yüklenmedi; ondan gelen sütunlar boş.`); });
   if (dr.atlanan + mt.atlanan) uyarilar.push(`${tarih} dışındaki tarihe ait ${dr.atlanan + mt.atlanan} satır alınmadı (önceki günden sarkan oturumlar).`);
   [...new Set(dr.cift.concat(mt.cift))].forEach(a => uyarilar.push(`${a} raporda aynı gün iki kez var; ilk satır alındı.`));
@@ -4724,8 +4756,9 @@ function gvHesapla(g){
     if (ykAnahtar(s.kaynak) === 'HESAP') (s.alan.match(/\{([^}]+)\}/g) || []).forEach(m => {
       const ad = m.slice(1, -1).trim(), n = ad.indexOf('.');
       if (n > 0){
-        const id2 = { 'DURUM RAPORU':'dr', 'MÜŞTERİ TEMSİLCİSİ BAZINDA':'mt', 'MÜŞTERİ TEMSİLCİSİ':'mt' }[ykAnahtar(ad.slice(0, n))];
+        const id2 = { 'DURUM RAPORU':'dr', 'MÜŞTERİ TEMSİLCİSİ BAZINDA':'mt', 'MÜŞTERİ TEMSİLCİSİ':'mt', 'DETAYLI DURUM':'dd' }[ykAnahtar(ad.slice(0, n))];
         if (!id2) uyarilar.push(`"${s.baslik}" formülünde tanınmayan kaynak: ${ad.slice(0, n)}.`);
+        else if (id2 === 'dd'){ if (!GV_DD_ALAN.some(f => ykAnahtar(f) === ykAnahtar(ad.slice(n + 1)))) uyarilar.push(`"${s.baslik}" formülü: Detaylı Durum'da "${ad.slice(n + 1)}" alanı yok (${GV_DD_ALAN.join(', ')}).`); }
         else if (!baslikVar(id2, ad.slice(n + 1))) uyarilar.push(`"${s.baslik}" formülü: dosyada "${ad.slice(n + 1)}" başlığı yok (0 sayıldı).`);
       } else if (!sutunlar.some(x => ykAnahtar(x.baslik) === ykAnahtar(ad))) uyarilar.push(`"${s.baslik}" formülünde "${ad}" adlı sütun yok.`);
     });
@@ -4752,6 +4785,8 @@ function gvHesapla(g){
           return vardiya ? ykGirisSaati(gi, vardiya) : (gi.ilk || gi.gece || (gi.tarihsiz ? '00:00:00' : ''));
         }
         if (f === 'ÇIKIŞ SAATİ') return cikis.get(a) || '';
+        if (f === 'GECE EKİ') return vardiya.startsWith('00:00') ? (dun.get(a) || 0) : 0;
+        if (f === 'GECE DÜŞÜMÜ') return (g.planYarin && ykVardiya(g.planYarin.get(p.sicil)).startsWith('00:00')) ? (bu.get(a) || 0) : 0;
         return '';
       }
       const m = rapor[k] && rapor[k].get(a);
@@ -4768,7 +4803,7 @@ function gvHesapla(g){
       yigin.add(s.baslik);
       const f = gvFormul(s.alan, ad => {
         const n = ad.indexOf('.');
-        if (n > 0 && rapor[ykAnahtar(ad.slice(0, n))]) return ham(ad.slice(0, n), ad.slice(n + 1));
+        if (n > 0 && (rapor[ykAnahtar(ad.slice(0, n))] || ykAnahtar(ad.slice(0, n)) === 'DETAYLI DURUM')) return ham(ad.slice(0, n), ad.slice(n + 1));
         const x = sutunlar.find(y => ykAnahtar(y.baslik) === ykAnahtar(ad));
         return x ? hesapla(x, yigin) : undefined;
       });
@@ -4778,9 +4813,12 @@ function gvHesapla(g){
       return f.deger;
     };
     sutunlar.forEach(s => hesapla(s, new Set()));
+    { const ek = gvSayi(ham('Detaylı Durum', 'Gece Eki')) || 0, dus = gvSayi(ham('Detaylı Durum', 'Gece Düşümü')) || 0;
+      if (ek || dus) geceDuzeltme.push(`${p.ad}${ek ? ' +' + gvSureYazi(ek) : ''}${dus ? ' −' + gvSureYazi(dus) : ''}`); }
     kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, grup: ayar.gorevGrup.get(ykAnahtar(p.gorev)) || '', takim: p.takim, degerler: deger });
   }
   formulHata.forEach(h => uyarilar.push(h));
+  if (geceDuzeltme.length) uyarilar.push(`Gece vardiyası düzeltmesi (gece yarısından önceki ${g.gecePencere == null ? 60 : g.gecePencere} dk): ${geceDuzeltme.join(', ')}. Staffed formülünde {Detaylı Durum.Gece Eki} / {Detaylı Durum.Gece Düşümü} kullanılıyorsa uygulanır.`);
   const grupsuz = kisiler.filter(k => !k.grup);
   if (grupsuz.length) uyarilar.push(`Görevinin Rapor Grubu tanımlı olmayan (yalnız Ana tabloda görünür): ${grupsuz.map(k => k.ad).join(', ')}.`);
   return { tarih, kisiler, uyarilar };
@@ -4875,9 +4913,9 @@ async function gvHazirla(){
   try {
     const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
     if (!gvSutunlar.length){ ykDurum('gvDurum', 'Sütun ayarı yok. "Günlük Veri Ayarları" sayfasından sütunları tanımla.', 'err'); return; }
-    let planGun = null;
-    for (const [, w] of plan.planlar){ if (w.has(tarih)){ planGun = w.get(tarih); break; } }
-    gvSonuc = gvHesapla({ tarih, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun });
+    let planGun = null, planYarin = null; const yarin = ykTarihEkle(tarih, 1);
+    for (const [, w] of plan.planlar){ if (!planGun && w.has(tarih)) planGun = w.get(tarih); if (!planYarin && w.has(yarin)) planYarin = w.get(yarin); }
+    gvSonuc = gvHesapla({ tarih, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
     if (!planGun) gvSonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı).`);
     ykDurum('gvDurum', '');
     if (!gvAktifGrup || (gvAktifGrup !== GV_ANA && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = gvGruplar[0] || GV_ANA;
@@ -5098,17 +5136,19 @@ document.getElementById('gvAyarKaydet').addEventListener('click', async () => {
 function gvStilFormu(st){
   document.getElementById('gvStilRenk').value = st.baslikRenk.toLowerCase();
   document.getElementById('gvStilYazi').value = st.baslikYazi.toLowerCase();
+  document.getElementById('gvStilGece').value = st.gecePencere;
   gvStilOrnek();
 }
 function gvStilOrnek(){
   const o = document.getElementById('gvStilOrnek');
   o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
 }
-['gvStilRenk','gvStilYazi'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+['gvStilRenk','gvStilYazi','gvStilGece'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
 document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
 document.getElementById('gvStilKaydet').addEventListener('click', async () => {
   const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
-                        [GV_STIL_ANAHTAR.baslikYazi, gvRenk(document.getElementById('gvStilYazi').value, GV_STIL_VARSAYILAN.baslikYazi)]]);
+                        [GV_STIL_ANAHTAR.baslikYazi, gvRenk(document.getElementById('gvStilYazi').value, GV_STIL_VARSAYILAN.baslikYazi)],
+                        [GV_STIL_ANAHTAR.gecePencere, String(Math.max(0, Math.round(gvSayi(document.getElementById('gvStilGece').value) ?? GV_STIL_VARSAYILAN.gecePencere)))]]);
   ykDurum('gvStilDurum', 'Kaydediliyor…');
   try {
     // AYARLAR'daki diğer satırlar (Yoklama ayarları) korunur; yalnız bu iki satır güncellenir.

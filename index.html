@@ -418,8 +418,10 @@
                 <button class="btn" id="gvKopyalaBtn" title="Ekranda görünen tabloyu (sekme + takım lideri) kopyalar">📋 Maile Kopyala</button>
                 <button class="btn" id="gvExcelBtn" title="Ekranda görünen tabloyu Excel'e aktarır">⬇ Excel'e Aktar</button>
                 <button class="btn ok" id="gvExcelTumBtn" title="Herkes, Ana sütunlarıyla (11.11 düzeni)">⬇ Ana Excel (Tümü)</button>
+                <button class="btn" id="gvAylikBtn" title="Ekrandaki sekme + takım lideri, gelmeyenler dahil: aylık dosyana o günün sayfası eklenir, VERİ sayfasının sonuna yazılır">📁 Dosyama Ekle</button>
               </div>
             </div>
+            <div class="hint" style="margin:6px 0 0;">Aylık dosya: <b id="gvAylikAd">seçilmedi</b> · <a href="#" id="gvAylikDegistir">dosyayı değiştir</a> (yalnız .xlsx; dosya Excel'de açıkken kaydedilemez)</div>
             <div id="gvKayitDurum" class="status"></div>
             <div id="gvUyari" class="status warn"></div>
             <div class="yk-sekmeler" id="gvSekmeler" style="margin-top:14px;"></div>
@@ -5336,14 +5338,13 @@ document.getElementById('gvKopyalaBtn').addEventListener('click', async () => {
 });
 
 // Excel: 11.11 sayfası düzeni — tek satır kalın başlık, süreler s:dd:ss, AHT 0.0
-async function gvExcel(gorunum, dosyaAdi){
-  const sut = gvGorSut(gorunum), kisiler = gvKisiler(gorunum);
-  const wb = new ExcelJS.Workbook();
-  wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
-  const ws = wb.addWorksheet(gvSonuc.tarih);
+// Başlık + kişi satırlarını sayfanın sonuna yazar (11.11 düzeni: başlık rengi, kenarlık, hizalama, koşullu renkler)
+function gvSatirlariYaz(ws, sut, kisiler, gorunum, ilkSatir){
   const argb = h => 'FF' + h.replace('#', '');
   const ince = { style:'thin', color:{ argb:'FF000000' } }, kenar = { top:ince, left:ince, bottom:ince, right:ince };
-  const bas = ws.addRow(sut.map(x => x.baslik));
+  let no = ilkSatir || (ws.rowCount + 1);
+  const bas = ws.getRow(no++);
+  sut.forEach((x, i) => { bas.getCell(i + 1).value = x.baslik; });
   bas.eachCell(c => {
     c.font = { name:'Calibri', size:11, bold:true, color:{ argb: argb(gvStil.baslikYazi) } };
     c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: argb(gvStil.baslikRenk) } };
@@ -5351,7 +5352,7 @@ async function gvExcel(gorunum, dosyaAdi){
     c.border = kenar;
   });
   kisiler.forEach(k => {
-    const row = ws.addRow(sut.map(() => null));
+    const row = ws.getRow(no++);
     sut.forEach((x, i) => {
       const v = gvHucre(k, x), d = v === GV_YOK ? { value: GV_YOK } : gvExcelDeger(v, x.bicim), c = row.getCell(i + 1);
       c.value = d.value; if (d.numFmt) c.numFmt = d.numFmt;
@@ -5365,17 +5366,107 @@ async function gvExcel(gorunum, dosyaAdi){
       c.border = kenar;
     });
   });
-  ws.views = [{ state:'frozen', ySplit:1 }];
+}
+function gvSutunGenislik(ws, sut, kisiler){
   sut.forEach((x, i) => {
     const uz = Math.max(String(x.baslik).length, ...kisiler.map(k => gvGoster(gvHucre(k, x), x.bicim).length));
     ws.getColumn(i + 1).width = Math.min(45, Math.max(9, uz + 2));
   });
+}
+async function gvExcel(gorunum, dosyaAdi){
+  const sut = gvGorSut(gorunum), kisiler = gvKisiler(gorunum);
+  const wb = new ExcelJS.Workbook();
+  wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
+  const ws = wb.addWorksheet(gvSonuc.tarih);
+  gvSatirlariYaz(ws, sut, kisiler, gorunum);
+  ws.views = [{ state:'frozen', ySplit:1 }];
+  gvSutunGenislik(ws, sut, kisiler);
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   a.download = dosyaAdi; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+
+// ---------- Aylık takım dosyasına ekleme (makronun yerine) ----------
+// Ekrandaki sekme + takım lideri, gelmeyenler dahil: o günün sayfası (adı tarih) eklenir, VERİ sayfasının sonuna da aynı blok yazılır.
+// Aynı gün yeniden eklenirse eski sayfa ve VERİ'deki eski blok silinip yenisi yazılır. Dosya Chrome'un dosya erişimiyle yerinde kaydedilir.
+const GV_VERI_SAYFA = 'VERİ';
+// İşlem (dosyadan bağımsız, test edilebilir): ExcelJS Workbook'u günceller
+function gvAylikIsle(wb, tarih, sut, kisiler, gorunum){
+  const eski = wb.getWorksheet(tarih);
+  if (eski) wb.removeWorksheet(eski.id);
+  const ws = wb.addWorksheet(tarih);
+  gvSatirlariYaz(ws, sut, kisiler, gorunum);
+  ws.views = [{ state:'frozen', ySplit:1 }];
+  gvSutunGenislik(ws, sut, kisiler);
+  // VERİ: bütün günler alt alta, her blok kendi başlık satırıyla
+  let veri = wb.worksheets.find(w => ykAnahtar(w.name) === ykAnahtar(GV_VERI_SAYFA));
+  if (!veri){ veri = wb.addWorksheet(GV_VERI_SAYFA); gvSutunGenislik(veri, sut, kisiler); }
+  // Aynı günün eski bloğu (o tarihli satırlar + hemen üstündeki başlık satırı) kaldırılır.
+  // Not: ExcelJS'in spliceRows'u sayfanın sonundaki satırları silmiyor; son blok ise hücreleri temizlenir.
+  const dolu = r => veri.getRow(r).values.some(v => v != null && v !== '');
+  const sonDolu = () => { let n = veri.rowCount; while (n > 0 && !dolu(n)) n--; return n; };
+  let silinen = 0;
+  for (let r = veri.rowCount; r >= 1; r--){
+    if (ykTarih(gvHucreDuz(veri.getRow(r).getCell(1).value)) !== tarih) continue;
+    let bas = r; while (bas > 1 && ykTarih(gvHucreDuz(veri.getRow(bas - 1).getCell(1).value)) === tarih) bas--;
+    const ust = bas - 1, ustDeger = ust >= 1 ? gvHucreDuz(veri.getRow(ust).getCell(1).value) : '';
+    const ilk = (ust >= 1 && ustDeger && !ykTarih(ustDeger)) ? ust : bas;
+    if (r >= sonDolu()){
+      for (let x = ilk; x <= r; x++){ const row = veri.getRow(x); row.eachCell({ includeEmpty: true }, c => { c.value = null; c.style = {}; }); }
+    } else veri.spliceRows(ilk, r - ilk + 1);
+    silinen++; r = ilk;
+  }
+  gvSatirlariYaz(veri, sut, kisiler, gorunum, sonDolu() + 1);
+  return { yenilendi: !!eski || silinen > 0 };
+}
+function gvHucreDuz(v){ return v && typeof v === 'object' && !(v instanceof Date) ? (v.result != null ? v.result : (v.text != null ? v.text : '')) : v; }
+// Dosya tutamacı: IndexedDB'de saklanır (bir sonraki seferde yeniden seçmek gerekmez; Chrome izin sorar)
+function gvIdb(){ return new Promise((ok, red) => { const r = indexedDB.open('gv-dosya', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => red(r.error); }); }
+async function gvTutamacOku(){ try { const db = await gvIdb(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get('aylik'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e){ return null; } }
+async function gvTutamacYaz(h){ try { const db = await gvIdb(); await new Promise(ok => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, 'aylik'); t.oncomplete = ok; t.onerror = ok; }); } catch(e){} }
+async function gvDosyaSecYeni(){
+  const [h] = await window.showOpenFilePicker({ types: [{ description:'Excel (.xlsx)', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }], excludeAcceptAllOption: true });
+  if (!/\.xlsx$/i.test(h.name)) throw new Error('Yalnız .xlsx dosyası seçilebilir (makrolu .xlsm dosyasını önce Excel\'de "Farklı Kaydet → .xlsx" ile kaydet).');
+  await gvTutamacYaz(h); return h;
+}
+async function gvAylikDosyayaEkle(degistir){
+  if (!gvSonuc) return;
+  if (!window.showOpenFilePicker){ ykDurum('gvKayitDurum', '✗ Bu tarayıcı dosyaya doğrudan yazmayı desteklemiyor; Chrome ya da Edge kullan.', 'err'); return; }
+  if ([GV_GEC].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel) ve takım liderini seç.', 'warn'); return; }
+  try {
+    let h = degistir ? null : await gvTutamacOku();
+    if (!h) h = await gvDosyaSecYeni();
+    if ((await h.queryPermission({ mode:'readwrite' })) !== 'granted' && (await h.requestPermission({ mode:'readwrite' })) !== 'granted'){
+      ykDurum('gvKayitDurum', '✗ Dosyaya yazma izni verilmedi.', 'err'); return;
+    }
+    { const mod = document.getElementById('gvMod'), e = mod.value; mod.value = 'tumu';
+      const bos = gvKisiler(gvAktifGrup).filter(k => k.yok && !k.sebep); mod.value = e;
+      if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return; }
+    ykDurum('gvKayitDurum', `${h.name} açılıyor…`);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await (await h.getFile()).arrayBuffer());
+    // Gelmeyenler her zaman dahil (takip için)
+    const mod = document.getElementById('gvMod'), eskiMod = mod.value; mod.value = 'tumu';
+    const sut = gvGorSut(gvAktifGrup), kisiler = gvKisiler(gvAktifGrup);
+    mod.value = eskiMod;
+    const s = gvAylikIsle(wb, gvSonuc.tarih, sut, kisiler, gvAktifGrup);
+    const buf = await wb.xlsx.writeBuffer();
+    let w;
+    try { w = await h.createWritable(); }
+    catch(e){ throw new Error('Dosyaya yazılamadı; Excel\'de açıksa kapatıp tekrar dene. (' + e.message + ')'); }
+    await w.write(buf); await w.close();
+    document.getElementById('gvAylikAd').textContent = h.name;
+    ykDurum('gvKayitDurum', `✓ ${h.name}: ${gvSonuc.tarih} sayfası ${s.yenilendi ? 'yenilendi' : 'eklendi'} ve VERİ sayfasının sonuna yazıldı (${kisiler.length} kişi, gelmeyenler dahil).`, 'ok');
+  } catch(err){
+    if (err && err.name === 'AbortError') return;
+    ykDurum('gvKayitDurum', '✗ ' + err.message, 'err');
+  }
+}
+document.getElementById('gvAylikBtn').addEventListener('click', () => gvAylikDosyayaEkle(false));
+document.getElementById('gvAylikDegistir').addEventListener('click', e => { e.preventDefault(); gvAylikDosyayaEkle(true); });
+gvTutamacOku().then(h => { if (h) document.getElementById('gvAylikAd').textContent = h.name; });
 document.getElementById('gvExcelBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
   if (gvAktifGrup === GV_GEC){ ykDurum('gvKayitDurum', 'Geç Girenler yalnız işaretleme içindir; Excel için bir tablo sekmesi seç.', 'warn'); return; }

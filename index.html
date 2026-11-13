@@ -452,6 +452,18 @@
             <span id="gvAyarDurum" class="status" style="margin:0;"></span>
           </div>
         </div>
+        <div class="card">
+          <h2>Excel ve Mail Görünümü</h2>
+          <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.</div>
+          <div class="row">
+            <label>Başlık rengi: <input type="color" id="gvStilRenk"></label>
+            <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
+            <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
+            <button class="btn" id="gvStilVarsayilan">Varsayılan</button>
+            <button class="btn ok" id="gvStilKaydet">💾 Kaydet</button>
+            <span id="gvStilDurum" class="status" style="margin:0;"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -4555,6 +4567,18 @@ let gvSutunlar = null;      // ayar satırları
 let gvGruplar = [];         // Rapor Grupları (GÖREVLER B sütunu) sırasıyla
 let gvSonuc = null;
 let gvAktifGrup = '';
+// Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
+const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF' };
+let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
+function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
+function gvStilKur(ayarRows){
+  const m = new Map((ayarRows || []).slice(1).filter(r => r && r[0]).map(r => [ykAnahtar(r[0]), r[1]]));
+  return { baslikRenk: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikRenk)), GV_STIL_VARSAYILAN.baslikRenk),
+           baslikYazi: gvRenk(m.get(ykAnahtar(GV_STIL_ANAHTAR.baslikYazi)), GV_STIL_VARSAYILAN.baslikYazi) };
+}
+// Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
+function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
 
 // ---------- Saf yardımcılar ----------
 function gvGrupAd(g){ return GV_GRUP_AD[ykAnahtar(g)] || g; }
@@ -4791,6 +4815,7 @@ async function gvAyarlariOku(){
   try { [rows] = await ykOku([`'${GV_TAB}'!A1:Z300`]); }
   catch(err){ if (!/Unable to parse range|400/.test(err.message)) throw err; rows = null; }
   gvSutunlar = rows ? gvSutunlarKur(rows, [GV_ANA].concat(gvGruplar)) : [];
+  try { const [a] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]); gvStil = gvStilKur(a); } catch(err){ gvStil = Object.assign({}, GV_STIL_VARSAYILAN); }
   return { ayar, sekmeVar: !!rows };
 }
 // Sekme yoksa açar, başlık + satırları yazar.
@@ -4885,10 +4910,10 @@ function gvSonucCiz(){
 function gvTabloCiz(){
   const sut = gvGorunumSutun(gvSutunlar, gvAktifGrup);
   const kisiler = gvKisiler(gvAktifGrup);
-  const sag = b => ['SAYI','ONDALIK','SÜRE','SAAT'].includes(ykAnahtar(b));
+  const sag = b => gvOrtala(b);
   document.getElementById('gvTablo').innerHTML = !sut.length ? '<tr><td class="soluk">Bu görünüm için sütun seçilmemiş (Günlük Veri Ayarları).</td></tr>' :
     '<tr>' + sut.map(x => `<th>${ykEsc(x.baslik)}</th>`).join('') + '</tr>' +
-    kisiler.map(k => '<tr>' + sut.map(x => `<td${sag(x.bicim) ? ' class="sayi"' : ''}>${ykEsc(gvGoster(k.degerler[x.baslik], x.bicim))}</td>`).join('') + '</tr>').join('');
+    kisiler.map(k => '<tr>' + sut.map(x => `<td${sag(x.bicim) ? ' style="text-align:center;"' : ''}>${ykEsc(gvGoster(k.degerler[x.baslik], x.bicim))}</td>`).join('') + '</tr>').join('');
   document.getElementById('gvSayi').textContent = `${kisiler.length} kişi · ${sut.length} sütun`;
 }
 document.getElementById('gvSekmeler').addEventListener('click', e => {
@@ -4902,10 +4927,10 @@ function gvMailHtml(gorunum){
   const sut = gvGorunumSutun(gvSutunlar, gorunum), kisiler = gvKisiler(gorunum);
   const yazi = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;';
   const td = `${yazi}border:1px solid #000;padding:1px 6px;white-space:nowrap;`;
-  const sag = b => ['SAYI','ONDALIK','SÜRE','SAAT'].includes(ykAnahtar(b));
+  const bas = `${td}font-weight:bold;text-align:center;background:${gvStil.baslikRenk};color:${gvStil.baslikYazi};`;
   return '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">' +
-    '<tr>' + sut.map(x => `<td style="${td}font-weight:bold;text-align:center;">${ykEsc(x.baslik)}</td>`).join('') + '</tr>' +
-    kisiler.map(k => '<tr>' + sut.map(x => `<td style="${td}${sag(x.bicim) ? 'text-align:right;' : ''}">${ykEsc(gvGoster(k.degerler[x.baslik], x.bicim)) || '&nbsp;'}</td>`).join('') + '</tr>').join('') +
+    '<tr>' + sut.map(x => `<td style="${bas}">${ykEsc(x.baslik)}</td>`).join('') + '</tr>' +
+    kisiler.map(k => '<tr>' + sut.map(x => `<td style="${td}text-align:${gvOrtala(x.bicim) ? 'center' : 'left'};">${ykEsc(gvGoster(k.degerler[x.baslik], x.bicim)) || '&nbsp;'}</td>`).join('') + '</tr>').join('') +
     '</table>';
 }
 document.getElementById('gvKopyalaBtn').addEventListener('click', async () => {
@@ -4924,13 +4949,23 @@ async function gvExcel(gorunum, dosyaAdi){
   const wb = new ExcelJS.Workbook();
   wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
   const ws = wb.addWorksheet(gvSonuc.tarih);
-  ws.addRow(sut.map(x => x.baslik)).font = { name:'Calibri', size:11, bold:true };
+  const argb = h => 'FF' + h.replace('#', '');
+  const ince = { style:'thin', color:{ argb:'FF000000' } }, kenar = { top:ince, left:ince, bottom:ince, right:ince };
+  const bas = ws.addRow(sut.map(x => x.baslik));
+  bas.eachCell(c => {
+    c.font = { name:'Calibri', size:11, bold:true, color:{ argb: argb(gvStil.baslikYazi) } };
+    c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: argb(gvStil.baslikRenk) } };
+    c.alignment = { horizontal:'center', vertical:'middle' };
+    c.border = kenar;
+  });
   kisiler.forEach(k => {
     const row = ws.addRow(sut.map(() => null));
     sut.forEach((x, i) => {
       const d = gvExcelDeger(k.degerler[x.baslik], x.bicim), c = row.getCell(i + 1);
       c.value = d.value; if (d.numFmt) c.numFmt = d.numFmt;
       c.font = { name:'Calibri', size:11 };
+      c.alignment = { horizontal: gvOrtala(x.bicim) ? 'center' : 'left', vertical:'middle' };
+      c.border = kenar;
     });
   });
   ws.views = [{ state:'frozen', ySplit:1 }];
@@ -4969,6 +5004,7 @@ async function gvAyarSayfasi(){
     const { sekmeVar } = await gvAyarlariOku();
     gvAyarSatir = gvSutunlar.map(s => ({ baslik: s.baslik, kaynak: s.kaynak, alan: s.alan, bicim: s.bicim, sira: Object.fromEntries(s.sira) }));
     gvAyarCiz();
+    gvStilFormu(gvStil);
     if (!sekmeVar) ykDurum('gvAyarDurum', `YOKLAMA tablosunda "${GV_TAB}" sekmesi yok; ilk Kaydet'te açılır.`, 'warn');
   } catch(err){ document.getElementById('gvAyarTablo').innerHTML = `<tr><td class="yok">✗ ${ykEsc(err.message)}</td></tr>`; }
 }
@@ -5057,6 +5093,36 @@ document.getElementById('gvAyarKaydet').addEventListener('click', async () => {
     ykDurum('gvAyarDurum', `✓ ${liste.length} sütun kaydedildi.`, 'ok');
     if (gvSonuc) gvHazirla();
   } catch(err){ ykDurum('gvAyarDurum', '✗ ' + err.message, 'err'); }
+});
+
+function gvStilFormu(st){
+  document.getElementById('gvStilRenk').value = st.baslikRenk.toLowerCase();
+  document.getElementById('gvStilYazi').value = st.baslikYazi.toLowerCase();
+  gvStilOrnek();
+}
+function gvStilOrnek(){
+  const o = document.getElementById('gvStilOrnek');
+  o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
+}
+['gvStilRenk','gvStilYazi'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
+document.getElementById('gvStilKaydet').addEventListener('click', async () => {
+  const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
+                        [GV_STIL_ANAHTAR.baslikYazi, gvRenk(document.getElementById('gvStilYazi').value, GV_STIL_VARSAYILAN.baslikYazi)]]);
+  ykDurum('gvStilDurum', 'Kaydediliyor…');
+  try {
+    // AYARLAR'daki diğer satırlar (Yoklama ayarları) korunur; yalnız bu iki satır güncellenir.
+    const [rows] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]);
+    const satirlar = rows.slice(1).filter(r => r && String(r[0] || '').trim()).map(r => {
+      const a = [...yeni.keys()].find(k => ykAnahtar(k) === ykAnahtar(r[0]));
+      if (a){ const d = yeni.get(a); yeni.delete(a); return [a, d]; }
+      return [r[0], r[1] == null ? '' : r[1]];
+    });
+    yeni.forEach((d, a) => satirlar.push([a, d]));
+    await ykSekmeYaz(YK_TAB.ayar, satirlar);
+    const [a2] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]); gvStil = gvStilKur(a2);
+    ykDurum('gvStilDurum', '✓ Kaydedildi.', 'ok');
+  } catch(err){ ykDurum('gvStilDurum', '✗ ' + err.message, 'err'); }
 });
 
 /* ===== PANEL KÖPRÜSÜ =====

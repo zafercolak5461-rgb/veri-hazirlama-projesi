@@ -2186,7 +2186,7 @@ window.addEventListener('pagehide', () => { if (currentUserEmail) sendLog('cikis
 
 async function loadUserPermissions(){
   if (currentUserEmail && normalizeKey(currentUserEmail).toLowerCase() === FIXED_SUPER_ADMIN_EMAIL.toLowerCase()){
-    userPerms = { superYetkili: true, projeler: new Set(projeler.map(p => p.ad)), excel: true, tabloOzelligi: true, sablonYukleme: true };
+    userPerms = { superYetkili: true, projeler: new Set(projeler.map(p => p.ad)), excel: true, tabloOzelligi: true, sablonYukleme: true, isim: 'ZAFER ÇOLAK' };
     currentUserDisplayName = currentUserDisplayName || 'Zafer Çolak';
     return;
   }
@@ -2211,6 +2211,7 @@ async function loadUserPermissions(){
       superYetkili,
       projeler: new Set(erisim ? projeler.map(p => p.ad) : []),
       excel: erisim, tabloOzelligi: erisim, sablonYukleme: erisim,
+      isim: isimCol !== -1 ? normalizeKey(myRow[isimCol]) : '',   // Dosyama Ekle: takım lideri adıyla eşleşir
     };
   } catch (err){
     // Yetkilendirme okunamazsa GÜVENLİ TARAF: hiçbir şey gösterme (sabit süper admin zaten
@@ -5290,15 +5291,16 @@ async function gvHazirla(){
 }
 
 // Görünümdeki kişiler (takım lideri filtresiyle)
-function gvKisiler(gorunum){
+function gvKisiler(gorunum, takim){
   if (!gvSonuc) return [];
-  const tk = document.getElementById('gvTakim').value;
+  const tk = takim !== undefined ? takim : document.getElementById('gvTakim').value;
   const tumu = gvMod() === 'tumu';
   return gvSonuc.kisiler.filter(k => (tumu || !k.yok) && (gorunum === GV_ANA || k.grup === gorunum) && (!tk || k.takim === tk));
 }
 function gvSonucCiz(){
   const s = gvSonuc;
   document.getElementById('gvSonuc').style.display = 'block';
+  gvAylikEtiket();
   document.getElementById('gvBaslik').textContent = `${s.tarih} Günlük Operasyon Verileri`;
   document.getElementById('gvUyari').textContent = s.uyarilar.map(u => '⚠ ' + u).join('\n');
   const gor = gvGruplar.concat(GV_ANA);
@@ -5540,32 +5542,65 @@ function gvAylikIsle(wb, tarih, sut, kisiler, gorunum){
 function gvHucreDuz(v){ return v && typeof v === 'object' && !(v instanceof Date) ? (v.result != null ? v.result : (v.text != null ? v.text : '')) : v; }
 // Dosya tutamacı: IndexedDB'de saklanır (bir sonraki seferde yeniden seçmek gerekmez; Chrome izin sorar)
 function gvIdb(){ return new Promise((ok, red) => { const r = indexedDB.open('gv-dosya', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => red(r.error); }); }
-async function gvTutamacOku(){ try { const db = await gvIdb(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get('aylik'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e){ return null; } }
-async function gvTutamacYaz(h){ try { const db = await gvIdb(); await new Promise(ok => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, 'aylik'); t.oncomplete = ok; t.onerror = ok; }); } catch(e){} }
-async function gvDosyaSecYeni(){
+// Her takım lideri için ayrı dosya (anahtar: "aylik:<TAKIM>", Tümü için "aylik:TÜMÜ"); yalnız bu bilgisayarın tarayıcısında
+const gvTutAnahtar = tk => 'aylik:' + (tk ? ykAnahtar(tk) : 'TÜMÜ');
+async function gvTutamacOku(tk){ try { const db = await gvIdb(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get(gvTutAnahtar(tk)); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch(e){ return null; } }
+async function gvTutamacYaz(h, tk){ try { const db = await gvIdb(); await new Promise(ok => { const t = db.transaction('h', 'readwrite'); t.objectStore('h').put(h, gvTutAnahtar(tk)); t.oncomplete = ok; t.onerror = ok; }); } catch(e){} }
+// Dosyama Ekle'nin yazacağı takım: Süper Yetkili filtredeki seçim ('' = Tümü); diğerleri yalnız kendi takımı (Yetkilendirme İsim = Takım Lideri)
+function gvHedefTakim(){
+  if (userPerms.superYetkili) return { takim: document.getElementById('gvTakim').value };
+  const isim = ykAnahtar(userPerms.isim || '');
+  const tk = isim && gvSonuc && (gvSonuc.kisiler.find(k => ykAnahtar(k.takim) === isim) || {}).takim;
+  return tk ? { takim: tk } : { hata: `Dosyama Ekle yalnız takım liderleri içindir; "${userPerms.isim || currentUserEmail}" personel listesinde takım lideri olarak geçmiyor (Yetkilendirme'deki İsim, PERSONEL'deki Takım Lideri yazılışıyla aynı olmalı).` };
+}
+async function gvAylikEtiket(){
+  const el = document.getElementById('gvAylikAd'); if (!el) return;
+  const hd = gvHedefTakim(); if (hd.hata){ el.textContent = '—'; return; }
+  const h = await gvTutamacOku(hd.takim), ad = hd.takim || 'Tümü';
+  el.textContent = (h ? h.name : 'seçilmedi') + ` (${ad})`;
+}
+// Dosya adındaki ay/yıl verinin ayıyla uyuşmuyorsa açıklama döner
+function gvAyUyumsuz(dosyaAd, tarih){
+  const m = String(tarih).match(/^\d{2}\.(\d{2})\.(\d{4})$/); if (!m) return '';
+  const ad = ykAnahtar(dosyaAd), ay = YK_AYLAR.find(a => ad.includes(a)), yil = (ad.match(/20\d{2}/) || [])[0];
+  const veriAy = YK_AYLAR[+m[1] - 1];
+  if (ay && ay !== veriAy) return `Dosya adı ${ay} ayını gösteriyor, veri ${veriAy} ${m[2]} ayına ait.`;
+  if (yil && yil !== m[2]) return `Dosya adı ${yil} yılını gösteriyor, veri ${m[2]} yılına ait.`;
+  return '';
+}
+async function gvDosyaSecYeni(tk){
   const [h] = await window.showOpenFilePicker({ types: [{ description:'Excel (.xlsx)', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }], excludeAcceptAllOption: true });
   if (!/\.xlsx$/i.test(h.name)) throw new Error('Yalnız .xlsx dosyası seçilebilir (makrolu .xlsm dosyasını önce Excel\'de "Farklı Kaydet → .xlsx" ile kaydet).');
-  await gvTutamacYaz(h); return h;
+  await gvTutamacYaz(h, tk); return h;
 }
 async function gvAylikDosyayaEkle(degistir){
   if (!gvSonuc) return;
   if (!window.showOpenFilePicker){ ykDurum('gvKayitDurum', '✗ Bu tarayıcı dosyaya doğrudan yazmayı desteklemiyor; Chrome ya da Edge kullan.', 'err'); return; }
   if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel) ve takım liderini seç.', 'warn'); return; }
+  const hd = gvHedefTakim();
+  if (hd.hata){ ykDurum('gvKayitDurum', '✗ ' + hd.hata, 'err'); return; }
+  const tk = hd.takim, tkAd = tk || 'Tümü';
   try {
-    let h = degistir ? null : await gvTutamacOku();
-    if (!h) h = await gvDosyaSecYeni();
+    let h = degistir ? null : await gvTutamacOku(tk);
+    if (!h){
+      if (!degistir && !confirm(`${tkAd} için bu bilgisayarda henüz aylık dosya seçilmedi. Şimdi seçilsin mi?`)) return;
+      h = await gvDosyaSecYeni(tk); gvAylikEtiket();
+    }
+    { const u = gvAyUyumsuz(h.name, gvSonuc.tarih);
+      if (u && !confirm(`${u}\n\nDosya: ${h.name}\nYine de bu dosyaya eklensin mi? (Hayır dersen "dosyayı değiştir" ile yeni ayın dosyasını seçebilirsin.)`)) return; }
     if ((await h.queryPermission({ mode:'readwrite' })) !== 'granted' && (await h.requestPermission({ mode:'readwrite' })) !== 'granted'){
       ykDurum('gvKayitDurum', '✗ Dosyaya yazma izni verilmedi.', 'err'); return;
     }
     { const mod = document.getElementById('gvMod'), e = mod.value; mod.value = 'tumu';
-      const bos = gvKisiler(gvAktifGrup).filter(k => k.yok && !k.sebep); mod.value = e;
+      const bos = gvKisiler(gvAktifGrup, tk).filter(k => k.yok && !k.sebep); mod.value = e;
       if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return; }
     ykDurum('gvKayitDurum', `${h.name} açılıyor…`);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await (await h.getFile()).arrayBuffer());
     // Gelmeyenler her zaman dahil (takip için)
     const mod = document.getElementById('gvMod'), eskiMod = mod.value; mod.value = 'tumu';
-    const sut = gvGorSut(gvAktifGrup), kisiler = gvKisiler(gvAktifGrup);
+    const sut = gvGorSut(gvAktifGrup), kisiler = gvKisiler(gvAktifGrup, tk);
+    if (!kisiler.length){ mod.value = eskiMod; ykDurum('gvKayitDurum', `✗ ${tkAd} için bu sekmede kişi yok.`, 'warn'); return; }
     mod.value = eskiMod;
     const s = gvAylikIsle(wb, gvSonuc.tarih, sut, kisiler, gvAktifGrup);
     const buf = await wb.xlsx.writeBuffer();
@@ -5573,8 +5608,8 @@ async function gvAylikDosyayaEkle(degistir){
     try { w = await h.createWritable(); }
     catch(e){ throw new Error('Dosyaya yazılamadı; Excel\'de açıksa kapatıp tekrar dene. (' + e.message + ')'); }
     await w.write(buf); await w.close();
-    document.getElementById('gvAylikAd').textContent = h.name;
-    ykDurum('gvKayitDurum', `✓ ${h.name}: ${gvSonuc.tarih} sayfası ${s.yenilendi ? 'yenilendi' : 'eklendi'} ve VERİ sayfasının sonuna yazıldı (${kisiler.length} kişi, gelmeyenler dahil).`, 'ok');
+    gvAylikEtiket();
+    ykDurum('gvKayitDurum', `✓ ${h.name} (${tkAd}): ${gvSonuc.tarih} sayfası ${s.yenilendi ? 'yenilendi' : 'eklendi'} ve VERİ sayfasının sonuna yazıldı (${kisiler.length} kişi, gelmeyenler dahil).`, 'ok');
   } catch(err){
     if (err && err.name === 'AbortError') return;
     ykDurum('gvKayitDurum', '✗ ' + err.message, 'err');
@@ -5582,7 +5617,7 @@ async function gvAylikDosyayaEkle(degistir){
 }
 document.getElementById('gvAylikBtn').addEventListener('click', () => gvAylikDosyayaEkle(false));
 document.getElementById('gvAylikDegistir').addEventListener('click', e => { e.preventDefault(); gvAylikDosyayaEkle(true); });
-gvTutamacOku().then(h => { if (h) document.getElementById('gvAylikAd').textContent = h.name; });
+document.getElementById('gvTakim').addEventListener('change', gvAylikEtiket);
 document.getElementById('gvExcelBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
   if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bu sekme yalnız işaretleme içindir; Excel için bir tablo sekmesi seç.', 'warn'); return; }

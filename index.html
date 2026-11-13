@@ -418,8 +418,8 @@
                 <button class="btn" id="gvKopyalaBtn" title="Ekranda görünen tabloyu (sekme + takım lideri) kopyalar">📋 Maile Kopyala</button>
                 <button class="btn" id="gvExcelBtn" title="Ekranda görünen tabloyu Excel'e aktarır">⬇ Excel'e Aktar</button>
                 <button class="btn ok" id="gvExcelTumBtn" title="Herkes, Ana sütunlarıyla (11.11 düzeni)">⬇ Ana Excel (Tümü)</button>
-                <button class="btn" id="gvAylikBtn" title="Ekrandaki sekme, gelmeyenler dahil: takımın aylık dosyasına o günün sayfası eklenir, VERİ sayfasının sonuna yazılır. O ayın dosyası klasörde yoksa oluşturulur.">📁 Dosyama Ekle</button>
-                <button class="btn" id="gvAylikTumBtn" style="display:none;" title="Ekrandaki sekme: her takım liderinin verisi kendi aylık dosyasına (Süper Yetkili)">📁 Tüm Takımlara Ekle</button>
+                <button class="btn" id="gvAylikBtn" title="Takımın bütün personeli (Personel, SM, Uzman; gelmeyenler dahil), Ana Tablo sütunlarıyla: aylık dosyaya o günün sayfası eklenir, VERİ sayfasının sonuna yazılır. O ayın dosyası klasörde yoksa oluşturulur.">📁 Dosyama Ekle</button>
+                <button class="btn" id="gvAylikTumBtn" style="display:none;" title="Her takım liderinin bütün personeli kendi aylık dosyasına, Ana Tablo sütunlarıyla (Süper Yetkili)">📁 Tüm Takımlara Ekle</button>
               </div>
             </div>
             <div class="hint" style="margin:6px 0 0;">Aylık dosyalar klasörü: <b id="gvKlasorAd">seçilmedi</b> · <a href="#" id="gvKlasorDegistir">klasörü değiştir</a> · Bu ayın dosyası: <b id="gvAylikAd">—</b> (dosya Excel'de açıkken kaydedilemez)</div>
@@ -5510,7 +5510,7 @@ async function gvExcel(gorunum, dosyaAdi){
 }
 
 // ---------- Aylık takım dosyasına ekleme (makronun yerine) ----------
-// Ekrandaki sekme + takım lideri, gelmeyenler dahil: o günün sayfası (adı tarih) eklenir, VERİ sayfasının sonuna da aynı blok yazılır.
+// Takımın Ana Tablo görünümü (gelmeyenler dahil): o günün sayfası (adı tarih) eklenir, VERİ sayfasının sonuna da aynı blok yazılır.
 // Aynı gün yeniden eklenirse eski sayfa ve VERİ'deki eski blok silinip yenisi yazılır. Dosya Chrome'un dosya erişimiyle yerinde kaydedilir.
 const GV_VERI_SAYFA = 'VERİ';
 // İşlem (dosyadan bağımsız, test edilebilir): ExcelJS Workbook'u günceller
@@ -5588,7 +5588,7 @@ async function gvAylikEtiket(){
 // Tek takımı klasördeki aylık dosyasına yazar; sonuç metni döner
 async function gvTakimaYaz(dir, tk, sut, gorunum){
   const kisiler = gvKisiler(gorunum, tk);
-  if (!kisiler.length) return { ok:false, metin:'bu sekmede kişi yok' };
+  if (!kisiler.length) return { ok:false, metin:'kişi yok' };
   const ad = gvDosyaAdi(gvSonuc.tarih, tk);
   let h, yeni = false, buf;
   try { h = await dir.getFileHandle(ad); buf = await (await h.getFile()).arrayBuffer(); }
@@ -5609,7 +5609,6 @@ async function gvTakimaYaz(dir, tk, sut, gorunum){
 }
 async function gvAylikDosyayaEkle(tumu){
   if (!gvSonuc) return;
-  if ([GV_GEC, GV_SD].includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bir tablo sekmesi seç (ör. Personel).', 'warn'); return; }
   let hedefler;
   if (tumu){
     if (!userPerms.superYetkili) return;
@@ -5623,13 +5622,14 @@ async function gvAylikDosyayaEkle(tumu){
   try {
     const dir = await gvKlasorAl(false); if (!dir) return;
     mod.value = 'tumu';                                 // gelmeyenler her zaman dahil (takip için)
-    const sut = gvGorSut(gvAktifGrup);
-    const bos = hedefler.flatMap(tk => gvKisiler(gvAktifGrup, tk).filter(k => k.yok && !k.sebep));
+    // Aylık dosyaya her zaman Ana Tablo yazılır: takımın bütün personeli (Personel, SM, Uzman), Ana sütunlarıyla
+    const sut = gvGorSut(GV_ANA);
+    const bos = hedefler.flatMap(tk => gvKisiler(GV_ANA, tk).filter(k => k.yok && !k.sebep));
     if (bos.length && !confirm(`${bos.length} gelmeyenin sebebi belli değil (${bos.map(k => k.ad).join(', ')}). Açıklama boş yazılacak. Yine de eklensin mi?\n(Önce "Gelmeyenler dahil" görünümündeki kutudan sebep seçebilirsin.)`)) return;
     const sonuc = [];
     for (const tk of hedefler){
       ykDurum('gvKayitDurum', `${tk || 'Tümü'} yazılıyor…`);
-      try { const r = await gvTakimaYaz(dir, tk, sut, gvAktifGrup); sonuc.push(`${r.ok ? '✓' : '–'} ${tk || 'Tümü'}: ${r.metin}`); }
+      try { const r = await gvTakimaYaz(dir, tk, sut, GV_ANA); sonuc.push(`${r.ok ? '✓' : '–'} ${tk || 'Tümü'}: ${r.metin}`); }
       catch(e){ sonuc.push(`✗ ${tk || 'Tümü'}: ${e.message}`); }
     }
     const hata = sonuc.some(x => x.startsWith('✗'));

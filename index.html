@@ -408,6 +408,7 @@
             <label class="btn primary" style="cursor:pointer;">📂 Raporları Seç<input type="file" id="gvDosyaSec" accept=".xlsx" multiple style="display:none;"></label>
             <label title="Tek gün için ikisine aynı tarihi seç; aralıkta her gün ayrı hesaplanır">Tarih: <input type="date" id="gvTarih"> – <input type="date" id="gvTarih2"></label>
             <button class="btn primary" id="gvHazirlaBtn">▶ Veriyi Hazırla</button>
+            <button class="btn" id="gvArsivBtn" title="Seçilen tarih aralığını dosya yüklemeden GÜNLÜK VERİ ARŞİVİ'nden açar">📚 Arşivden Aç</button>
           </div>
           <div id="gvDosyalar" class="gv-dosyalar"></div>
           <div id="gvDurum" class="status"></div>
@@ -4633,8 +4634,8 @@ function gvHerGun(gunler, fn){ const eski = gvSonuc, out = []; try { gunler.forE
 let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
 const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
-  aylikAd:'Aylık Dosya Adı', sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true };
+  aylikAd:'Aylık Dosya Adı', arsivId:'Günlük Veri Arşivi (Sheets ID)', sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', arsivId:'1IIVfbBzmfKjRh1n1cC-z1sksPKZ237447xghPR3pSRE', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
@@ -4646,7 +4647,8 @@ function gvStilKur(ayarRows){
            sdOrta: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdOrta))),
            sdBas: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdBas))),
            sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))),
-           aylikAd: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.aylikAd)) || '').trim() || GV_STIL_VARSAYILAN.aylikAd };
+           aylikAd: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.aylikAd)) || '').trim() || GV_STIL_VARSAYILAN.aylikAd,
+           arsivId: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.arsivId)) || '').trim() || GV_STIL_VARSAYILAN.arsivId };
 }
 // Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
 function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
@@ -5060,6 +5062,127 @@ async function gvSekmeHazir(ad){
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}:batchUpdate`, { method:'POST', headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify({ requests: [{ addSheet: { properties: { title: ad } } }] }) });
 }
+// ---------- Günlük Veri Arşivi (ayrı Sheets dosyası, yıl başına bir sekme) ----------
+// Her hazırlanan gün yazılır; aynı gün yeniden yazılırsa eski satırları silinir. Takım lideri tutulmaz (değişir; açarken güncel listeden).
+const GV_ARSIV_SABIT = ['Tarih', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Gelmedi', 'Sebep', 'Sistem Dışı', 'Kaynak', 'Kayıt Zamanı'];
+const gvArsivVeriSut = () => gvSutunlar.filter(x => !['TARİH', 'PERSONEL LİSTESİ', 'SEBEP'].includes(ykAnahtar(x.kaynak))).map(x => x.baslik);
+const gvArsivUrl = yol => `https://sheets.googleapis.com/v4/spreadsheets/${gvStil.arsivId}${yol}`;
+async function gvArsivSekmeler(){
+  const d = await authFetch(gvArsivUrl('?fields=sheets.properties(sheetId,title)'));
+  return new Map((d.sheets || []).map(x => [x.properties.title, x.properties.sheetId]));
+}
+async function gvArsivYaz(gunler, kaynak){
+  const id = gvStil.arsivId; if (!id) return null;
+  const yillar = new Map();
+  [...gunler.values()].forEach(g => { const y = g.tarih.slice(6); if (!yillar.has(y)) yillar.set(y, []); yillar.get(y).push(g); });
+  let sekmeler = await gvArsivSekmeler(), toplam = 0;
+  const d = new Date(), zaman = `${ykTarih(d)} ${ykIki(d.getHours())}:${ykIki(d.getMinutes())}`;
+  for (const [yil, gl] of yillar){
+    if (!sekmeler.has(yil)){
+      await authFetch(gvArsivUrl(':batchUpdate'), { method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: yil, gridProperties: { frozenRowCount: 1 } } } }] }) });
+      sekmeler = await gvArsivSekmeler();
+    }
+    const sid = sekmeler.get(yil);
+    const oku = await authFetch(gvArsivUrl(`/values/${encodeURIComponent(`'${yil}'!A1:A200000`)}`));
+    const aSut = oku.values || [];
+    const basOku = await authFetch(gvArsivUrl(`/values/${encodeURIComponent(`'${yil}'!1:1`)}`));
+    let bas = (basOku.values && basOku.values[0]) || [];
+    const gerekli = GV_ARSIV_SABIT.concat(gvArsivVeriSut());
+    const eksik = gerekli.filter(h => !bas.includes(h));
+    if (eksik.length){
+      bas = bas.concat(eksik);
+      await authFetch(gvArsivUrl(`/values/${encodeURIComponent(`'${yil}'!A1`)}?valueInputOption=RAW`), { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: [bas] }) });
+    }
+    // aynı günlerin eski satırlarını sil (alttan üste, ardışık bloklar halinde)
+    const tarihler = new Set(gl.map(g => g.tarih)), sil = [];
+    aSut.forEach((r, i) => { if (i > 0 && tarihler.has(ykTarih(String((r && r[0]) || '')))) sil.push(i); });
+    const bloklar = [];
+    sil.forEach(i => { const b = bloklar[bloklar.length - 1]; if (b && b[1] === i) b[1] = i + 1; else bloklar.push([i, i + 1]); });
+    if (bloklar.length) await authFetch(gvArsivUrl(':batchUpdate'), { method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ requests: bloklar.reverse().map(([a, z]) => ({ deleteDimension: { range: { sheetId: sid, dimension:'ROWS', startIndex: a, endIndex: z } } })) }) });
+    const ix = h => bas.indexOf(h);
+    const satirlar = [];
+    gl.sort((a, b) => ykSira(a.tarih) - ykSira(b.tarih)).forEach(g => g.kisiler.forEach(k => {
+      const r = new Array(bas.length).fill('');
+      const koy = (h, v) => { const i = ix(h); if (i >= 0) r[i] = v == null ? '' : v; };
+      koy('Tarih', g.tarih); koy('Sicil', k.sicil); koy('Ad Soyad', k.ad); koy('Tegsoft Adı', k.tegsoft); koy('Rapor Grubu', k.grup);
+      koy('Gelmedi', k.yok ? 'EVET' : ''); koy('Sebep', k.yok ? (k.sebep || '') : '');
+      koy('Sistem Dışı', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : ''); koy('Kaynak', kaynak || 'Panel'); koy('Kayıt Zamanı', zaman);
+      gvArsivVeriSut().forEach(h => koy(h, k.degerler[h]));
+      satirlar.push(r);
+    }));
+    for (let i = 0; i < satirlar.length; i += 5000)
+      await authFetch(gvArsivUrl(`/values/${encodeURIComponent(`'${yil}'!A1`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`), {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar.slice(i, i + 5000) }) });
+    toplam += satirlar.length;
+  }
+  return toplam;
+}
+// Arşivden [t1, t2] aralığını okur → Map(tarih → [{...satır}]) (biçimsiz değerler)
+async function gvArsivOku(t1, t2){
+  const out = new Map(), yillar = [];
+  for (let y = +t1.slice(6); y <= +t2.slice(6); y++) yillar.push(String(y));
+  const sekmeler = await gvArsivSekmeler();
+  for (const yil of yillar){
+    if (!sekmeler.has(yil)) continue;
+    const d = await authFetch(gvArsivUrl(`/values/${encodeURIComponent(`'${yil}'!A1:ZZ200000`)}?valueRenderOption=UNFORMATTED_VALUE`));
+    const rows = d.values || [], bas = rows[0] || [];
+    const ix = h => bas.indexOf(h), veri = bas.filter(h => h && !GV_ARSIV_SABIT.includes(h));
+    rows.slice(1).forEach(r => {
+      const t = ykTarih(String(r[ix('Tarih')] || '')); if (!t || ykSira(t) < ykSira(t1) || ykSira(t) > ykSira(t2)) return;
+      const al = h => { const i = ix(h); return i >= 0 && r[i] != null ? r[i] : ''; };
+      const degerler = {}; veri.forEach(h => { degerler[h] = al(h); });
+      const yok = ykAnahtar(al('Gelmedi')) === 'EVET';
+      let sd = []; try { sd = al('Sistem Dışı') ? JSON.parse(al('Sistem Dışı')) : []; } catch(e){}
+      if (!out.has(t)) out.set(t, []);
+      out.get(t).push({ sicil: String(al('Sicil')), ad: al('Ad Soyad'), tegsoft: al('Tegsoft Adı'), grup: al('Rapor Grubu'), degerler, yok, sebep: yok ? String(al('Sebep')) : '', sistemDisi: sd, kaynak: al('Kaynak') });
+    });
+  }
+  return out;
+}
+async function gvArsivdenAc(){
+  const t1 = ykIsoToTarih(document.getElementById('gvTarih').value);
+  const t2 = ykIsoToTarih(document.getElementById('gvTarih2').value) || t1;
+  if (!t1){ ykDurum('gvDurum', 'Tarih aralığı seç.', 'err'); return; }
+  if (ykSira(t2) < ykSira(t1)){ ykDurum('gvDurum', 'Bitiş tarihi başlangıçtan önce olamaz.', 'err'); return; }
+  ykDurum('gvDurum', 'Arşiv okunuyor…');
+  try {
+    const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
+    gvSebepSecenek = ayar.sebepler || [];
+    const arsiv = await gvArsivOku(t1, t2);
+    if (!arsiv.size){ ykDurum('gvDurum', `${t1} – ${t2} için arşivde kayıt yok.`, 'warn'); return; }
+    const pm = new Map(ayar.personel.map(p => [p.sicil, p]));
+    const ob = { drv: {} }, yeni = new Map(), kaynaklar = new Set();
+    for (const t of [...arsiv.keys()].sort((a, b) => ykSira(a) - ykSira(b))){
+      const kisiler = arsiv.get(t).map(k => {
+        const p = pm.get(k.sicil);
+        k.takim = p ? p.takim : '';   // takım lideri her zaman güncel listeden
+        gvSutunlar.forEach(x => {     // tarih ve personel sütunları arşivde ayrıca tutulmaz
+          const kay = ykAnahtar(x.kaynak);
+          if (kay === 'TARİH') k.degerler[x.baslik] = t;
+          else if (kay === 'PERSONEL LİSTESİ') k.degerler[x.baslik] = { 'SİCİL':k.sicil, 'TEGSOFT ADI':k.tegsoft, 'AD SOYAD':k.ad, 'GÖREV':p ? p.gorev : '', 'TAKIM LİDERİ':k.takim }[ykAnahtar(x.alan)] || '';
+        });
+        if (k.kaynak) kaynaklar.add(k.kaynak);
+        return k;
+      });
+      let planGun = null;
+      for (const [, w] of plan.planlar){ if (w.has(t)){ planGun = w.get(t); break; } }
+      if (!planGun) planGun = await ykDriveGun(t, ob.drv);
+      const sonuc = { tarih: t, kisiler, uyarilar: [] };
+      gvSebepleriUygula(sonuc, await gvSebepKaynaklari(t, planGun, ob));
+      yeni.set(t, sonuc);
+    }
+    gvGunler = yeni; gvCokSec = new Set(); gvSonuc = null;
+    if (!gvAktifGrup || (![GV_ANA, GV_GEC, GV_SD].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = GV_ANA;
+    const tl = [...yeni.keys()];
+    gvGunSec(tl[tl.length - 1]);
+    const eksikGun = []; for (let t = t1; ykSira(t) <= ykSira(t2); t = ykTarihEkle(t, 1)) if (!yeni.has(t)) eksikGun.push(t.slice(0, 5));
+    ykDurum('gvDurum', `✓ Arşivden açıldı: ${tl.length} gün (${tl[0]} – ${tl[tl.length - 1]})` + (eksikGun.length ? ` · arşivde olmayan günler: ${eksikGun.join(', ')}` : '') +
+      ([...kaynaklar].some(k => k !== 'Panel') ? ' · bazı günler eski Excel dosyalarından aktarıldı (tanımlar farklı olabilir).' : ''), 'ok');
+  } catch(err){ ykDurum('gvDurum', '✗ Arşiv okunamadı: ' + err.message, 'err'); }
+}
+document.getElementById('gvArsivBtn').addEventListener('click', gvArsivdenAc);
 async function gvSonKaydet(gunler){
   await gvSekmeHazir(GV_SON_TAB);
   const basliklar = gvSutunlar.map(x => x.baslik);
@@ -5415,8 +5538,11 @@ async function gvHazirla(){
     const secili = gvSonuc && yeni.has(gvSonuc.tarih) ? gvSonuc.tarih : tarihler[tarihler.length - 1];
     gvGunSec(secili);
     const ad = tarihler.length > 1 ? `${t1} – ${t2} (${tarihler.length} gün)` : t1;
-    try { const z = await gvSonKaydet(gvGunler); ykDurum('gvDurum', `✓ ${ad} verisi kaydedildi (${z}); sayfayı yeniden açınca dosya yüklemeden gelir.`, 'ok'); }
-    catch(err){ ykDurum('gvDurum', '⚠ Tablo hazırlandı ama kaydedilemedi (yeniden açınca dosyaları tekrar yüklemen gerekir): ' + err.message, 'warn'); }
+    let z;
+    try { z = await gvSonKaydet(gvGunler); ykDurum('gvDurum', `✓ ${ad} verisi kaydedildi (${z}); arşive yazılıyor…`, 'ok'); }
+    catch(err){ ykDurum('gvDurum', '⚠ Tablo hazırlandı ama kaydedilemedi (yeniden açınca dosyaları tekrar yüklemen gerekir): ' + err.message, 'warn'); return; }
+    try { const n = await gvArsivYaz(gvGunler, 'Panel'); ykDurum('gvDurum', `✓ ${ad} verisi kaydedildi (${z}) ve arşive yazıldı (${n} satır).`, 'ok'); }
+    catch(err){ ykDurum('gvDurum', `⚠ ${ad} kaydedildi ama arşive yazılamadı: ${err.message}`, 'warn'); }
   } catch(err){ ykDurum('gvDurum', '✗ ' + err.message, 'err'); }
 }
 

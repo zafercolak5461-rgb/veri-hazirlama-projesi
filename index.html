@@ -5189,9 +5189,13 @@ async function gvArsivdenAc(){
     if (!gvAktifGrup || (![GV_ANA, ...GV_LISTE()].includes(gvAktifGrup) && !gvGruplar.includes(gvAktifGrup))) gvAktifGrup = GV_ANA;
     const tl = [...yeni.keys()];
     gvGunSec(tl[tl.length - 1]);
+    // aynı gün aynı sicilde birden çok satır (eski Excel'den gelen sicil yazım hatası olabilir)
+    const cift = [];
+    yeni.forEach((s, t) => { const say = new Map(); s.kisiler.forEach(k => say.set(k.sicil, (say.get(k.sicil) || 0) + 1)); say.forEach((n, sc) => { if (n > 1) cift.push(`${t.slice(0, 5)} ${sc} (${n} satır)`); }); });
     const eksikGun = []; for (let t = t1; ykSira(t) <= ykSira(t2); t = ykTarihEkle(t, 1)) if (!yeni.has(t)) eksikGun.push(t.slice(0, 5));
     ykDurum('gvDurum', `✓ Arşivden açıldı: ${tl.length} gün (${tl[0]} – ${tl[tl.length - 1]})` + (eksikGun.length ? ` · arşivde olmayan günler: ${eksikGun.join(', ')}` : '') +
-      ([...kaynaklar].some(k => k !== 'Panel') ? ' · bazı günler eski Excel dosyalarından aktarıldı (tanımlar farklı olabilir).' : ''), 'ok');
+      ([...kaynaklar].some(k => k !== 'Panel') ? ' · bazı günler eski Excel dosyalarından aktarıldı (tanımlar farklı olabilir).' : '') +
+      (cift.length ? ` · ⚠ arşivde aynı gün aynı sicilde birden çok satır var, sicil yanlış yazılmış olabilir: ${cift.join(', ')}` : ''), cift.length ? 'warn' : 'ok');
   } catch(err){ ykDurum('gvDurum', '✗ Arşiv okunamadı: ' + err.message, 'err'); }
 }
 document.getElementById('gvArsivBtn').addEventListener('click', gvArsivdenAc);

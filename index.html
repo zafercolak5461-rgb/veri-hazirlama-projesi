@@ -4939,9 +4939,24 @@ function gvHesapla(g){
   return { tarih, kisiler, uyarilar };
 }
 // Bir kişinin bir sütundaki ham değeri: gelmeyende kimlik sütunları dolu, Sebep sütununda sebep, diğerlerinde YOK
+// Ana dosya (tüm personel Excel'i ve aylık takım dosyası) yazılırken true: Açıklama'ya saatlik izinlinin mola kullanımı da eklenir.
+// Ekran, mail kopyası ve Personel / Sosyal Medya / Uzman dosyalarında eklenmez.
+let gvUzunAciklama = false;
+// "izne göre büyüktür" kuralına göre: mola hakkı (izinli sınır), kullanılan ve farkı
+function gvMolaYazi(k){
+  const mk = gvKosullar.find(r => ykAnahtar(r.kosul) === 'İZNE GÖRE BÜYÜKTÜR'); if (!mk) return '';
+  const mx = (gvSutunlar || []).find(x => ykAnahtar(x.baslik) === ykAnahtar(mk.sutun)); if (!mx) return '';
+  const sinir = gvIzinliSinir(k, mk), n = gvHucreSayi(gvHucre(k, mx), mx.bicim); if (sinir == null || n == null) return '';
+  const f = Math.round(n - sinir);
+  return `mola hakkı ${gvDkSn(Math.round(sinir))}, kullanılan ${gvDkSn(Math.round(n))}` + (f ? ` (${gvDkSn(Math.abs(f))} ${f > 0 ? 'fazla' : 'az'})` : '');
+}
 function gvHucre(k, x){
   const kay = ykAnahtar(x.kaynak);
-  if (kay === 'SEBEP') return k.yok ? (k.sebep || '') : [k.calisanSebep, gvIzinYazi(k)].filter(Boolean).join(', ');
+  if (kay === 'SEBEP'){
+    if (k.yok) return k.sebep || '';
+    const iz = gvIzinYazi(k), mola = iz && gvUzunAciklama ? gvMolaYazi(k) : '';
+    return [k.calisanSebep, iz + (mola ? ' · ' + mola : '')].filter(Boolean).join(', ');
+  }
   if (k.yok && !['TARİH','PERSONEL LİSTESİ'].includes(kay)) return GV_YOK;
   return k.degerler[x.baslik];
 }
@@ -5924,9 +5939,12 @@ async function gvExcel(gorunum, dosyaAdi){
   const wb = new ExcelJS.Workbook();
   wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
   const ws = wb.addWorksheet(gvSonuc.tarih);
-  gvSatirlariYaz(ws, sut, kisiler, gorunum);
-  ws.views = [{ state:'frozen', ySplit:1 }];
-  gvSutunGenislik(ws, sut, kisiler);
+  gvUzunAciklama = gorunum === GV_ANA;
+  try {
+    gvSatirlariYaz(ws, sut, kisiler, gorunum);
+    ws.views = [{ state:'frozen', ySplit:1 }];
+    gvSutunGenislik(ws, sut, kisiler);
+  } finally { gvUzunAciklama = false; }
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
@@ -5940,6 +5958,10 @@ async function gvExcel(gorunum, dosyaAdi){
 const GV_VERI_SAYFA = 'VERİ';
 // İşlem (dosyadan bağımsız, test edilebilir): ExcelJS Workbook'u günceller
 function gvAylikIsle(wb, tarih, sut, kisiler, gorunum){
+  gvUzunAciklama = true;
+  try { return gvAylikIsleIc(wb, tarih, sut, kisiler, gorunum); } finally { gvUzunAciklama = false; }
+}
+function gvAylikIsleIc(wb, tarih, sut, kisiler, gorunum){
   const eski = wb.getWorksheet(tarih);
   if (eski) wb.removeWorksheet(eski.id);
   const ws = wb.addWorksheet(tarih);

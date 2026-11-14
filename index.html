@@ -3312,8 +3312,9 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
   for (const p of ayar.personel){
     bilinen.add(ykAd(p.tegsoft));
     const rg = ayar.gorevGrup.get(ykAnahtar(p.gorev)) || 'Asistan';
-    const planVal = planGun ? (planGun.get(p.sicil) || '') : '';
     const driveVal = driveGun ? (driveGun.get(p.sicil) || '') : '';
+    // Drive VARDİYA esas: kişinin Drive'da değeri varsa Haftalık Plan'a bakılmaz; plan yalnız Drive'da boşsa yedektir.
+    const planVal = !String(driveVal).trim() && planGun ? (planGun.get(p.sicil) || '') : '';
     const man = manuel.get(p.sicil) || null;
     const ozelAktif = p.ozel && (!p.bitis || ykSira(p.bitis) >= sira);
     const ozelIzin = ozelAktif && ykAnahtar(ayar.ozelTur.get(ykAnahtar(p.ozel)) || '') === 'İZİN';
@@ -3327,9 +3328,8 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     else if (gD && gD !== 'Çalışmıyor'){ sebepGrup = gD; sebepAd = driveVal; }
     else if (gP && gP !== 'Çalışmıyor'){ sebepGrup = gP; sebepAd = planVal; }
     else if (ozelIzin){ sebepGrup = 'Diğer'; sebepAd = p.ozel; }
-    // Planda kod (Dİ, HT…) yazıyorsa Drive'daki saat kullanılmaz: kişinin o günkü durumu plandaki koddur.
-    const planKod = !ykVardiya(planVal) && !!grupOf(planVal);
-    const gercekVardiya = calismiyor ? '' : (ykVardiya(planVal) || (planKod ? '' : ykVardiya(driveVal)));
+    // Drive'da kod (Dİ, HT…) varsa vardiya yoktur; Drive boşsa plandaki vardiya (planVal yalnız o durumda dolu).
+    const gercekVardiya = calismiyor ? '' : (ykVardiya(driveVal) || ykVardiya(planVal));
     if (!calismiyor && !gercekVardiya && !sebepGrup && (gD === 'Çalışmıyor' || gP === 'Çalışmıyor')) calismiyor = true;
     // Vardiya yerine kod yazılmışsa (Dİ, Rapor…) kişi kodun "Sayılacak Vardiya"sında sayılır.
     const vardiya = gercekVardiya || (sebepGrup ? kodVardiyasi(sebepAd) : '');
@@ -3393,12 +3393,12 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     .sort((a, b) => b.dk - a.dk || a.ad.localeCompare(b.ad, 'tr'));
   const sebepsiz = kisiler.filter(k => k.exAciklama === 'SEBEP YOK');
   // Uyarılar
-  if (!planGun) uyarilar.push(`${tarih} için kayıtlı haftalık plan yok: vardiyalar Drive VARDİYA'dan alındı. Haftalık Plan sayfasından planı yapıştır.`);
+  if (!driveGun && !planGun) uyarilar.push(`${tarih} için Drive VARDİYA'da gün yok ve Haftalık Plan da yok: vardiyalar bilinmiyor.`);
+  else if (!driveGun) uyarilar.push(`Drive VARDİYA'da ${tarih} günü okunamadı: vardiya ve kodlar Haftalık Plan'dan alındı.`);
   else {
-    const plansiz = kisiler.filter(k => !planGun.has(k.sicil) && !k.sebepGrup);
-    if (plansiz.length) uyarilar.push(`Planda olmayan ${plansiz.length} kişi: ${plansiz.map(k => k.ad).join(', ')}.`);
+    const plansiz = kisiler.filter(k => !String(k.driveVal).trim() && !String(k.planVal).trim() && !k.sebepGrup && !k.manuel);
+    if (plansiz.length) uyarilar.push(`Drive VARDİYA'da da Haftalık Plan'da da değeri olmayan ${plansiz.length} kişi: ${plansiz.map(k => k.ad).join(', ')}.`);
   }
-  if (!driveGun) uyarilar.push(`Drive VARDİYA'da ${tarih} günü okunamadı: rapor/izin bilgisi yalnız plandan ve elle girilenden alındı.`);
   const disari = [...giris.entries()].filter(([a, g]) => g.ilk && !bilinen.has(a)).map(([a]) => a);
   if (disari.length) uyarilar.push(`Personel listesinde olmayan ${disari.length} Tegsoft girişi: ${disari.join(', ')}. Bunlar sayılmadı; kişi listede başka adla kayıtlıysa Tegsoft Adı'nı düzelt.`);
   const plandisi = kisiler.filter(k => k.login && (k.durum === 'Çalışmıyor' || k.durum === 'Plan yok'));
@@ -3461,6 +3461,13 @@ async function ykPlanlariOku(){
 function ykBolum(v){ return ykAnahtar(v) === ykAnahtar('Sosyal Medya') ? 'Sosyal Medya' : 'Personel'; }
 // Drive VARDİYA: o ayın sekmesinden o günün sütunu → Map(sicil→değer) ya da null
 // onbellek verilirse ayın sekmesi bir kez okunur (tarih aralığında her gün için tekrar okumamak için)
+// Günün vardiya kaynağı: Drive VARDİYA esastır (sistemden üretilir); Haftalık Plan yalnız Drive'da değeri boş olan kişi için yedektir.
+function ykVardiyaBirlestir(drive, plan){
+  if (!drive && !plan) return null;
+  const m = new Map(plan || []);
+  (drive || new Map()).forEach((v, sc) => { if (String(v == null ? '' : v).trim()) m.set(sc, v); });
+  return m;
+}
 async function ykDriveGun(tarih, onbellek){
   const m = tarih.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   const sekme = `${YK_AYLAR[Number(m[2]) - 1]}-${m[3]}`;
@@ -5182,9 +5189,9 @@ async function gvArsivdenAc(){
         if (k.kaynak) kaynaklar.add(k.kaynak);
         return k;
       });
-      let planGun = null;
-      for (const [, w] of plan.planlar){ if (w.has(t)){ planGun = w.get(t); break; } }
-      if (!planGun) planGun = await ykDriveGun(t, ob.drv);
+      let hpGun = null;
+      for (const [, w] of plan.planlar){ if (w.has(t)){ hpGun = w.get(t); break; } }
+      const planGun = ykVardiyaBirlestir(await ykDriveGun(t, ob.drv), hpGun);
       const sonuc = { tarih: t, kisiler, uyarilar: [] };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(t, planGun, ob));
       if (planGun) gvVardiyasizUyari(sonuc);
@@ -5267,9 +5274,10 @@ async function gvSonuGetir(){
       const kisiler = ayar.personel.map(p => calisan.get(p.sicil) || gvGelmeyen(p, g.tarih, ayar));
       const listede = new Set(ayar.personel.map(p => p.sicil));
       calisan.forEach((k, sc) => { if (!listede.has(sc)) kisiler.push(k); });   // listeden çıkarılmış ama o gün çalışmış
-      let planGun = null;
-      if (planlar) for (const [, w] of planlar){ if (w.has(g.tarih)){ planGun = w.get(g.tarih); break; } }
-      if (!planGun){ ob.drv = ob.drv || {}; planGun = await ykDriveGun(g.tarih, ob.drv); }
+      let hpGun = null;
+      if (planlar) for (const [, w] of planlar){ if (w.has(g.tarih)){ hpGun = w.get(g.tarih); break; } }
+      ob.drv = ob.drv || {};
+      const planGun = ykVardiyaBirlestir(await ykDriveGun(g.tarih, ob.drv), hpGun);
       const sonuc = { tarih: g.tarih, kisiler, uyarilar: g.uyarilar };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(g.tarih, planGun, ob));
       yeni.set(g.tarih, sonuc);
@@ -5428,20 +5436,19 @@ function gvSebepleriUygula(sonuc, kay){
   const ckod = v => !!v && calismiyorKod.has(ykAnahtar(String(v).trim()));
   sonuc.kisiler.filter(k => k.yok).forEach(k => {
     const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak;
-    k.calismiyor = !!b.calismiyor || ckod(b.sebep) || ckod(kay.plan.get(k.sicil)) || ckod(kay.drive.get(k.sicil));
+    k.calismiyor = !!b.calismiyor || ckod(b.sebep) || ckod(kay.plan.get(k.sicil));   // kay.plan = Drive + yedek Haftalık Plan
   });
   // Girişi olup o gün sebebi de olan (ör. Rapor alıp erken çıkan): Açıklama'da sebep yazılır, sistem dışı sorulmaz
   sonuc.kisiler.filter(k => !k.yok).forEach(k => {
     k.calisanSebep = '';
     let v = kay.elle.get(k.sicil) || (kay.kayitGiris && kay.kayitGiris.get(k.sicil)) || '';
-    if (!v){ const dv = String(kay.drive.get(k.sicil) || '').trim(); if (dv && !ykVardiya(dv)) v = dv; }
-    if (!v){ const pv = String(kay.plan.get(k.sicil) || '').trim(); if (pv && !ykVardiya(pv)) v = pv; }
+    if (!v){ const pv = String(kay.plan.get(k.sicil) || '').trim(); if (pv && !ykVardiya(pv)) v = pv; }   // Drive, boşsa Haftalık Plan
     if (v && !ckod(v)) k.calisanSebep = v;
     if (k.calisanSebep) k.sistemDisi = [];   // kayıtlı veriden gelen eski aralıklar da düşer
   });
   sonuc.kisiler = sonuc.kisiler.filter(k => !(k.yok && k.calismiyor));
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA
-  sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ykVardiya(kay.drive.get(k.sicil)) || ''; });
+  sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ''; });   // kay.plan: Drive esas, boşsa Haftalık Plan
   sonuc.notlar = { gecDegil: kay.gecDegil, staffKapali: kay.staffKapali, saatlik: kay.saatlik, planVar: kay.planVar };
 }
 // Elle seçilen sebebi yazar (boş = siler). Yalnız GÜNLÜK VERİ SEBEP sekmesi.
@@ -5546,19 +5553,19 @@ async function gvHazirla(){
     const aralik = new Set(tarihler), ob = {}, yeni = new Map();
     for (const tarih of tarihler){
       if (tarihler.length > 1) ykDurum('gvDurum', `${tarih} hesaplanıyor… (${yeni.size + 1}/${tarihler.length})`);
-      let planGun = null, planYarin = null; const yarin = ykTarihEkle(tarih, 1);
-      for (const [, w] of plan.planlar){ if (!planGun && w.has(tarih)) planGun = w.get(tarih); if (!planYarin && w.has(yarin)) planYarin = w.get(yarin); }
-      // Haftalık Plan yoksa vardiyalar Drive VARDİYA'dan (Yoklama ile aynı yedek kaynak)
+      let hpGun = null, hpYarin = null; const yarin = ykTarihEkle(tarih, 1);
+      for (const [, w] of plan.planlar){ if (!hpGun && w.has(tarih)) hpGun = w.get(tarih); if (!hpYarin && w.has(yarin)) hpYarin = w.get(yarin); }
+      // Vardiyalar Drive VARDİYA'dan; Drive'da boş olan kişi için Haftalık Plan (Yoklama ile aynı sıra)
       ob.drv = ob.drv || {};
-      let planKaynak = planGun ? 'plan' : '';
-      if (!planGun){ planGun = await ykDriveGun(tarih, ob.drv); if (planGun) planKaynak = 'drive'; }
-      if (!planYarin) planYarin = await ykDriveGun(yarin, ob.drv);
+      const drvGun = await ykDriveGun(tarih, ob.drv);
+      const planGun = ykVardiyaBirlestir(drvGun, hpGun), planYarin = ykVardiyaBirlestir(await ykDriveGun(yarin, ob.drv), hpYarin);
+      const planKaynak = drvGun ? '' : (hpGun ? 'plan' : '');
       const sonuc = gvHesapla({ tarih, aralik, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(tarih, planGun, ob));
       gvSistemDisiHesapla(sonuc, gvDosyalar.dd);
       if (planGun) gvVardiyasizUyari(sonuc);   // gün için hiç plan yoksa aşağıdaki genel uyarı yeter
-      if (planKaynak === 'drive') sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: vardiyalar Drive VARDİYA'dan alındı.`);
-      if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan ve Drive VARDİYA yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
+      if (planKaynak === 'plan') sonuc.uyarilar.unshift(`${tarih} Drive VARDİYA'da yok: vardiyalar Haftalık Plan'dan alındı.`);
+      if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Drive VARDİYA ve Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
       if (!sonuc.kisiler.some(k => !k.yok)) sonuc.uyarilar.unshift(`${tarih}: raporlarda bu güne ait veri yok.`);
       yeni.set(tarih, sonuc);
     }
@@ -5633,7 +5640,7 @@ function gvGecCiz(){
       return `<tr>${cok ? `<td>${o.g.tarih.slice(0, 5)} ${gvGunAdi(o.g.tarih)}</td>` : ''}<td>${ykEsc(o.k.sicil)}</td><td>${ykEsc(o.k.ad)}</td><td>${ykEsc(o.k.takim || '')}</td><td style="text-align:center;">${ykEsc(o.k.vardiya)}</td>` +
         `<td style="text-align:center;background:${isaret ? '#92D050' : '#FF0000'};color:#000;">${ykEsc(ykSaat(o.giris))}</td><td style="text-align:center;">${o.dk}</td>` +
         `<td style="text-align:center;"><input type="checkbox" data-gvgec="${ykEsc(o.k.sicil)}" data-tarih="${o.g.tarih}"${isaret ? ' checked' : ''}></td></tr>`; }).join('')
-      : `<tr><td colspan="${cok ? 8 : 7}" class="soluk">${!cok && (gunler[0].notlar || {}).planVar === false ? 'Bu gün için Haftalık Plan yok; geç giriş hesaplanamadı.' : 'Geç giren yok.'}</td></tr>`);
+      : `<tr><td colspan="${cok ? 8 : 7}" class="soluk">${!cok && (gunler[0].notlar || {}).planVar === false ? 'Bu gün için Drive VARDİYA ve Haftalık Plan yok; geç giriş hesaplanamadı.' : 'Geç giren yok.'}</td></tr>`);
   document.getElementById('gvSayi').textContent = `${liste.length} geç giriş${cok ? ` · ${gunler.length} gün` : ''} · tolerans ${gvTolerans} dk · işaretlenen yeşil olur`;
 }
 document.getElementById('gvTablo').addEventListener('change', async e => {
@@ -5728,7 +5735,7 @@ function gvVkCiz(){
       `<td style="text-align:center;">${gvDkYaz(o.gk)}</td><td style="text-align:center;">${o.ck == null ? '—' : gvDkYaz(o.ck)}</td>` +
       `<td style="${renk[o.deger] ? `background:${renk[o.deger]};color:#000;` : ''}">${ykEsc(o.deger)}</td><td style="text-align:center;font-weight:bold;">${ykEsc(o.olasi)}</td>` +
       `<td style="text-align:center;">${o.yon === 'geç' ? `<input type="checkbox" data-gvgec="${ykEsc(o.k.sicil)}" data-tarih="${o.g.tarih}" title="Geç değil: Geç Girenler'de yeşil olur, Saatlik İzin ve bu listeden düşer">` : ''}</td></tr>`).join('')
-      : `<tr><td colspan="${cok ? 12 : 11}" class="soluk">${!cok && (gunler[0].notlar || {}).planVar === false ? 'Bu gün için Haftalık Plan yok; vardiya kontrolü yapılamadı.' : 'Vardiyası yanlış girilmiş olabilecek kimse yok.'}</td></tr>`);
+      : `<tr><td colspan="${cok ? 12 : 11}" class="soluk">${!cok && (gunler[0].notlar || {}).planVar === false ? 'Bu gün için Drive VARDİYA ve Haftalık Plan yok; vardiya kontrolü yapılamadı.' : 'Vardiyası yanlış girilmiş olabilecek kimse yok.'}</td></tr>`);
   const ck = gunler.some(g => g.kisiler.some(k => !k.yok && k.sonCikis));
   document.getElementById('gvSayi').textContent = `${liste.length} kayıt${cok ? ` · ${gunler.length} gün` : ''} · eşik ${gvStil.vkEsik} dk, pay ${gvStil.vkPay} dk` +
     (ck ? '' : ' · son çıkış yok (Detaylı Durum yüklenmeli ya da gün eski Excel arşivinden): yalnız geç yön kontrol edildi');

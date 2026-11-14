@@ -3318,14 +3318,16 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     const man = manuel.get(p.sicil) || null;
     const ozelAktif = p.ozel && (!p.bitis || ykSira(p.bitis) >= sira);
     const ozelIzin = ozelAktif && ykAnahtar(ayar.ozelTur.get(ykAnahtar(p.ozel)) || '') === 'İZİN';
-    // Sebep önceliği: elle girilen > Drive'daki günlük sebep > plandaki kod > özel durum (İzin türü)
-    const gM = man ? (man.grup || grupOf(man.sebep) || 'Diğer') : '';
+    // Sebep önceliği: Drive VARDİYA'daki kod (sistemden gelir, esas) > elle girilen (Drive henüz güncellenmemişken) > plandaki kod > özel durum (İzin türü)
     const gD = ykVardiya(driveVal) ? '' : grupOf(driveVal);
+    const gM = man && !gD ? (man.grup || grupOf(man.sebep) || 'Diğer') : '';
     const gP = ykVardiya(planVal) ? '' : grupOf(planVal);
+    if (man && gD && ykAnahtar(man.sebep) !== ykAnahtar(driveVal)) uyarilar.push(`${p.ad}: elle "${man.sebep}" girilmiş, Drive VARDİYA'da "${driveVal}" yazıyor; Drive esas alındı.`);
     let sebepGrup = '', sebepAd = '', calismiyor = false;
-    if (gM === 'Çalışmıyor') calismiyor = true;
+    if (gD === 'Çalışmıyor') calismiyor = true;
+    else if (gD){ sebepGrup = gD; sebepAd = driveVal; }
+    else if (gM === 'Çalışmıyor') calismiyor = true;
     else if (gM){ sebepGrup = gM; sebepAd = man.sebep; }
-    else if (gD && gD !== 'Çalışmıyor'){ sebepGrup = gD; sebepAd = driveVal; }
     else if (gP && gP !== 'Çalışmıyor'){ sebepGrup = gP; sebepAd = planVal; }
     else if (ozelIzin){ sebepGrup = 'Diğer'; sebepAd = p.ozel; }
     // Drive'da kod (Dİ, HT…) varsa vardiya yoktur; Drive boşsa plandaki vardiya (planVal yalnız o durumda dolu).
@@ -5078,7 +5080,7 @@ async function gvAyarlariYaz(sutunlar){
 // Her "Veriyi Hazırla"da sonuç bu sekmeye yazılır (öncekinin yerine). Sayfa yeniden açılınca dosya yüklemeden gelir.
 // Düzen: A1 Tarih | B1 tarih ; A2 Kaydeden | B2 ad + saat ; A3 Uyarılar | B3 metin ; 5. satır başlık ; 6. satırdan veri.
 const GV_SON_TAB = 'GÜNLÜK VERİ SON';
-const GV_SON_SABIT = ['Gün', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep', 'Sistem Dışı', 'Son Çıkış'];
+const GV_SON_SABIT = ['Gün', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Takım Lideri', 'Gelmedi', 'Sebep', 'Sistem Dışı', 'Son Çıkış', 'Vardiya'];
 async function gvSekmeHazir(ad){
   const adlar = await getSheetTabNames(YOKLAMA_SHEET_ID);
   if (adlar.includes(ad)) return;
@@ -5087,7 +5089,7 @@ async function gvSekmeHazir(ad){
 }
 // ---------- Günlük Veri Arşivi (ayrı Sheets dosyası, yıl başına bir sekme) ----------
 // Her hazırlanan gün yazılır; aynı gün yeniden yazılırsa eski satırları silinir. Takım lideri tutulmaz (değişir; açarken güncel listeden).
-const GV_ARSIV_SABIT = ['Tarih', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Gelmedi', 'Sebep', 'Sistem Dışı', 'Son Çıkış', 'Kaynak', 'Kayıt Zamanı'];
+const GV_ARSIV_SABIT = ['Tarih', 'Sicil', 'Ad Soyad', 'Tegsoft Adı', 'Rapor Grubu', 'Gelmedi', 'Sebep', 'Sistem Dışı', 'Son Çıkış', 'Vardiya', 'Kaynak', 'Kayıt Zamanı'];
 const gvArsivVeriSut = () => gvSutunlar.filter(x => !['TARİH', 'PERSONEL LİSTESİ', 'SEBEP'].includes(ykAnahtar(x.kaynak))).map(x => x.baslik);
 const gvArsivUrl = yol => `https://sheets.googleapis.com/v4/spreadsheets/${gvStil.arsivId}${yol}`;
 async function gvArsivSekmeler(){
@@ -5131,7 +5133,7 @@ async function gvArsivYaz(gunler, kaynak){
       const koy = (h, v) => { const i = ix(h); if (i >= 0) r[i] = v == null ? '' : v; };
       koy('Tarih', g.tarih); koy('Sicil', k.sicil); koy('Ad Soyad', k.ad); koy('Tegsoft Adı', k.tegsoft); koy('Rapor Grubu', k.grup);
       koy('Gelmedi', k.yok ? 'EVET' : ''); koy('Sebep', k.yok ? (k.sebep || '') : '');
-      koy('Sistem Dışı', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : ''); koy('Son Çıkış', k.yok ? '' : (k.sonCikis || '')); koy('Kaynak', kaynak || 'Panel'); koy('Kayıt Zamanı', zaman);
+      koy('Sistem Dışı', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : ''); koy('Son Çıkış', k.yok ? '' : (k.sonCikis || '')); koy('Vardiya', k.vardiya || ''); koy('Kaynak', kaynak || 'Panel'); koy('Kayıt Zamanı', zaman);
       gvArsivVeriSut().forEach(h => koy(h, k.degerler[h]));
       satirlar.push(r);
     }));
@@ -5159,7 +5161,7 @@ async function gvArsivOku(t1, t2){
       const yok = ykAnahtar(al('Gelmedi')) === 'EVET';
       let sd = []; try { sd = al('Sistem Dışı') ? JSON.parse(al('Sistem Dışı')) : []; } catch(e){}
       if (!out.has(t)) out.set(t, []);
-      out.get(t).push({ sicil: String(al('Sicil')), ad: al('Ad Soyad'), tegsoft: al('Tegsoft Adı'), grup: al('Rapor Grubu'), degerler, yok, sebep: yok ? String(al('Sebep')) : '', sistemDisi: sd, sonCikis: yok ? '' : String(al('Son Çıkış') || ''), kaynak: al('Kaynak') });
+      out.get(t).push({ sicil: String(al('Sicil')), ad: al('Ad Soyad'), tegsoft: al('Tegsoft Adı'), grup: al('Rapor Grubu'), degerler, yok, sebep: yok ? String(al('Sebep')) : '', sistemDisi: sd, sonCikis: yok ? '' : String(al('Son Çıkış') || ''), kayitVardiya: String(al('Vardiya') || ''), kaynak: al('Kaynak') });
     });
   }
   return out;
@@ -5194,6 +5196,7 @@ async function gvArsivdenAc(){
       const planGun = ykVardiyaBirlestir(await ykDriveGun(t, ob.drv), hpGun);
       const sonuc = { tarih: t, kisiler, uyarilar: [] };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(t, planGun, ob));
+      gvSdVardiyayaUydur(sonuc);
       if (planGun) gvVardiyasizUyari(sonuc);
       yeni.set(t, sonuc);
     }
@@ -5220,7 +5223,7 @@ async function gvSonKaydet(gunler){
   const uyari = liste.flatMap(s => s.uyarilar.map(u => liste.length > 1 ? `[${s.tarih}] ${u}` : u));
   const satirlar = [['Tarih', aralik], ['Kaydeden', `${ykKaydeden()} · ${zaman}`], ['Uyarılar', uyari.join('\n')], [], GV_SON_SABIT.concat(basliklar)];
   liste.forEach(s => s.kisiler.forEach(k => satirlar.push(
-    [s.tarih, k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : '', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : '', k.yok ? '' : (k.sonCikis || '')]
+    [s.tarih, k.sicil, k.ad, k.tegsoft, k.grup, k.takim, k.yok ? 'EVET' : '', k.yok ? (k.sebep || '') : '', (k.sistemDisi || []).length ? JSON.stringify(k.sistemDisi) : '', k.yok ? '' : (k.sonCikis || ''), k.vardiya || '']
       .concat(basliklar.map(b => { const v = k.degerler[b]; return v == null ? '' : v; })))));
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1:ZZ`)}:clear`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
   await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GV_SON_TAB}'!A1`)}?valueInputOption=RAW`, {
@@ -5240,7 +5243,7 @@ async function gvSonOku(){
   if (!ilkTarih || !bas.length) return null;
   let n = 0; while (n < bas.length && GV_SON_SABIT.includes(bas[n])) n++;   // eski kayıtta Gün/Gelmedi/Sebep olmayabilir
   const ix = a => bas.indexOf(a);
-  const cGun = ix('Gün'), cSc = ix('Sicil'), cAd = ix('Ad Soyad'), cTg = ix('Tegsoft Adı'), cRg = ix('Rapor Grubu'), cTk = ix('Takım Lideri'), cG = ix('Gelmedi'), cS = ix('Sebep'), cSD = ix('Sistem Dışı'), cSC = ix('Son Çıkış');
+  const cGun = ix('Gün'), cSc = ix('Sicil'), cAd = ix('Ad Soyad'), cTg = ix('Tegsoft Adı'), cRg = ix('Rapor Grubu'), cTk = ix('Takım Lideri'), cG = ix('Gelmedi'), cS = ix('Sebep'), cSD = ix('Sistem Dışı'), cSC = ix('Son Çıkış'), cV = ix('Vardiya');
   const al = (r, c, v) => c >= 0 && r[c] != null ? r[c] : v;
   const gunler = new Map();
   rows.slice(5).filter(r => r && al(r, cSc, '') !== '').forEach(r => {
@@ -5250,7 +5253,7 @@ async function gvSonOku(){
     const yok = cG >= 0 && ykAnahtar(r[cG]) === 'EVET';
     if (!gunler.has(t)) gunler.set(t, []);
     gunler.get(t).push({ sicil: String(al(r, cSc, '')), ad: al(r, cAd, ''), tegsoft: al(r, cTg, ''), grup: al(r, cRg, ''), takim: al(r, cTk, ''), degerler,
-             yok, sebep: yok ? String(al(r, cS, '')) : '', sonCikis: yok ? '' : String(al(r, cSC, '')),
+             yok, sebep: yok ? String(al(r, cS, '')) : '', sonCikis: yok ? '' : String(al(r, cSC, '')), kayitVardiya: String(al(r, cV, '')),
              sistemDisi: (() => { try { return cSD >= 0 && r[cSD] ? JSON.parse(r[cSD]) : []; } catch(e){ return []; } })() });
   });
   const uyariSatir = String((rows[2] && rows[2][1]) || '').split('\n').filter(Boolean);
@@ -5280,6 +5283,7 @@ async function gvSonuGetir(){
       const planGun = ykVardiyaBirlestir(await ykDriveGun(g.tarih, ob.drv), hpGun);
       const sonuc = { tarih: g.tarih, kisiler, uyarilar: g.uyarilar };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(g.tarih, planGun, ob));
+      gvSdVardiyayaUydur(sonuc);
       yeni.set(g.tarih, sonuc);
     }
     if (gvSonuc) return;
@@ -5359,11 +5363,12 @@ async function gvSebepKaynaklari(tarih, planGun, onbellek){
   });
   return { tarih, elle: elleM, kayit: kayitM, kayitGiris: kayitGirisM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, staffKapali, saatlik, planVar: !!planGun };
 }
+// Sebep sırası: Drive VARDİYA kodu (sistemden gelir, esas) > Günlük Veri'de elle > Yoklama kaydı > Haftalık Plan kodu > özel durum
 function gvSebepBul(k, kay){
-  if (kay.elle.has(k.sicil)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
-  if (kay.kayit.has(k.sicil)){ const v = kay.kayit.get(k.sicil); return typeof v === 'object' ? { sebep: v.sebep, kaynak: 'Yoklama', calismiyor: true } : { sebep: v, kaynak: 'Yoklama' }; }
   const dv = String(kay.drive.get(k.sicil) || '').trim();
   if (dv && !ykVardiya(dv)) return { sebep: dv, kaynak: 'VARDİYA' };
+  if (kay.elle.has(k.sicil)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
+  if (kay.kayit.has(k.sicil)){ const v = kay.kayit.get(k.sicil); return typeof v === 'object' ? { sebep: v.sebep, kaynak: 'Yoklama', calismiyor: true } : { sebep: v, kaynak: 'Yoklama' }; }
   const pv = String(kay.plan.get(k.sicil) || '').trim();
   if (pv && !ykVardiya(pv)) return { sebep: pv, kaynak: 'Plan' };
   if (k.ozel && (!k.bitis || ykSira(k.bitis) >= ykSira(kay.tarih))) return { sebep: k.ozel, kaynak: 'Özel durum' };
@@ -5429,6 +5434,29 @@ function gvVardiyasizUyari(sonuc){
   const l = sonuc.kisiler.filter(k => !k.yok && !k.calisanSebep && !k.vardiya);
   if (l.length) sonuc.uyarilar.push(`${sonuc.tarih}: çalışmış ama vardiyası girilmemiş (geç giriş, erken çıkış ve vardiya kontrolü yapılamadı): ${l.map(k => `${k.ad}${k.takim ? ` (${k.takim})` : ''}`).join(', ')}.`);
 }
+// Kayıtlı günü (SON / arşiv) açarken sistem dışı aralıkları güncel vardiyaya göre yeniden kurar:
+// vardiya sonradan düzeltilmişse (Drive) eski vardiyaya göre hesaplanan baş/son boşlukları yanlış kalmasın.
+// Baş = vardiya başı → ilk giriş, son = son çıkış → vardiya bitişi; gün içi boşluklar yeni vardiya aralığına kırpılır.
+// Yalnız Son Çıkış'ı olan (panelden hazırlanmış) günlerde.
+function gvSdVardiyayaUydur(sonuc){
+  const x = gvGecSutun(), esik = (gvStil.sdEsik || 30) * 60;
+  const hm = sn => ykIki(Math.floor(sn / 3600) % 24) + ':' + ykIki(Math.floor(sn % 3600 / 60));
+  sonuc.kisiler.forEach(k => {
+    if (k.yok || !k.sonCikis) return;
+    if (k.calisanSebep){ k.sistemDisi = []; return; }
+    if (k.kayitVardiya && k.kayitVardiya === k.vardiya) return;   // vardiya değişmemiş: kayıtlı aralıklar doğru
+    const vs = gvVardiyaBasSure(k.vardiya); if (!vs) return;
+    const pb = vs.bas, ps = Math.min(vs.bas + vs.sure, 86400);
+    let g = x ? gvSaatSn(k.degerler[x.baslik]) : null; if (g != null && vs.bas === 0 && g >= 12 * 3600) g = 0;
+    if (g != null && g >= ps) g = null;   // vardiya bitişinden sonraki giriş (gece oturumu vb.): baş boşluğu bilinemez
+    const c = gvSaatSn(k.sonCikis);
+    const yeni = [], ekle = (tur, a, z) => { if (z - a > esik) yeni.push({ tur, bas: a, son: z, dk: Math.round((z - a) / 60), aralik: `${hm(a)}-${hm(z)}` }); };
+    if (gvStil.sdBas && g != null) ekle('bas', pb, Math.min(g, ps));
+    (k.sistemDisi || []).filter(a => a.tur === 'orta').forEach(a => ekle('orta', Math.max(a.bas, pb), Math.min(a.son, ps)));
+    if (gvStil.sdSon && c != null) ekle('son', Math.max(c, pb), ps);
+    k.sistemDisi = yeni;
+  });
+}
 function gvSebepleriUygula(sonuc, kay){
   // SEBEPLER'de "Çalışmıyor" grubundaki kod (HT, OFF…) ya da Yoklama'da "Çalışmıyor": o gün çalışması beklenmiyor → gelmeyen sayılmaz
   // Plandaki ya da Drive'daki HT/OFF, başka kaynaktaki sebebin (ör. uzun rapor) önüne geçer: o gün çalışması beklenmiyor.
@@ -5441,11 +5469,22 @@ function gvSebepleriUygula(sonuc, kay){
   // Girişi olup o gün sebebi de olan (ör. Rapor alıp erken çıkan): Açıklama'da sebep yazılır, sistem dışı sorulmaz
   sonuc.kisiler.filter(k => !k.yok).forEach(k => {
     k.calisanSebep = '';
-    let v = kay.elle.get(k.sicil) || (kay.kayitGiris && kay.kayitGiris.get(k.sicil)) || '';
+    const dkod = (v0 => v0 && !ykVardiya(v0) ? v0 : '')(String(kay.drive.get(k.sicil) || '').trim());   // Drive kodu esas
+    let v = dkod || kay.elle.get(k.sicil) || (kay.kayitGiris && kay.kayitGiris.get(k.sicil)) || '';
     if (!v){ const pv = String(kay.plan.get(k.sicil) || '').trim(); if (pv && !ykVardiya(pv)) v = pv; }   // Drive, boşsa Haftalık Plan
     if (v && !ckod(v)) k.calisanSebep = v;
     if (k.calisanSebep) k.sistemDisi = [];   // kayıtlı veriden gelen eski aralıklar da düşer
   });
+  // Elle girilen (Günlük Veri / Yoklama) ile Drive'daki kod farklıysa: Drive esas, uyarı
+  const fark = [];
+  sonuc.kisiler.forEach(k => {
+    const dv = String(kay.drive.get(k.sicil) || '').trim(); if (!dv || ykVardiya(dv)) return;
+    let el = kay.elle.get(k.sicil) || (kay.kayitGiris && kay.kayitGiris.get(k.sicil)) || '';
+    if (!el && kay.kayit.has(k.sicil)){ const x = kay.kayit.get(k.sicil); el = typeof x === 'object' ? x.sebep : x; }
+    if (el && ykAnahtar(el) !== ykAnahtar(dv)) fark.push(`${k.ad} (elle ${el}, Drive ${dv})`);
+  });
+  const fm = `${sonuc.tarih}: elle girilen sebep Drive VARDİYA'dakinden farklı, Drive esas alındı: ${fark.join(', ')}.`;
+  if (fark.length && sonuc.uyarilar && !sonuc.uyarilar.includes(fm)) sonuc.uyarilar.push(fm);
   sonuc.kisiler = sonuc.kisiler.filter(k => !(k.yok && k.calismiyor));
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA
   sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ''; });   // kay.plan: Drive esas, boşsa Haftalık Plan

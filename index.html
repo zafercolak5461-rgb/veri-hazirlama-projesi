@@ -5594,7 +5594,9 @@ function gvSonucCiz(){
     return `<button class="yk-sekme${g === gvAktifGrup ? ' aktif' : ''}" data-gvgrup="${ykEsc(g)}">${ykEsc(g === GV_ANA ? 'Ana Tablo' : gvGrupAd(g))} (${n})</button>`;
   }).join('');
   const sel = document.getElementById('gvTakim'), v = sel.value;
-  const takimlar = [...new Set(s.kisiler.filter(k => [GV_ANA, ...GV_LISTE()].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+  // liste sekmelerinde seçili bütün günlerin kişileri (hafta sonu günü seçiliyken yalnız o günün takımı görünmesin)
+  const tkKisi = GV_LISTE().includes(gvAktifGrup) ? lg.flatMap(g => g.kisiler) : s.kisiler;
+  const takimlar = [...new Set(tkKisi.filter(k => [GV_ANA, ...GV_LISTE()].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
   const sk = document.getElementById('gvStaffKapali'); sk.checked = !!(s.notlar && s.notlar.staffKapali);
   sel.innerHTML = '<option value="">Tüm takım liderleri</option>' + takimlar.map(t => `<option value="${ykEsc(t)}">${ykEsc(t)}</option>`).join('');
   sel.value = takimlar.includes(v) ? v : '';

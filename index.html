@@ -483,6 +483,7 @@
             <label title="Detaylı Durum'da sistemde olunmayan bu süreyi aşan aralıklar Sistem Dışı Süreler sekmesinde sorulur">Sistem dışı süre eşiği (dk): <input type="number" id="gvStilSd" min="1" step="5" style="width:70px;"></label>
             <label title="Vardiya Kontrolü: girişi vardiya başından bu kadar dakika geç olan (ya da giriş ve çıkışı bu kadar erken olan) listelenir">Vardiya kontrolü eşiği (dk): <input type="number" id="gvStilVkEsik" min="1" step="5" style="width:70px;"></label>
             <label title="Son çıkış, eşikten bu kadar az kaymışsa da aynı yöne kaymış sayılır (vardiya yanlış olabilir)">Pay (dk): <input type="number" id="gvStilVkPay" min="0" step="5" style="width:60px;"></label>
+            <label title="Erken Çıkanlar: son çıkışı vardiya bitişinden bu kadar dakikadan fazla önce olanlar listelenir (0 = bir saniye bile)">Erken çıkış toleransı (dk): <input type="number" id="gvStilEcTol" min="0" step="1" style="width:60px;"></label>
             <label title="{AY} = Kasım, {YIL} = 2026, {TAKIM} = takım lideri (ya da Tümü)">Aylık dosya adı: <input type="text" id="gvStilAylikAd" style="width:300px;"></label>
             <label><input type="checkbox" id="gvStilSdOrta"> gün içi</label><label><input type="checkbox" id="gvStilSdBas"> vardiya başı</label><label><input type="checkbox" id="gvStilSdSon"> vardiya sonu</label>
             <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
@@ -4610,7 +4611,9 @@ const GV_GEC = '__gec';   // Geç Girenler sekmesi
 //  Değerlendirme: son çıkış da aynı yöne (eşik − pay) kaymışsa "Vardiya yanlış olabilir" + o günün vardiyalarından en uyanı.
 //  "Geç değil" işaretli, saatlik izin "Kullandı" (vardiya başı) ya da o gün sebebi olan listelenmez.
 const GV_VK = '__vk';
-const GV_LISTE = () => [GV_GEC, GV_SD, GV_VK];
+// Erken Çıkanlar sekmesi: son çıkışı vardiya bitişinden önce olanlar (AYARLAR'daki toleranstan fazla; varsayılan 0 = bir saniye bile)
+const GV_EC = '__ec';
+const GV_LISTE = () => [GV_GEC, GV_EC, GV_SD, GV_VK];
 const GV_YOK = 'YOK';
 let gvSebepSecenek = [];   // Yoklama SEBEPLER listesi (yalnız okunur)
 const GV_PERSONEL_ALAN = ['Sicil', 'Tegsoft Adı', 'Ad Soyad', 'Görev', 'Takım Lideri'];
@@ -4644,8 +4647,8 @@ let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
 const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
   aylikAd:'Aylık Dosya Adı', arsivId:'Günlük Veri Arşivi (Sheets ID)', sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu',
-  vkEsik:'Vardiya Kontrolü Eşiği (dk)', vkPay:'Vardiya Kontrolü Payı (dk)' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', arsivId:'1IIVfbBzmfKjRh1n1cC-z1sksPKZ237447xghPR3pSRE', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true, vkEsik:45, vkPay:15 };
+  vkEsik:'Vardiya Kontrolü Eşiği (dk)', vkPay:'Vardiya Kontrolü Payı (dk)', ecTol:'Erken Çıkış Toleransı (dk)' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', arsivId:'1IIVfbBzmfKjRh1n1cC-z1sksPKZ237447xghPR3pSRE', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true, vkEsik:45, vkPay:15, ecTol:0 };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
@@ -4656,6 +4659,7 @@ function gvStilKur(ayarRows){
            sdEsik: (n => n == null || n <= 0 ? GV_STIL_VARSAYILAN.sdEsik : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdEsik)))),
            vkEsik: (n => n == null || n <= 0 ? GV_STIL_VARSAYILAN.vkEsik : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.vkEsik)))),
            vkPay: (n => n == null || n < 0 ? GV_STIL_VARSAYILAN.vkPay : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.vkPay)))),
+           ecTol: (n => n == null || n < 0 ? GV_STIL_VARSAYILAN.ecTol : n)(gvSayi(m.get(ykAnahtar(GV_STIL_ANAHTAR.ecTol)))),
            sdOrta: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdOrta))),
            sdBas: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdBas))),
            sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))),
@@ -5583,9 +5587,10 @@ function gvSonucCiz(){
   const lg = gvGunler.size > 1 ? gvListeGunleri() : [s];
   const gecSay = gvHerGun(lg, () => gvGecListe(true)).length;   // diğer sekmeler gibi takım lideri filtresinden bağımsız
   const sdHep = gvHerGun(lg, g => g.kisiler.filter(k => !k.yok).flatMap(k => gvSdAraliklar(k, g).map(a => ({ k, a, g }))));
-  const vkSay = gvHerGun(lg, () => gvVkListe(true)).length;
+  const vkSay = gvHerGun(lg, () => gvVkListe(true)).length, ecSay = gvHerGun(lg, () => gvEcListe(true)).length;
   const sdBekleyen = sdHep.filter(o => !gvSdDurum(o.k, o.a, o.g)).length;
-  document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).concat([GV_SD]).concat(gvGecSutun() ? [GV_VK] : []).map(g => {
+  document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).concat([GV_EC, GV_SD]).concat(gvGecSutun() ? [GV_VK] : []).map(g => {
+    if (g === GV_EC) return `<button class="yk-sekme${gvAktifGrup === GV_EC ? ' aktif' : ''}" data-gvgrup="${GV_EC}" title="Son çıkışı vardiya bitişinden önce olanlar">Erken Çıkanlar (${ecSay})</button>`;
     if (g === GV_VK) return `<button class="yk-sekme${gvAktifGrup === GV_VK ? ' aktif' : ''}" data-gvgrup="${GV_VK}" title="Vardiyası yanlış girilmiş olabilecekler">Vardiya Kontrolü (${vkSay})</button>`;
     if (g === GV_SD) return `<button class="yk-sekme${gvAktifGrup === GV_SD ? ' aktif' : ''}" data-gvgrup="${GV_SD}">Sistem Dışı Süreler (${sdHep.length}${sdBekleyen ? ` · ${sdBekleyen} bekleyen` : ''})</button>`;
     if (g === GV_GEC) return `<button class="yk-sekme${gvAktifGrup === GV_GEC ? ' aktif' : ''}" data-gvgrup="${GV_GEC}">Geç Girenler (${gecSay})</button>`;
@@ -5648,6 +5653,30 @@ document.getElementById('gvStaffKapali').addEventListener('change', async e => {
   } catch(err){ el.checked = !el.checked; ykDurum('gvKayitDurum', '✗ Kaydedilemedi: ' + err.message, 'err'); }
   el.disabled = false;
 });
+// ---------- Erken Çıkanlar ----------
+function gvEcListe(hepsi){
+  if (!gvSonuc) return [];
+  const tk = hepsi ? '' : document.getElementById('gvTakim').value, tol = gvStil.ecTol * 60;
+  return gvSonuc.kisiler.filter(k => !k.yok && !k.calisanSebep && (!tk || k.takim === tk)).flatMap(k => {
+    const vs = gvVardiyaBasSure(k.vardiya), c = gvSaatSn(k.sonCikis); if (!vs || c == null) return [];
+    const bit = vs.bas + vs.sure;
+    if (c >= 86400 && bit > 86400) return [];                  // gece yarısını geçen vardiyada hâlâ içeride: ertesi gün belli olur
+    if ((k.sistemDisi || []).some(a => a.tur === 'son' && gvIzinleri(k).includes(a.aralik))) return [];   // saatlik izin kullandı
+    const erken = Math.round(bit - c);
+    return erken > tol ? [{ k, erken }] : [];
+  }).sort((a, b) => b.erken - a.erken);
+}
+const gvDkSn = sn => gvSnSaat(sn).replace(/^0(\d):/, '$1:');   // 0:00:20 · 2:59:59
+function gvEcCiz(){
+  const gunler = gvListeGunleri(), cok = gunler.length > 1;
+  const liste = gvHerGun(gunler, g => gvEcListe().map(o => Object.assign(o, { g })));
+  const cikisVar = gunler.some(g => g.kisiler.some(k => !k.yok && k.sonCikis));
+  document.getElementById('gvTablo').innerHTML = '<tr>' + (cok ? '<th>Tarih</th>' : '') + '<th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Son Çıkış</th><th>Erken</th></tr>' +
+    (liste.length ? liste.map(o => `<tr>${cok ? `<td>${o.g.tarih.slice(0, 5)} ${gvGunAdi(o.g.tarih)}</td>` : ''}<td>${ykEsc(o.k.sicil)}</td><td>${ykEsc(o.k.ad)}</td><td>${ykEsc(o.k.takim || '')}</td>` +
+      `<td style="text-align:center;">${ykEsc(o.k.vardiya)}</td><td style="text-align:center;">${ykEsc(o.k.sonCikis)}</td><td style="text-align:center;font-weight:bold;">${gvDkSn(o.erken)}</td></tr>`).join('')
+      : `<tr><td colspan="${cok ? 7 : 6}" class="soluk">${cikisVar ? 'Vardiya bitişinden önce çıkan yok.' : 'Son çıkış bilgisi yok (Detaylı Durum yüklenmeli; eski Excel arşiv günlerinde bulunmaz).'}</td></tr>`);
+  document.getElementById('gvSayi').textContent = `${liste.length} erken çıkış${cok ? ` · ${gunler.length} gün` : ''} · tolerans ${gvStil.ecTol} dk · o gün sebebi olanlar ve vardiya sonunda saatlik izin kullananlar listelenmez`;
+}
 // ---------- Vardiya Kontrolü ----------
 function gvSaatSn(v){ const s = ykSaat(v); return s ? ykSaniye(s) : null; }
 const gvDkYaz = sn => (sn > 0 ? '+' : sn < 0 ? '−' : '') + Math.round(Math.abs(sn) / 60) + ' dk';
@@ -5751,6 +5780,7 @@ function gvTabloCiz(){
   if (gvAktifGrup === GV_GEC) return gvGecCiz();
   if (gvAktifGrup === GV_SD) return gvSdCiz();
   if (gvAktifGrup === GV_VK) return gvVkCiz();
+  if (gvAktifGrup === GV_EC) return gvEcCiz();
   const sut = gvGorSut(gvAktifGrup);
   const kisiler = gvKisiler(gvAktifGrup);
   const sag = b => gvOrtala(b);
@@ -6127,7 +6157,7 @@ function gvStilFormu(st){
   document.getElementById('gvStilYazi').value = st.baslikYazi.toLowerCase();
   document.getElementById('gvStilGece').value = st.gecePencere;
   document.getElementById('gvStilSd').value = st.sdEsik;
-  document.getElementById('gvStilVkEsik').value = st.vkEsik; document.getElementById('gvStilVkPay').value = st.vkPay;
+  document.getElementById('gvStilVkEsik').value = st.vkEsik; document.getElementById('gvStilVkPay').value = st.vkPay; document.getElementById('gvStilEcTol').value = st.ecTol;
   document.getElementById('gvStilAylikAd').value = st.aylikAd;
   document.getElementById('gvStilSdOrta').checked = st.sdOrta; document.getElementById('gvStilSdBas').checked = st.sdBas; document.getElementById('gvStilSdSon').checked = st.sdSon;
   gvStilOrnek();
@@ -6136,7 +6166,7 @@ function gvStilOrnek(){
   const o = document.getElementById('gvStilOrnek');
   o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
 }
-['gvStilRenk','gvStilYazi','gvStilGece','gvStilAylikAd','gvStilSd','gvStilVkEsik','gvStilVkPay','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+['gvStilRenk','gvStilYazi','gvStilGece','gvStilAylikAd','gvStilSd','gvStilVkEsik','gvStilVkPay','gvStilEcTol','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
 document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
 document.getElementById('gvStilKaydet').addEventListener('click', async () => {
   const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
@@ -6145,6 +6175,7 @@ document.getElementById('gvStilKaydet').addEventListener('click', async () => {
                         [GV_STIL_ANAHTAR.sdEsik, String(Math.max(1, Math.round(gvSayi(document.getElementById('gvStilSd').value) ?? GV_STIL_VARSAYILAN.sdEsik)))],
                         [GV_STIL_ANAHTAR.vkEsik, String(Math.max(1, Math.round(gvSayi(document.getElementById('gvStilVkEsik').value) ?? GV_STIL_VARSAYILAN.vkEsik)))],
                         [GV_STIL_ANAHTAR.vkPay, String(Math.max(0, Math.round(gvSayi(document.getElementById('gvStilVkPay').value) ?? GV_STIL_VARSAYILAN.vkPay)))],
+                        [GV_STIL_ANAHTAR.ecTol, String(Math.max(0, gvSayi(document.getElementById('gvStilEcTol').value) ?? GV_STIL_VARSAYILAN.ecTol))],
                         [GV_STIL_ANAHTAR.sdOrta, document.getElementById('gvStilSdOrta').checked ? 'EVET' : 'HAYIR'],
                         [GV_STIL_ANAHTAR.sdBas, document.getElementById('gvStilSdBas').checked ? 'EVET' : 'HAYIR'],
                         [GV_STIL_ANAHTAR.sdSon, document.getElementById('gvStilSdSon').checked ? 'EVET' : 'HAYIR'],

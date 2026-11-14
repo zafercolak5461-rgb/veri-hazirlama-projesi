@@ -5354,7 +5354,7 @@ document.getElementById('gvDosyaSec').addEventListener('change', async e => {
       const rows = gvSatirlar(wb.worksheets[0]);
       const t = gvRaporTani(rows);
       if (!t){ bilinmeyen.push(f.name); continue; }
-      if (buSecim[t.id]) ayniTur.push(`${buSecim[t.id]} ve ${f.name} ikisi de ${t.ad} olarak tanındı; ${f.name} kullanılıyor`);
+      if (buSecim[t.id]) ayniTur.push(`${buSecim[t.id]} ve ${f.name} ikisi de ${GV_RAPORLAR.find(x => x.id === t.id).ad} olarak tanındı; ${f.name} kullanılıyor`);
       buSecim[t.id] = f.name;
       gvDosyalar[t.id] = Object.assign({ ad: f.name, rows }, t);
     } catch(err){ bilinmeyen.push(`${f.name} (${err.message})`); }

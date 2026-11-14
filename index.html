@@ -4312,15 +4312,17 @@ async function ykPersonelSayfasi(){
 }
 function ykPerFormSecenek(){
   document.getElementById('ykPerGorev').innerHTML = ykAyar.gorevler.map(g => `<option>${ykEsc(g)}</option>`).join('');
-  document.getElementById('ykPerOzelListe').innerHTML = ykAyar.ozeller.map(g => `<option value="${ykEsc(g)}">`).join('');
+  document.getElementById('ykPerOzelListe').innerHTML = [YK_OZEL_YOK].concat(ykAyar.ozeller).map(g => `<option value="${ykEsc(g)}">`).join('');
   document.getElementById('ykPerTakimListe').innerHTML = ykAyar.takimlar.map(g => `<option value="${ykEsc(g)}">`).join('');
   document.getElementById('ykPerAdListe').innerHTML = ykAyar.personel.slice().sort((a, b) => a.ad.localeCompare(b.ad, 'tr'))
     .map(p => `<option value="${ykEsc(p.ad)}">${ykEsc(p.sicil)} · ${ykEsc(p.tegsoft)}</option>`).join('');
   ykPerOzelTurGoster();
 }
+// Özel durum listesindeki ilk seçenek: kişinin özel durumunu kaldırır (kaydedilince boş yazılır)
+const YK_OZEL_YOK = '— Özel durum yok —';
 // Özel durum kutusuna listede olmayan bir şey yazılırsa türü sorulur (İzin / Bilgi).
 function ykPerOzelTurGoster(){
-  const v = document.getElementById('ykPerOzel').value.trim();
+  const v = document.getElementById('ykPerOzel').value.trim().replace(YK_OZEL_YOK, '');
   const yeni = v && ykAyar && !ykAyar.ozeller.some(o => ykAnahtar(o) === ykAnahtar(v));
   document.getElementById('ykPerOzelTurWrap').style.display = yeni ? '' : 'none';
 }
@@ -4389,7 +4391,7 @@ function ykPerTemizle(){
 }
 document.getElementById('ykPerTemizleBtn').addEventListener('click', ykPerTemizle);
 document.getElementById('ykPerKaydetBtn').addEventListener('click', async () => {
-  const ozelHam = document.getElementById('ykPerOzel').value.replace(/\s+/g, ' ').trim();
+  const ozelHam = document.getElementById('ykPerOzel').value.replace(YK_OZEL_YOK, '').replace(/\s+/g, ' ').trim();
   const varOlan = ykAyar.ozeller.find(o => ykAnahtar(o) === ykAnahtar(ozelHam));
   const k = {
     sicil: document.getElementById('ykPerSicil').value.trim(),
@@ -4567,6 +4569,11 @@ document.addEventListener('focusin', e => {
   if (inp.value === '') return;
   inp.dataset.eski = inp.value; inp.dataset.eskiYer = inp.placeholder || '';
   inp.placeholder = inp.value; inp.value = '';
+});
+// Boşaltılmış kutuda Delete / Backspace: eski değer geri gelmesin (kutu boş bırakılır)
+document.addEventListener('keydown', e => {
+  const inp = e.target.closest && e.target.closest('input.yk-liste-ac'); if (!inp || inp.dataset.eski === undefined) return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && inp.value === ''){ delete inp.dataset.eski; inp.placeholder = inp.dataset.eskiYer || ''; delete inp.dataset.eskiYer; inp.dispatchEvent(new Event('input', { bubbles:true })); }
 });
 document.addEventListener('focusout', e => {
   const inp = e.target.closest && e.target.closest('input.yk-liste-ac'); if (!inp || inp.dataset.eski === undefined) return;

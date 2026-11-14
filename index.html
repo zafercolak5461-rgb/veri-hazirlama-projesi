@@ -5187,6 +5187,7 @@ async function gvArsivdenAc(){
       if (!planGun) planGun = await ykDriveGun(t, ob.drv);
       const sonuc = { tarih: t, kisiler, uyarilar: [] };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(t, planGun, ob));
+      if (planGun) gvVardiyasizUyari(sonuc);
       yeni.set(t, sonuc);
     }
     gvGunler = yeni; gvCokSec = new Set(); gvSonuc = null;
@@ -5415,6 +5416,11 @@ function gvSistemDisiHesapla(sonuc, dosya){
     if (vs && gvStil.sdSon) ekle('son', Math.max(l[l.length - 1][1], pb), ps);
   });
 }
+// Çalışmış ama vardiyası ne Haftalık Plan'da ne Drive VARDİYA'da olan: geç/erken/vardiya kontrolü yapılamaz → uyarı
+function gvVardiyasizUyari(sonuc){
+  const l = sonuc.kisiler.filter(k => !k.yok && !k.calisanSebep && !k.vardiya);
+  if (l.length) sonuc.uyarilar.push(`${sonuc.tarih}: çalışmış ama vardiyası girilmemiş (geç giriş, erken çıkış ve vardiya kontrolü yapılamadı): ${l.map(k => `${k.ad}${k.takim ? ` (${k.takim})` : ''}`).join(', ')}.`);
+}
 function gvSebepleriUygula(sonuc, kay){
   // SEBEPLER'de "Çalışmıyor" grubundaki kod (HT, OFF…) ya da Yoklama'da "Çalışmıyor": o gün çalışması beklenmiyor → gelmeyen sayılmaz
   // Plandaki ya da Drive'daki HT/OFF, başka kaynaktaki sebebin (ör. uzun rapor) önüne geçer: o gün çalışması beklenmiyor.
@@ -5550,6 +5556,7 @@ async function gvHazirla(){
       const sonuc = gvHesapla({ tarih, aralik, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(tarih, planGun, ob));
       gvSistemDisiHesapla(sonuc, gvDosyalar.dd);
+      if (planGun) gvVardiyasizUyari(sonuc);   // gün için hiç plan yoksa aşağıdaki genel uyarı yeter
       if (planKaynak === 'drive') sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: vardiyalar Drive VARDİYA'dan alındı.`);
       if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan ve Drive VARDİYA yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
       if (!sonuc.kisiler.some(k => !k.yok)) sonuc.uyarilar.unshift(`${tarih}: raporlarda bu güne ait veri yok.`);

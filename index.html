@@ -4575,8 +4575,10 @@ const GV_SAYFALAR = [
 ];
 // Raporlar: dosyayı içindeki başlıklardan tanır (dosya adına bakılmaz).
 const GV_RAPORLAR = [
-  { id:'dr', ad:'Durum Raporu',               tani:['Müşteri Temsilcisi','Hazır Değil'] },
+  // Tanıma yalnız o rapora özgü sütunla: geniş Müşteri Temsilcisi Bazında'da "Hazır Değil" de bulunur, o yüzden ayırt edici olan
+  // Durum Raporu'nda "İhtiyaç", Müşteri Temsilcisi Bazında'da "Cevaplanan". Önce özgül olan (mt) denenir.
   { id:'mt', ad:'Müşteri Temsilcisi Bazında', tani:['Müşteri Temsilcisi','Cevaplanan'] },
+  { id:'dr', ad:'Durum Raporu',               tani:['Müşteri Temsilcisi','İhtiyaç'] },
   { id:'dd', ad:'Detaylı Durum',              tani:['Müşteri Temsilcisi','Başlangıç Tarihi'] },
 ];
 const GV_KAYNAKLAR = ['Tarih', 'Personel Listesi', 'Durum Raporu', 'Müşteri Temsilcisi Bazında', 'Detaylı Durum', 'Hesap', 'Sebep'];
@@ -5344,7 +5346,7 @@ function gvDosyaBilgiCiz(){
 document.getElementById('gvDosyaSec').addEventListener('change', async e => {
   const files = [...e.target.files]; if (!files.length) return;
   ykDurum('gvDurum', 'Dosyalar okunuyor…');
-  const bilinmeyen = [];
+  const bilinmeyen = [], ayniTur = [], buSecim = {};
   for (const f of files){
     try {
       const wb = new ExcelJS.Workbook();
@@ -5352,6 +5354,8 @@ document.getElementById('gvDosyaSec').addEventListener('change', async e => {
       const rows = gvSatirlar(wb.worksheets[0]);
       const t = gvRaporTani(rows);
       if (!t){ bilinmeyen.push(f.name); continue; }
+      if (buSecim[t.id]) ayniTur.push(`${buSecim[t.id]} ve ${f.name} ikisi de ${t.ad} olarak tanındı; ${f.name} kullanılıyor`);
+      buSecim[t.id] = f.name;
       gvDosyalar[t.id] = Object.assign({ ad: f.name, rows }, t);
     } catch(err){ bilinmeyen.push(`${f.name} (${err.message})`); }
   }
@@ -5359,7 +5363,10 @@ document.getElementById('gvDosyaSec').addEventListener('change', async e => {
   gvDosyaBilgiCiz();
   const ar = gvRaporAraligi(gvDosyalar.dr) || gvRaporAraligi(gvDosyalar.mt);
   if (ar){ document.getElementById('gvTarih').value = ykTarihToIso(ar[0]); document.getElementById('gvTarih2').value = ykTarihToIso(ar[1]); }
-  ykDurum('gvDurum', bilinmeyen.length ? `✗ Tanınmayan dosya: ${bilinmeyen.join(', ')}. Durum Raporu, Müşteri Temsilcisi Bazında ya da Detaylı Durum olmalı.` : '', bilinmeyen.length ? 'err' : '');
+  const msj = [];
+  if (bilinmeyen.length) msj.push(`✗ Tanınmayan dosya: ${bilinmeyen.join(', ')}. Durum Raporu, Müşteri Temsilcisi Bazında ya da Detaylı Durum olmalı.`);
+  ayniTur.forEach(x => msj.push('⚠ ' + x + '.'));
+  ykDurum('gvDurum', msj.join('\n'), bilinmeyen.length ? 'err' : (ayniTur.length ? 'warn' : ''));
   if (GV_RAPORLAR.every(r => gvDosyalar[r.id])) gvHazirla();
 });
 document.getElementById('gvDosyalar').addEventListener('click', e => {

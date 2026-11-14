@@ -100,6 +100,8 @@
   table.prev td .y-btn.onay{ border-color:var(--danger); color:var(--danger); }
   table.prev td input[type=text], table.prev td select{ padding:4px 7px; font-size:12px; }
   .yk-sekmeler{ display:flex; gap:6px; margin:4px 0 2px; }
+  .gv-gunler{ flex-wrap:wrap; gap:4px; }
+  .gv-gunler .yk-sekme{ padding:4px 8px; font-size:12px; white-space:nowrap; }
   .yk-sekme{ background:var(--panel2); border:1px solid var(--line); color:var(--dim); padding:7px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
   .gv-dosyalar{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
   .gv-dosya{ display:flex; align-items:center; gap:8px; border:1px dashed var(--line); border-radius:8px; padding:6px 10px; font-size:12.5px; color:var(--dim); }
@@ -425,7 +427,7 @@
             <div class="hint" style="margin:6px 0 0;">Aylık dosyalar klasörü: <b id="gvKlasorAd">seçilmedi</b> · <a href="#" id="gvKlasorDegistir">klasörü değiştir</a> · Bu ayın dosyası: <b id="gvAylikAd">—</b> (dosya Excel'de açıkken kaydedilemez)</div>
             <div id="gvKayitDurum" class="status"></div>
             <div id="gvUyari" class="status warn"></div>
-            <div class="yk-sekmeler" id="gvGunSec" style="margin-top:14px;display:none;"></div>
+            <div class="yk-sekmeler gv-gunler" id="gvGunSec" style="margin-top:14px;display:none;"></div>
             <div class="yk-sekmeler" id="gvSekmeler" style="margin-top:14px;"></div>
             <div class="row" style="margin-top:10px;">
               <select id="gvMod" title="Gelmeyenler dahil: Personel Listesi'ndeki herkes; gelmeyenlere YOK ve sebep yazılır">
@@ -3079,7 +3081,8 @@ let ykAktifSayfa = null;
 // ---------- Saf yardımcılar (ağ yok; test edilebilir) ----------
 // Tegsoft adlarını karşılaştırmak için: Türkçe harfler sadeleştirilir, boşluklar tekleştirilir.
 function ykAd(v){
-  return String(v == null ? '' : v).replace(/ /g, ' ').trim().toLocaleUpperCase('tr-TR')
+  // Tegsoft işten ayrılanları "{PASIF}AD SOYAD" diye verir: önek eşleşmeyi bozmasın
+  return String(v == null ? '' : v).replace(/ /g, ' ').replace(/^\s*\{\s*PAS[İI]F\s*\}\s*/i, '').trim().toLocaleUpperCase('tr-TR')
     .replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ğ/g,'G').replace(/Ü/g,'U').replace(/Ö/g,'O').replace(/Ç/g,'C')
     .replace(/\s+/g, ' ');
 }
@@ -4958,7 +4961,7 @@ function gvGecDk(k, v){
   if (!vs || !s) return null;
   const l = ykSaniye(s);
   if (vs.bas === 0 && l >= 12 * 3600) return null;
-  return l >= vs.bas + gvTolerans * 60 ? Math.floor((l - vs.bas) / 60) : null;
+  return l >= vs.bas + gvTolerans * 60 ? Math.round((l - vs.bas) / 60) : null;   // dakika yuvarlanır (08:02:45 → 3)
 }
 function gvStilBul(k, x, gorunum){
   const kay = ykAnahtar(x.kaynak);

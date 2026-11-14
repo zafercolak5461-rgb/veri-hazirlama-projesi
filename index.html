@@ -3453,11 +3453,13 @@ async function ykPlanlariOku(){
 }
 function ykBolum(v){ return ykAnahtar(v) === ykAnahtar('Sosyal Medya') ? 'Sosyal Medya' : 'Personel'; }
 // Drive VARDİYA: o ayın sekmesinden o günün sütunu → Map(sicil→değer) ya da null
-async function ykDriveGun(tarih){
+// onbellek verilirse ayın sekmesi bir kez okunur (tarih aralığında her gün için tekrar okumamak için)
+async function ykDriveGun(tarih, onbellek){
   const m = tarih.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   const sekme = `${YK_AYLAR[Number(m[2]) - 1]}-${m[3]}`;
   try {
-    const rows = await getSheetValues(VARDIYA_SHEET_ID, `'${sekme}'!A1:AK400`);
+    const oku = () => getSheetValues(VARDIYA_SHEET_ID, `'${sekme}'!A1:AK400`);
+    const rows = onbellek ? await (onbellek[sekme] = onbellek[sekme] || oku()) : await oku();
     const bas = rows[0] || [];
     const ci = bas.findIndex(h => ykTarih(h) === tarih);
     const si = ykSutun(bas, 'Sicil');
@@ -5118,6 +5120,7 @@ async function gvSonuGetir(){
       calisan.forEach((k, sc) => { if (!listede.has(sc)) kisiler.push(k); });   // listeden çıkarılmış ama o gün çalışmış
       let planGun = null;
       if (planlar) for (const [, w] of planlar){ if (w.has(g.tarih)){ planGun = w.get(g.tarih); break; } }
+      if (!planGun){ ob.drv = ob.drv || {}; planGun = await ykDriveGun(g.tarih, ob.drv); }
       const sonuc = { tarih: g.tarih, kisiler, uyarilar: g.uyarilar };
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(g.tarih, planGun, ob));
       yeni.set(g.tarih, sonuc);
@@ -5167,7 +5170,8 @@ async function gvSebepKaynaklari(tarih, planGun, onbellek){
   const oku = async aralik => { try { const [r] = await ykOku([aralik]); return r; } catch(err){ return []; } };
   const ob = onbellek || {};
   if (!ob.ortak) ob.ortak = Promise.all([oku(`'${GV_NOT_TAB}'!A1:G10000`), oku(`'${YK_TAB.kayit}'!A1:H20000`)]);
-  const [[notlar, kayit], drive] = await Promise.all([ob.ortak, ykDriveGun(tarih)]);
+  ob.drv = ob.drv || {};
+  const [[notlar, kayit], drive] = await Promise.all([ob.ortak, ykDriveGun(tarih, ob.drv)]);
   const elleM = new Map(), kayitM = new Map(), kayitGirisM = new Map(), gecDegil = new Set(), saatlik = new Map(); let staffKapali = false;
   (notlar || []).slice(1).forEach(r => {
     if (!r || ykTarih(r[0]) !== tarih || !r[1] || !String(r[4] || '').trim()) return;
@@ -5382,10 +5386,16 @@ async function gvHazirla(){
       if (tarihler.length > 1) ykDurum('gvDurum', `${tarih} hesaplanıyor… (${yeni.size + 1}/${tarihler.length})`);
       let planGun = null, planYarin = null; const yarin = ykTarihEkle(tarih, 1);
       for (const [, w] of plan.planlar){ if (!planGun && w.has(tarih)) planGun = w.get(tarih); if (!planYarin && w.has(yarin)) planYarin = w.get(yarin); }
+      // Haftalık Plan yoksa vardiyalar Drive VARDİYA'dan (Yoklama ile aynı yedek kaynak)
+      ob.drv = ob.drv || {};
+      let planKaynak = planGun ? 'plan' : '';
+      if (!planGun){ planGun = await ykDriveGun(tarih, ob.drv); if (planGun) planKaynak = 'drive'; }
+      if (!planYarin) planYarin = await ykDriveGun(yarin, ob.drv);
       const sonuc = gvHesapla({ tarih, aralik, ayar, sutunlar: gvSutunlar, dosyalar: gvDosyalar, planGun, planYarin, gecePencere: gvStil.gecePencere });
       gvSebepleriUygula(sonuc, await gvSebepKaynaklari(tarih, planGun, ob));
       gvSistemDisiHesapla(sonuc, gvDosyalar.dd);
-      if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
+      if (planKaynak === 'drive') sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan yok: vardiyalar Drive VARDİYA'dan alındı.`);
+      if (!planGun) sonuc.uyarilar.unshift(`${tarih} için Haftalık Plan ve Drive VARDİYA yok: giriş saati günün ilk girişinden alındı (00:00 vardiyası kuralı uygulanamadı); HT/OFF kodları bilinmediği için gelmeyen listesi fazla olabilir.`);
       if (!sonuc.kisiler.some(k => !k.yok)) sonuc.uyarilar.unshift(`${tarih}: raporlarda bu güne ait veri yok.`);
       yeni.set(tarih, sonuc);
     }

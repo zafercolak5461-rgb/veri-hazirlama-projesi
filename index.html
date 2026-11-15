@@ -5887,14 +5887,82 @@ function gvMailHtml(gorunum){
     kisiler.map(k => '<tr>' + sut.map(x => `<td style="${td}text-align:${gvOrtala(x.bicim) ? 'center' : 'left'};${(ks => ks ? (ks.dolgu ? `background:${ks.dolgu};` : '') + (ks.yazi ? `color:${ks.yazi};` : '') + (ks.kalin ? 'font-weight:bold;' : '') : '')(gvStilBul(k, x, gorunum))}">${ykEsc(gvGoster(gvHucre(k, x), x.bicim)) || '&nbsp;'}</td>`).join('') + '</tr>').join('') +
     '</table>';
 }
+// ---------- Liste sekmeleri (Geç Girenler, Erken Çıkanlar, Sistem Dışı Süreler, Vardiya Kontrolü): ekranda ne varsa ----------
+// Tablo ekrandan okunur: işaretli kutu → "Evet", açılır liste → seçili değer ("Sor…" boş), renk/kalınlık/hizalama aynen.
+const GV_LISTE_AD = () => ({ [GV_GEC]:'Geç Girenler', [GV_EC]:'Erken Çıkanlar', [GV_SD]:'Sistem Dışı Süreler', [GV_VK]:'Vardiya Kontrolü' });
+function gvRenkHex(c){
+  if (!c) return '';
+  if (c[0] === '#') return c.length === 4 ? '#' + [...c.slice(1)].map(x => x + x).join('') : c.toUpperCase();
+  const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); if (!m || m[4] === '0') return '';
+  return '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+function gvEkranTablo(){
+  const satirlar = [...document.getElementById('gvTablo').rows];
+  if (satirlar.length < 2) return null;
+  if (satirlar.length === 2 && satirlar[1].cells.length === 1 && satirlar[1].cells[0].classList.contains('soluk')) return null;   // "Geç giren yok." gibi
+  return satirlar.map(tr => [...tr.cells].map(td => {
+    const kutu = td.querySelector('input[type=checkbox]'), sec = td.querySelector('select');
+    const metin = kutu ? (kutu.checked ? 'Evet' : '') : sec ? sec.value : td.textContent.trim();
+    const fw = td.style.fontWeight;
+    return { metin, span: td.colSpan || 1, baslik: td.tagName === 'TH', dolgu: gvRenkHex(td.style.backgroundColor), yazi: gvRenkHex(td.style.color),
+             kalin: fw === 'bold' || +fw >= 600, orta: td.style.textAlign === 'center' };
+  }));
+}
+function gvListeBaslik(){
+  const gunler = gvListeGunleri(), tk = document.getElementById('gvTakim').value;
+  const tarih = gunler.length > 1 ? `${gunler[0].tarih}-${gunler[gunler.length - 1].tarih}` : gvSonuc.tarih;
+  return `${tarih} ${GV_LISTE_AD()[gvAktifGrup]}${tk ? ' - ' + tk : ''}`;
+}
+function gvEkranMailHtml(t){
+  const yazi = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;';
+  const td = `${yazi}border:1px solid #000;padding:1px 6px;white-space:nowrap;`;
+  return '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">' + t.map(r => '<tr>' + r.map(c => {
+    const st = c.baslik ? `${td}font-weight:bold;text-align:center;background:${gvStil.baslikRenk};color:${gvStil.baslikYazi};`
+      : `${td}text-align:${c.orta ? 'center' : 'left'};${c.dolgu ? `background:${c.dolgu};` : ''}${c.yazi ? `color:${c.yazi};` : ''}${c.kalin ? 'font-weight:bold;' : ''}`;
+    return `<td${c.span > 1 ? ` colspan="${c.span}"` : ''} style="${st}">${ykEsc(c.metin) || '&nbsp;'}</td>`;
+  }).join('') + '</tr>').join('') + '</table>';
+}
+async function gvEkranExcel(t, dosyaAdi, sayfaAdi){
+  const argb = h => 'FF' + h.replace('#', '');
+  const ince = { style:'thin', color:{ argb:'FF000000' } }, kenar = { top:ince, left:ince, bottom:ince, right:ince };
+  const wb = new ExcelJS.Workbook();
+  wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
+  const ws = wb.addWorksheet(sayfaAdi.replace(/[\\\/\?\*\[\]:]/g, '-').slice(0, 31));
+  const gen = [];
+  t.forEach((r, i) => {
+    const row = ws.getRow(i + 1); let s = 1;
+    r.forEach(c => {
+      const h = row.getCell(s), sayi = /^-?\d+$/.test(c.metin);
+      h.value = sayi ? +c.metin : c.metin;
+      h.font = { name:'Calibri', size:11, bold: c.baslik || c.kalin, color: c.baslik ? { argb: argb(gvStil.baslikYazi) } : (c.yazi ? { argb: argb(c.yazi) } : undefined) };
+      const dolgu = c.baslik ? gvStil.baslikRenk : c.dolgu;
+      if (dolgu) h.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: argb(dolgu) } };
+      h.alignment = { horizontal: c.baslik || c.orta || sayi ? 'center' : 'left', vertical:'middle' };
+      for (let j = 0; j < c.span; j++) row.getCell(s + j).border = kenar;
+      if (c.span > 1) ws.mergeCells(i + 1, s, i + 1, s + c.span - 1);
+      else gen[s] = Math.max(gen[s] || 0, c.metin.length);
+      s += c.span;
+    });
+  });
+  gen.forEach((u, i) => { if (u != null) ws.getColumn(i).width = Math.min(45, Math.max(9, u + 2)); });
+  ws.views = [{ state:'frozen', ySplit:1 }];
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = dosyaAdi; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
 document.getElementById('gvKopyalaBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
-  if (GV_LISTE().includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bu sekme yalnız işaretleme içindir; mail için bir tablo sekmesi seç.', 'warn'); return; }
-  const html = gvMailHtml(gvAktifGrup);
+  const liste = GV_LISTE().includes(gvAktifGrup), t = liste ? gvEkranTablo() : null;
+  if (liste && !t){ ykDurum('gvKayitDurum', 'Bu sekmede kopyalanacak kayıt yok.', 'warn'); return; }
+  const html = liste ? gvEkranMailHtml(t) : gvMailHtml(gvAktifGrup);
   const duz = html.replace(/&nbsp;/g, ' ').replace(/<\/td>/g, '\t').replace(/<\/tr>/g, '\n').replace(/<[^>]+>/g, '');
   try {
     await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type:'text/html' }), 'text/plain': new Blob([duz], { type:'text/plain' }) })]);
-    ykDurum('gvKayitDurum', `✓ ${gvKisiler(gvAktifGrup).length} kişilik tablo panoya kopyalandı; Outlook'a yapıştırabilirsin.`, 'ok');
+    ykDurum('gvKayitDurum', liste ? `✓ ${gvListeBaslik()}: ${t.length - 1} satır panoya kopyalandı; Outlook'a yapıştırabilirsin.`
+      : `✓ ${gvKisiler(gvAktifGrup).length} kişilik tablo panoya kopyalandı; Outlook'a yapıştırabilirsin.`, 'ok');
   } catch(err){ ykDurum('gvKayitDurum', '✗ Kopyalanamadı: ' + err.message, 'err'); }
 });
 
@@ -6115,7 +6183,13 @@ document.getElementById('gvKlasorDegistir').addEventListener('click', async e =>
 document.getElementById('gvTakim').addEventListener('change', gvAylikEtiket);
 document.getElementById('gvExcelBtn').addEventListener('click', async () => {
   if (!gvSonuc) return;
-  if (GV_LISTE().includes(gvAktifGrup)){ ykDurum('gvKayitDurum', 'Bu sekme yalnız işaretleme içindir; Excel için bir tablo sekmesi seç.', 'warn'); return; }
+  if (GV_LISTE().includes(gvAktifGrup)){
+    const t = gvEkranTablo();
+    if (!t){ ykDurum('gvKayitDurum', 'Bu sekmede Excel\'e aktarılacak kayıt yok.', 'warn'); return; }
+    try { await gvEkranExcel(t, gvListeBaslik() + '.xlsx', GV_LISTE_AD()[gvAktifGrup]); }
+    catch(err){ ykDurum('gvKayitDurum', '✗ Excel oluşturulamadı: ' + err.message, 'err'); }
+    return;
+  }
   const tk = document.getElementById('gvTakim').value;
   const ad = gvAktifGrup === GV_ANA ? 'Operasyon Verileri' : (gvGrupAd(gvAktifGrup) + ' Verileri');
   try { await gvExcel(gvAktifGrup, `${gvSonuc.tarih} ${ad}${tk ? ' - ' + tk : ''}.xlsx`); }

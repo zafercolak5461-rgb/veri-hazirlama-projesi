@@ -533,7 +533,35 @@
           <div id="gtUyari" class="status warn"></div>
           <div class="hint gt-renkler" style="margin:10px 0 8px;">Günün kutuları:<span style="background:#E2F0D9;"></span>bakanlık dosyasından<span style="background:#FFF3CD;"></span>dosyada yok, yaz<span style="background:#fff;"></span><b>kalın</b> = elle girildi. Enter ile sonraki kutuya geçer. Hücrenin üstüne gelince kaynağı görünür.</div>
           <div class="prev-wrap" id="gtTabloWrap" style="max-height:none; overflow:auto;"></div>
-          <div class="hint" style="margin:12px 0 0;">Satırlar, bakanlık dosyasındaki satır adları, hesap türü (Toplam / Ortalama — OFF, boş ve 0 günler ortalamaya girmez / Gün / =formül), Yüzde sütununun paydası ve dosya bilgisi YOKLAMA tablosunun <b>GÜNLÜK TABLO AYARLARI</b> sekmesindedir.</div>
+          <div class="hint" style="margin:12px 0 0;">Satırlar, bakanlık dosyasındaki satır adları, hesap türü ve Yüzde sütununun paydası menüdeki <b>Günlük Tablo Ayarları</b> sayfasından değiştirilir.</div>
+        </div>
+      </div>
+
+      <!-- ===== GÜNLÜK TABLO AYARLARI (16.11.2026) — Drive > ALO-144 > "GÜNLÜK TABLO AYARLARI" dosyasına yazar ===== -->
+      <div id="yk-gtayar" class="yk-alt" style="display:none;">
+        <div class="page-title">Günlük Tablo Ayarları</div>
+        <div class="page-sub">Günlük Tablo'da hangi satırların olacağı, bakanlık dosyasında hangi satırdan alınacağı ve nasıl hesaplanacağı. Ayarlar Drive'daki ALO-144 klasöründe <b>GÜNLÜK TABLO AYARLARI</b> dosyasında saklanır.</div>
+        <div class="card">
+          <h2>Satırlar</h2>
+          <div class="hint">
+            <b>Bölüm</b>: Üst = ana tablo · Alt = alttaki Planlanan / Gerçekleşen / Fark kutuları (en çok 5) · Kontrol = tabloda görünmez; formülün sonucu bakanlık dosyasındaki satırla karşılaştırılır, tutmazsa uyarı verir.<br>
+            <b>183 / 144 Satırı</b>: bakanlık dosyasında A sütununda yazan ad (listeden seçilir).<br>
+            <b>Hesap</b>: Toplam = günlerin toplamı · Ortalama = günlerin ortalaması (OFF, boş ve 0 günler girmez) · Gün = yalnız seçilen gün · Formül = başka satırlardan hesap, ör. <code>{Köpük Çağrı Sayısı}/({Gelen Çağrı Sayısı}-{Kaçan Çağrı Sayısı})</code>; yalnız + − × ÷ ve parantez.
+          </div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="gtAyarTablo"></table></div>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn" id="gtAyarEkle">+ Satır Ekle</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Genel</h2>
+          <div class="row" style="flex-wrap:wrap; gap:10px 18px;" id="gtAyarGenel"></div>
+          <div class="hint" style="margin-top:8px;"><b>Yüzde paydası</b>: Yüzde sütunu = Fark ÷ geçen ay (Önceki) ya da Fark ÷ bu ay (Bu). Şablonda 183 = Önceki, 144 = Bu.</div>
+        </div>
+        <div class="row" style="margin:4px 0 20px;">
+          <button class="btn ok" id="gtAyarKaydet">💾 Kaydet</button>
+          <button class="btn" id="gtAyarYenile" title="Kaydedilmemiş değişiklikleri bırakır, dosyadan yeniden okur">↻ Dosyadan Yeniden Oku</button>
+          <span id="gtAyarDurum" class="status" style="margin:0;"></span>
         </div>
       </div>
     </div>
@@ -3574,6 +3602,7 @@ function ykSayfaAc(id){
   if (id === 'ayar') ykAyarSayfasi();
   if (id === 'gvayar') gvAyarSayfasi();
   if (id === 'gt') gtSayfasi();
+  if (id === 'gtayar') gtAyarSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
@@ -4640,6 +4669,7 @@ const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊' },
   { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙' },
   { id:'gt',     ad:'Günlük Tablo',          ikon:'📋' },
+  { id:'gtayar', ad:'Günlük Tablo Ayarları', ikon:'⚙' },
 ];
 // Raporlar: dosyayı içindeki başlıklardan tanır (dosya adına bakılmaz).
 const GV_RAPORLAR = [
@@ -6611,7 +6641,10 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
 // Bulunamayan / iki kez geçen tarih ya da satır tahmin edilmez: uyarı verilir, hücre boş kalır.
 // Günün sütunu: bakanlık dosyasında o günün değeri varsa oradan, yoksa ekranda elle girilir (144 akşam canlı veri).
 // ============================================================================
-const GT_TAB = 'GÜNLÜK TABLO AYARLARI';
+// Ayarlar ayrı dosyada (16.11.2026): Drive > ALO-144 > "GÜNLÜK TABLO AYARLARI" > AYARLAR sekmesi.
+// YOKLAMA'ya erişimi olmayan takım liderleri de yalnız bu dosyayı görüntüleme yetkisiyle kullanabilsin diye.
+const GT_AYAR_DOSYA = '1qWSsxMIBjxX8T1hTyv_gFiS8Odf9fKF1V0Pppm6WbhI';
+const GT_TAB = 'AYARLAR';
 // Ayar sekmesi ilk kez açıldığında yazılan başlangıç değerleri (sonra yalnız sekmeden okunur).
 const GT_VARSAYILAN = {
   baslik: ['Satır', 'Bölüm', '183 Satırı', '144 Satırı', 'Hesap', 'Biçim', '', 'Ayar', 'Değer'],
@@ -6915,21 +6948,15 @@ document.getElementById('gtTabloWrap').addEventListener('keydown', e => {
 });
 
 // ---------- Ayarlar ve bakanlık dosyası ----------
-async function gtAyarOku(){
-  let rows;
-  try { [rows] = await ykOku([`'${GT_TAB}'!A1:Z200`]); }
-  catch(err){ if (!/Unable to parse range|400/.test(err.message)) throw err; rows = null; }
-  if (!rows){
-    const satirlar = [GT_VARSAYILAN.baslik].concat(GT_VARSAYILAN.satirlar.map((r, i) => r.concat(['', ...(GT_VARSAYILAN.ayarlar[i] || ['', ''])])));
-    try {
-      await gvSekmeHazir(GT_TAB);
-      await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GT_TAB}'!A1`)}?valueInputOption=RAW`, {
-        method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
-    } catch(err){ /* yazılamazsa bu açılışta varsayılanlarla devam */ }
-    rows = satirlar;
+const GT_AYAR_URL = aralik => `https://sheets.googleapis.com/v4/spreadsheets/${GT_AYAR_DOSYA}/values/${encodeURIComponent(`'${GT_TAB}'!${aralik}`)}`;
+async function gtAyarHam(){
+  try { const r = await authFetch(GT_AYAR_URL('A1:Z300')); return r.values || []; }
+  catch(err){
+    if (/403|404|PERMISSION|not found/i.test(err.message)) throw new Error('"GÜNLÜK TABLO AYARLARI" dosyası açılamadı. Bu hesapla paylaşılmamış olabilir; Zafer Çolak\'tan görüntüleme yetkisi iste.');
+    throw err;
   }
-  return gtAyarKur(rows);
 }
+async function gtAyarOku(){ return gtAyarKur(await gtAyarHam()); }
 async function gtSekmeOku(dosya, ad){
   const u = (aralik, bicim) => `https://sheets.googleapis.com/v4/spreadsheets/${dosya}/values/${encodeURIComponent(`'${ad}'!${aralik}`)}?valueRenderOption=${bicim}`;
   const [b, g] = await Promise.all([authFetch(u('A1:ZZ1', 'FORMATTED_VALUE')), authFetch(u('A1:ZZ100', 'UNFORMATTED_VALUE'))]);
@@ -7091,6 +7118,146 @@ document.getElementById('gtResimIndirBtn').addEventListener('click', async () =>
     ykDurum('gtDurum', '✓ Resim indirildi.', 'ok');
   } catch(err){ ykDurum('gtDurum', '✗ Resim oluşturulamadı: ' + err.message, 'err'); }
 });
+
+// ---------- Günlük Tablo Ayarları sayfası ----------
+let gtAy = null;   // { satirlar:[{ad,bolum,k183,k144,hesap,formul,bicim}], genel:{...}, etiket:{183:[...],144:[...]}, degisti }
+const GT_BOLUMLER = ['Üst', 'Alt', 'Kontrol'], GT_HESAPLAR = ['Toplam', 'Ortalama', 'Gün', 'Formül'], GT_BICIMLER = ['Sayı', 'Yüzde', 'Ondalık'];
+const GT_GENEL = [
+  { ad:'Bakanlık Dosyası', tur:'metin', gen:'34ch', ipucu:'Bakanlık dosyasının kimliği (adres çubuğundaki /d/ ile /edit arası)' },
+  { ad:'183 Sekmesi', tur:'metin', gen:'12ch' }, { ad:'144 Sekmesi', tur:'metin', gen:'12ch' },
+  { ad:'183 Yüzde Paydası', tur:'secim', liste:['Önceki', 'Bu'], vars:'Önceki' },
+  { ad:'144 Yüzde Paydası', tur:'secim', liste:['Önceki', 'Bu'], vars:'Bu' },
+];
+// Ham ayar satırları → düzenlenebilir yapı (bilinmeyen ek sütunlar korunmaz; sekmeyi yalnız bu sayfa yönetir)
+function gtAyKur(rows){
+  const a = gtAyarKur(rows.length ? rows : [GT_VARSAYILAN.baslik]);
+  const satirlar = a.satirlar.map(s => ({ ad: s.ad, bolum: s.bolum, k183: s.kaynak['183'], k144: s.kaynak['144'],
+    hesap: s.formul ? 'Formül' : s.hesap, formul: s.formul, bicim: s.bicim }));
+  const genel = {};
+  GT_GENEL.forEach(g => { genel[g.ad] = a.ayar[ykAnahtar(g.ad)] || g.vars || (g.ad === 'Bakanlık Dosyası' ? GT_VARSAYILAN.ayarlar[0][1] : g.ad.startsWith('183') ? 'Alo 183' : 'Alo 144'); });
+  return { satirlar, genel, hatalar: a.hatalar };
+}
+async function gtAyEtiketleri(){
+  const dosya = gtAy.genel['Bakanlık Dosyası'], et = {};
+  await Promise.all(GT_TARAF.map(async t => {
+    try {
+      const r = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${dosya}/values/${encodeURIComponent(`'${gtAy.genel[t + ' Sekmesi']}'!A1:A150`)}`);
+      et[t] = [...new Set((r.values || []).map(x => String(x[0] || '').trim()).filter(x => x && !/^\d+$/.test(x)))];
+    } catch(e){ et[t] = null; }
+  }));
+  gtAy.etiket = et;
+}
+function gtAySecim(liste, deger, attr, bosEtiket){
+  const var_ = liste && liste.some(x => ykAnahtar(x) === ykAnahtar(deger));
+  let h = `<select ${attr}>`;
+  if (bosEtiket != null) h += `<option value=""${!deger ? ' selected' : ''}>${bosEtiket}</option>`;
+  if (deger && !var_) h += `<option value="${ykEsc(deger)}" selected>⚠ ${ykEsc(deger)}${liste ? ' (dosyada yok)' : ''}</option>`;
+  (liste || []).forEach(x => h += `<option value="${ykEsc(x)}"${ykAnahtar(x) === ykAnahtar(deger) ? ' selected' : ''}>${ykEsc(x)}</option>`);
+  return h + '</select>';
+}
+function gtAyCiz(){
+  const T = document.getElementById('gtAyarTablo'), adlar = gtAy.satirlar.map(s => s.ad).filter(Boolean);
+  T.innerHTML = '<tr><th>Satır (tablodaki ad)</th><th>Bölüm</th><th>183 Satırı</th><th>144 Satırı</th><th>Hesap / Formül</th><th>Biçim</th><th></th></tr>' +
+    gtAy.satirlar.map((s, i) => {
+      const formul = s.hesap === 'Formül';
+      return `<tr><td><input type="text" data-gta="${i}" data-alan="ad" value="${ykEsc(s.ad)}" style="width:140px;"></td>` +
+        `<td>${gtAySecim(GT_BOLUMLER, s.bolum, `data-gta="${i}" data-alan="bolum"`)}</td>` +
+        GT_TARAF.map(t => `<td>${formul && s.bolum !== 'Kontrol' ? '<span class="soluk">—</span>' : gtAySecim(gtAy.etiket[t], s['k' + t], `data-gta="${i}" data-alan="k${t}" style="max-width:150px;"`, '— seç —')}</td>`).join('') +
+        `<td style="white-space:nowrap;">${gtAySecim(GT_HESAPLAR, s.hesap, `data-gta="${i}" data-alan="hesap"`)}` +
+          (formul ? `<div style="margin-top:4px;"><input type="text" data-gta="${i}" data-alan="formul" value="${ykEsc(s.formul)}" style="width:160px;" placeholder="{Satır A}/{Satır B}" title="${ykEsc(s.formul)}"> <select data-gtekle="${i}" title="Formüle satır adı ekler" style="width:48px; min-width:0;"><option value="">+</option>${adlar.filter(a => a !== s.ad).map(a => `<option>${ykEsc(a)}</option>`).join('')}</select></div>` : '') + '</td>' +
+        `<td>${gtAySecim(GT_BICIMLER, s.bicim, `data-gta="${i}" data-alan="bicim"`)}</td>` +
+        `<td style="white-space:nowrap;"><button class="btn y-btn" data-gtyukari="${i}" title="Yukarı">↑</button><button class="btn y-btn" data-gtasagi="${i}" title="Aşağı">↓</button><button class="btn y-btn" data-gtsil="${i}" title="Sil">✕</button></td></tr>`;
+    }).join('');
+  document.getElementById('gtAyarGenel').innerHTML = GT_GENEL.map(g => `<label title="${ykEsc(g.ipucu || '')}">${ykEsc(g.ad)}: ` +
+    (g.tur === 'secim' ? gtAySecim(g.liste, gtAy.genel[g.ad], `data-gtgenel="${ykEsc(g.ad)}"`) : `<input type="text" data-gtgenel="${ykEsc(g.ad)}" value="${ykEsc(gtAy.genel[g.ad])}" style="width:${g.gen};">`) + '</label>').join('');
+  const yok = GT_TARAF.filter(t => !gtAy.etiket[t]);
+  ykDurum('gtAyarDurum', yok.length ? `⚠ ${yok.join(' ve ')} sekmesi bakanlık dosyasında okunamadı; satır adları listelenemedi (sekme adını kontrol et).` : (gtAy.degisti ? 'Kaydedilmemiş değişiklik var.' : ''), yok.length || gtAy.degisti ? 'warn' : '');
+}
+function gtAyDegisti(){ gtAy.degisti = true; ykDurum('gtAyarDurum', 'Kaydedilmemiş değişiklik var.', 'warn'); }
+document.getElementById('gtAyarTablo').addEventListener('change', e => {
+  const ekle = e.target.closest('[data-gtekle]');
+  if (ekle){ const s = gtAy.satirlar[+ekle.dataset.gtekle]; if (ekle.value) s.formul = (s.formul || '') + `{${ekle.value}}`; gtAyDegisti(); gtAyCiz(); return; }
+  const el = e.target.closest('[data-gta]'); if (!el) return;
+  const s = gtAy.satirlar[+el.dataset.gta], eskiAd = s.ad;
+  s[el.dataset.alan] = el.value.trim();
+  if (el.dataset.alan === 'ad' && eskiAd && s.ad && eskiAd !== s.ad)   // ad değişince formüllerdeki {eski ad} da değişir
+    gtAy.satirlar.forEach(x => { if (x.formul) x.formul = x.formul.split(`{${eskiAd}}`).join(`{${s.ad}}`); });
+  if (el.dataset.alan === 'hesap' && s.hesap !== 'Formül') s.formul = '';
+  gtAyDegisti();
+  if (['hesap', 'bolum', 'ad'].includes(el.dataset.alan)) gtAyCiz();
+});
+document.getElementById('gtAyarTablo').addEventListener('click', e => {
+  const b = e.target.closest('[data-gtyukari],[data-gtasagi],[data-gtsil]'); if (!b) return;
+  const l = gtAy.satirlar;
+  if (b.dataset.gtsil != null){ const s = l[+b.dataset.gtsil]; if (!confirm(`"${s.ad || 'adsız'}" satırı silinsin mi? (Kaydet'e basınca kalıcı olur)`)) return; l.splice(+b.dataset.gtsil, 1); }
+  else { const i = +(b.dataset.gtyukari != null ? b.dataset.gtyukari : b.dataset.gtasagi), j = b.dataset.gtyukari != null ? i - 1 : i + 1; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; }
+  gtAyDegisti(); gtAyCiz();
+});
+document.getElementById('gtAyarGenel').addEventListener('change', async e => {
+  const el = e.target.closest('[data-gtgenel]'); if (!el) return;
+  gtAy.genel[el.dataset.gtgenel] = el.value.trim(); gtAyDegisti();
+  if (!/Paydası/.test(el.dataset.gtgenel)){ await gtAyEtiketleri(); gtAyCiz(); gtAyDegisti(); }
+});
+document.getElementById('gtAyarEkle').addEventListener('click', () => {
+  gtAy.satirlar.push({ ad:'', bolum:'Üst', k183:'', k144:'', hesap:'Toplam', formul:'', bicim:'Sayı' });
+  gtAyDegisti(); gtAyCiz();
+  const l = document.querySelectorAll('#gtAyarTablo input[data-alan="ad"]'); if (l.length) l[l.length - 1].focus();
+});
+// Kaydetmeden önce denetim: ad boş/tekrar, kaynak seçilmemiş, formülde olmayan satır, Alt en çok 5
+function gtAyDenetle(){
+  const h = [], adlar = new Map();
+  gtAy.satirlar.forEach((s, i) => {
+    const n = `${i + 1}. satır${s.ad ? ` (${s.ad})` : ''}`;
+    if (!s.ad) h.push(`${n}: ad boş.`);
+    else if (adlar.has(ykAnahtar(s.ad))) h.push(`${n}: aynı ad iki kez var.`); else adlar.set(ykAnahtar(s.ad), s);
+    if (s.hesap === 'Formül'){
+      if (!s.formul) h.push(`${n}: formül boş.`);
+      else {
+        (s.formul.match(/\{([^}]+)\}/g) || []).forEach(m => { const a = m.slice(1, -1).trim(); if (!gtAy.satirlar.some(x => ykAnahtar(x.ad) === ykAnahtar(a))) h.push(`${n}: formüldeki {${a}} diye bir satır yok.`); });
+        const ifade = s.formul.replace(/\{[^}]+\}/g, '1').replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
+        let gecerli = /^[\d\s+\-*/().]+$/.test(ifade);
+        if (gecerli) try { Function('"use strict";return (' + ifade + ')'); } catch(e){ gecerli = false; }
+        if (!gecerli) h.push(`${n}: formül okunamadı (yalnız {Satır adı}, + − × ÷ ve parantez kullanılabilir).`);
+      }
+      if (s.bolum === 'Kontrol' && !s.k183 && !s.k144) h.push(`${n}: Kontrol satırında karşılaştırılacak bakanlık satırı seçilmemiş.`);
+    } else if (!s.k183 && !s.k144) h.push(`${n}: 183 ya da 144 satırından en az biri seçilmeli.`);
+    if (s.hesap === 'Gün' && s.bolum === 'Üst') h.push(`${n}: "Gün" hesabı yalnız Alt bölümde kullanılır.`);
+  });
+  if (gtAy.satirlar.filter(s => s.bolum === 'Alt').length > 5) h.push('Alt bölümde en çok 5 satır olabilir.');
+  if (!gtAy.satirlar.some(s => s.bolum === 'Üst')) h.push('Üst bölümde en az bir satır olmalı.');
+  return h;
+}
+document.getElementById('gtAyarKaydet').addEventListener('click', async () => {
+  const h = gtAyDenetle();
+  if (h.length){ ykDurum('gtAyarDurum', '✗ Kaydedilmedi:\n' + h.join('\n'), 'err'); return; }
+  const genel = GT_GENEL.map(g => [g.ad, gtAy.genel[g.ad] || '']);
+  const rows = [GT_VARSAYILAN.baslik].concat(gtAy.satirlar.map((s, i) => [s.ad, s.bolum, s.k183, s.k144, s.hesap === 'Formül' ? '=' + s.formul.replace(/^=/, '') : s.hesap, s.bicim, '']
+    .concat(genel[i] || ['', ''])));
+  for (let i = gtAy.satirlar.length; i < genel.length; i++) rows.push(['', '', '', '', '', '', ''].concat(genel[i]));
+  ykDurum('gtAyarDurum', 'Kaydediliyor…');
+  try {
+    await authFetch(GT_AYAR_URL('A1:Z300') + ':clear', { method:'POST' });
+    await authFetch(GT_AYAR_URL('A1') + '?valueInputOption=RAW', { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: rows }) });
+    gtAy.degisti = false; gt = null;   // Günlük Tablo bir sonraki açılışta yeni ayarlarla getirilir
+    ykDurum('gtAyarDurum', `✓ Kaydedildi (${gtAy.satirlar.length} satır). Günlük Tablo açılınca yeni ayarlar kullanılır.`, 'ok');
+  } catch(err){
+    ykDurum('gtAyarDurum', /403|PERMISSION/i.test(err.message) ? '✗ Bu hesabın ayar dosyasına yazma yetkisi yok; ayarları yalnız dosya sahibi değiştirebilir.' : '✗ Kaydedilemedi: ' + err.message, 'err');
+  }
+});
+async function gtAyarYukle(){
+  ykDurum('gtAyarDurum', 'Ayarlar okunuyor…');
+  try {
+    gtAy = gtAyKur(await gtAyarHam());
+    await gtAyEtiketleri();
+    gtAyCiz();
+    if (gtAy.hatalar.length) ykDurum('gtAyarDurum', '⚠ ' + gtAy.hatalar.join('\n'), 'warn');
+  } catch(err){ ykDurum('gtAyarDurum', '✗ ' + err.message, 'err'); }
+}
+document.getElementById('gtAyarYenile').addEventListener('click', () => {
+  if (gtAy && gtAy.degisti && !confirm('Kaydedilmemiş değişiklikler bırakılsın mı?')) return;
+  gtAyarYukle();
+});
+function gtAyarSayfasi(){ if (!gtAy || !gtAy.degisti) gtAyarYukle(); }
 </script>
 </body>
 </html>

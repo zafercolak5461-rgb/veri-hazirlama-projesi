@@ -100,8 +100,15 @@
   table.prev td .y-btn.onay{ border-color:var(--danger); color:var(--danger); }
   table.prev td input[type=text], table.prev td select{ padding:4px 7px; font-size:12px; }
   .yk-sekmeler{ display:flex; gap:6px; margin:4px 0 2px; }
-  .gv-gunler{ flex-wrap:wrap; gap:4px; }
-  .gv-gunler .yk-sekme{ padding:4px 8px; font-size:12px; white-space:nowrap; }
+  .gv-gun-dd{ position:relative; }
+  .gv-gun-btn{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer; min-width:150px; text-align:left; white-space:nowrap; }
+  .gv-gun-btn::after{ content:'▾'; float:right; margin-left:12px; color:var(--dim); }
+  .gv-gun-liste{ position:absolute; top:calc(100% + 4px); left:0; z-index:50; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:100%; max-height:320px; overflow:auto; padding:4px; }
+  .gv-gun-oge{ display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; color:#111; user-select:none; }
+  .gv-gun-oge:hover{ background:var(--panel2); }
+  .gv-gun-oge.aktif{ color:var(--accent); font-weight:600; background:var(--accent-soft); }
+  .gv-gun-oge input{ pointer-events:none; margin:0; }
+  .gv-gun-ayrac{ border-top:1px solid var(--line); margin:4px 0; }
   .yk-sekme{ background:var(--panel2); border:1px solid var(--line); color:var(--dim); padding:7px 14px; border-radius:8px; font-size:13px; cursor:pointer; }
   .gv-dosyalar{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
   .gv-dosya{ display:flex; align-items:center; gap:8px; border:1px dashed var(--line); border-radius:8px; padding:6px 10px; font-size:12.5px; color:var(--dim); }
@@ -428,9 +435,9 @@
             <div class="hint" style="margin:6px 0 0;">Aylık dosyalar klasörü: <b id="gvKlasorAd">seçilmedi</b> · <a href="#" id="gvKlasorDegistir">klasörü değiştir</a> · Bu ayın dosyası: <b id="gvAylikAd">—</b> (dosya Excel'de açıkken kaydedilemez)</div>
             <div id="gvKayitDurum" class="status"></div>
             <div id="gvUyari" class="status warn"></div>
-            <div class="yk-sekmeler gv-gunler" id="gvGunSec" style="margin-top:14px;display:none;"></div>
             <div class="yk-sekmeler" id="gvSekmeler" style="margin-top:14px;"></div>
             <div class="row" style="margin-top:10px;">
+              <div class="gv-gun-dd" id="gvGunDD" style="display:none;"><button type="button" class="gv-gun-btn" id="gvGunBtn" title="Gün seç"></button><div class="gv-gun-liste" id="gvGunSec" hidden></div></div>
               <select id="gvMod" title="Gelmeyenler dahil: Personel Listesi'ndeki herkes; gelmeyenlere YOK ve sebep yazılır">
                 <option value="calisan">Sadece çalışanlar</option><option value="tumu">Gelmeyenler dahil</option></select>
               <select id="gvTakim"><option value="">Tüm takım liderleri</option></select>
@@ -5326,21 +5333,33 @@ function gvGunSec(t){
   gvCokSec = new Set([t]);   // liste sekmelerinde bu günden başlanır, istenirse başka günler eklenir
   gvSonucCiz(); gvSebepKutuCiz();
 }
+// Gün filtresi: açılır liste. Liste sekmelerinde çoklu (onay kutulu), diğerlerinde tek gün.
 function gvGunSecCiz(){
-  const el = document.getElementById('gvGunSec'); if (!el) return;
-  el.style.display = gvGunler.size > 1 ? '' : 'none';
-  if (gvGunler.size < 2){ el.innerHTML = ''; return; }
-  const cok = gvListeSekme();
-  el.innerHTML = (cok ? `<button class="yk-sekme${[...gvGunler.keys()].every(t => gvCokSec.has(t)) ? ' aktif' : ''}" data-gvgun="__tum">Tüm günler</button>` : '') +
-    [...gvGunler.values()].map(s => {
-      const n = s.kisiler.filter(k => !k.yok).length, aktif = cok ? gvCokSec.has(s.tarih) : s === gvSonuc;
-      return `<button class="yk-sekme${aktif ? ' aktif' : ''}" data-gvgun="${s.tarih}" title="${n} kişi çalıştı${cok ? ' · tıklayarak seçime ekle/çıkar' : ''}">${cok ? (aktif ? '☑ ' : '☐ ') : ''}${s.tarih.slice(0, 5)} ${gvGunAdi(s.tarih)} <span class="soluk">(${n})</span></button>`;
+  const dd = document.getElementById('gvGunDD'), el = document.getElementById('gvGunSec'), btn = document.getElementById('gvGunBtn'); if (!dd) return;
+  dd.style.display = gvGunler.size > 1 ? '' : 'none';
+  if (gvGunler.size < 2){ el.innerHTML = ''; el.hidden = true; return; }
+  const cok = gvListeSekme(), gunler = [...gvGunler.values()];
+  const say = s => s.kisiler.filter(k => !k.yok).length, ad = s => `${s.tarih.slice(0, 5)} ${gvGunAdi(s.tarih)}`;
+  const tum = gunler.every(s => gvCokSec.has(s.tarih));
+  const secili = cok ? gunler.filter(s => gvCokSec.has(s.tarih)) : [gvSonuc];
+  btn.textContent = secili.length === 1 && secili[0] ? `${ad(secili[0])} (${say(secili[0])})` : (tum ? `Tüm günler (${gunler.length})` : `${secili.length} gün seçili`);
+  btn.title = cok ? 'Günleri seç (birden fazla seçilebilir)' : 'Gün seç';
+  el.innerHTML = (cok ? `<div class="gv-gun-oge${tum ? ' aktif' : ''}" data-gvgun="__tum"><input type="checkbox" tabindex="-1"${tum ? ' checked' : ''}>Tümünü seç</div><div class="gv-gun-ayrac"></div>` : '') +
+    gunler.map(s => {
+      const aktif = cok ? gvCokSec.has(s.tarih) : s === gvSonuc;
+      return `<div class="gv-gun-oge${aktif ? ' aktif' : ''}" data-gvgun="${s.tarih}" title="${say(s)} kişi çalıştı">${cok ? `<input type="checkbox" tabindex="-1"${aktif ? ' checked' : ''}>` : ''}${ad(s)} <span class="soluk">(${say(s)})</span></div>`;
     }).join('');
 }
+document.getElementById('gvGunBtn').addEventListener('click', () => { const el = document.getElementById('gvGunSec'); el.hidden = !el.hidden; });
+document.addEventListener('click', e => {   // dışarı tıklayınca kapat (liste yeniden çizilince kopan hedefi sayma)
+  const dd = document.getElementById('gvGunDD');
+  if (dd && e.target.isConnected && !dd.contains(e.target)) document.getElementById('gvGunSec').hidden = true;
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('gvGunSec').hidden = true; });
 document.getElementById('gvGunSec').addEventListener('click', e => {
   const b = e.target.closest('[data-gvgun]'); if (!b) return;
   const t = b.dataset.gvgun;
-  if (!gvListeSekme()) return gvGunSec(t);
+  if (!gvListeSekme()){ document.getElementById('gvGunSec').hidden = true; return gvGunSec(t); }
   if (t === '__tum') gvCokSec = [...gvGunler.keys()].every(x => gvCokSec.has(x)) ? new Set([gvSonuc.tarih]) : new Set(gvGunler.keys());
   else if (gvCokSec.has(t)){ if (gvCokSec.size > 1) gvCokSec.delete(t); }
   else gvCokSec.add(t);
@@ -5660,9 +5679,17 @@ function gvSonucCiz(){
   const gor = [GV_ANA].concat(gvGruplar);
   gvGunSecCiz();
   const lg = gvGunler.size > 1 ? gvListeGunleri() : [s];
-  const gecSay = gvHerGun(lg, () => gvGecListe(true)).length;   // diğer sekmeler gibi takım lideri filtresinden bağımsız
-  const sdHep = gvHerGun(lg, g => g.kisiler.filter(k => !k.yok).flatMap(k => gvSdAraliklar(k, g).map(a => ({ k, a, g }))));
-  const vkSay = gvHerGun(lg, () => gvVkListe(true)).length, ecSay = gvHerGun(lg, () => gvEcListe(true)).length;
+  // Takım lideri listesi önce kurulur; sekme sayıları seçili takım liderine göre (seçili değilse herkes)
+  const sel = document.getElementById('gvTakim'), v = sel.value;
+  // liste sekmelerinde seçili bütün günlerin kişileri (hafta sonu günü seçiliyken yalnız o günün takımı görünmesin)
+  const tkKisi = GV_LISTE().includes(gvAktifGrup) ? lg.flatMap(g => g.kisiler) : s.kisiler;
+  const takimlar = [...new Set(tkKisi.filter(k => [GV_ANA, ...GV_LISTE()].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+  sel.innerHTML = '<option value="">Tüm takım liderleri</option>' + takimlar.map(t => `<option value="${ykEsc(t)}">${ykEsc(t)}</option>`).join('');
+  sel.value = takimlar.includes(v) ? v : '';
+  const tk = sel.value;
+  const gecSay = gvHerGun(lg, () => gvGecListe()).length;
+  const sdHep = gvHerGun(lg, g => g.kisiler.filter(k => !k.yok && (!tk || k.takim === tk)).flatMap(k => gvSdAraliklar(k, g).map(a => ({ k, a, g }))));
+  const vkSay = gvHerGun(lg, () => gvVkListe()).length, ecSay = gvHerGun(lg, () => gvEcListe()).length;
   const sdBekleyen = sdHep.filter(o => !gvSdDurum(o.k, o.a, o.g)).length;
   document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).concat([GV_EC, GV_SD]).concat(gvGecSutun() ? [GV_VK] : []).map(g => {
     if (g === GV_EC) return `<button class="yk-sekme${gvAktifGrup === GV_EC ? ' aktif' : ''}" data-gvgrup="${GV_EC}" title="Son çıkışı vardiya bitişinden önce olanlar">Erken Çıkanlar (${ecSay})</button>`;
@@ -5670,16 +5697,10 @@ function gvSonucCiz(){
     if (g === GV_SD) return `<button class="yk-sekme${gvAktifGrup === GV_SD ? ' aktif' : ''}" data-gvgrup="${GV_SD}">Sistem Dışı Süreler (${sdHep.length}${sdBekleyen ? ` · ${sdBekleyen} bekleyen` : ''})</button>`;
     if (g === GV_GEC) return `<button class="yk-sekme${gvAktifGrup === GV_GEC ? ' aktif' : ''}" data-gvgrup="${GV_GEC}">Geç Girenler (${gecSay})</button>`;
     const tumu = gvMod() === 'tumu';
-    const n = s.kisiler.filter(k => (tumu || !k.yok) && (g === GV_ANA || k.grup === g)).length;
+    const n = s.kisiler.filter(k => (tumu || !k.yok) && (g === GV_ANA || k.grup === g) && (!tk || k.takim === tk)).length;
     return `<button class="yk-sekme${g === gvAktifGrup ? ' aktif' : ''}" data-gvgrup="${ykEsc(g)}">${ykEsc(g === GV_ANA ? 'Ana Tablo' : gvGrupAd(g))} (${n})</button>`;
   }).join('');
-  const sel = document.getElementById('gvTakim'), v = sel.value;
-  // liste sekmelerinde seçili bütün günlerin kişileri (hafta sonu günü seçiliyken yalnız o günün takımı görünmesin)
-  const tkKisi = GV_LISTE().includes(gvAktifGrup) ? lg.flatMap(g => g.kisiler) : s.kisiler;
-  const takimlar = [...new Set(tkKisi.filter(k => [GV_ANA, ...GV_LISTE()].includes(gvAktifGrup) || k.grup === gvAktifGrup).map(k => k.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
   const sk = document.getElementById('gvStaffKapali'); sk.checked = !!(s.notlar && s.notlar.staffKapali);
-  sel.innerHTML = '<option value="">Tüm takım liderleri</option>' + takimlar.map(t => `<option value="${ykEsc(t)}">${ykEsc(t)}</option>`).join('');
-  sel.value = takimlar.includes(v) ? v : '';
   gvTabloCiz();
   gvSebepKutuCiz();
 }
@@ -5874,7 +5895,7 @@ document.getElementById('gvSekmeler').addEventListener('click', e => {
   const b = e.target.closest('[data-gvgrup]'); if (!b) return;
   gvAktifGrup = b.dataset.gvgrup; gvSonucCiz();
 });
-document.getElementById('gvTakim').addEventListener('change', () => { if (gvSonuc){ gvTabloCiz(); gvSebepKutuCiz(); } });
+document.getElementById('gvTakim').addEventListener('change', () => { if (gvSonuc) gvSonucCiz(); });   // sekme sayıları da takım liderine göre
 
 // Mail: ekrandaki görünüm (sekme + takım lideri), Excel görünümüyle kenarlıklı tablo
 function gvMailHtml(gorunum){

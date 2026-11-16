@@ -6905,7 +6905,8 @@ function gtYuvarla(v, bicim){
 function gtGoster(v, bicim){
   if (v == null || v === '') return '';
   if (typeof v === 'string') return v;
-  if (bicim === 'Yüzde'){ const r = Math.round(v * 100); return (r < 0 ? '-' : '') + '%' + Math.abs(r).toLocaleString('tr-TR'); }
+  // Yüzde satırları (ör. Köpük Çağrı Oranı) 2 hane: %9,38 · Değişim (kenardaki Yüzde sütunu) şablondaki gibi tam sayı: %12
+  if (bicim === 'Yüzde' || bicim === 'Değişim'){ const h = bicim === 'Yüzde' ? 2 : 0; const k = Math.pow(10, h), r = Math.round(v * 100 * k) / k; return (r < 0 ? '-' : '') + '%' + Math.abs(r).toLocaleString('tr-TR', { minimumFractionDigits:h, maximumFractionDigits:h }); }
   if (bicim === 'Ondalık') return v.toLocaleString('tr-TR', { minimumFractionDigits:2, maximumFractionDigits:2 });
   return Math.round(v).toLocaleString('tr-TR');
 }
@@ -7023,11 +7024,11 @@ function gtTabloHtml(statik){
   h += `<th class="gt-bu">${ykEsc(d.gun)}</th><th class="gt-bu">${ykEsc(d.buEtiket)}</th><th class="gt-once">${ykEsc(d.onceEtiket)}</th><th>Fark</th><th>Yüzde</th></tr>`;
   ust.forEach(s => {
     const y183 = yuzde('183', s.ad), y144 = yuzde('144', s.ad);
-    h += `<tr><td class="gt-y">${gtOk(y183)}${ykEsc(gtGoster(y183, 'Yüzde'))}</td><td>${ykEsc(gtGoster(fark('183', s.ad), fBic(s)))}</td>` +
+    h += `<tr><td class="gt-y">${gtOk(y183)}${ykEsc(gtGoster(y183, 'Değişim'))}</td><td>${ykEsc(gtGoster(fark('183', s.ad), fBic(s)))}</td>` +
       kayHucre('183', 'once', s) + kayHucre('183', 'bu', s) + gunHucre('183', s) +
       `<td colspan="2" class="gt-ad">${ykEsc(s.ad)}</td>` +
       gunHucre('144', s) + kayHucre('144', 'bu', s) + kayHucre('144', 'once', s) +
-      `<td>${ykEsc(gtGoster(fark('144', s.ad), fBic(s)))}</td><td class="gt-y">${gtOk(y144)}${ykEsc(gtGoster(y144, 'Yüzde'))}</td></tr>`;
+      `<td>${ykEsc(gtGoster(fark('144', s.ad), fBic(s)))}</td><td class="gt-y">${gtOk(y144)}${ykEsc(gtGoster(y144, 'Değişim'))}</td></tr>`;
   });
   if (alt.length){
     const bos = n => n > 0 ? `<td colspan="${n}" class="gt-bosluk"></td>` : '';
@@ -7138,7 +7139,7 @@ async function gtExcel(){
     for (let r = r1; r <= r2; r++) for (let c = c1.charCodeAt(0); c <= c2.charCodeAt(0); c++) hucre(String.fromCharCode(c) + r, undefined, o);
     ws.mergeCells(`${a}:${b}`); hucre(a, deger, o);
   };
-  const NF = { 'Sayı':'#,##0', 'Yüzde':'0%', 'Ondalık':'#,##0.00' };
+  const NF = { 'Sayı':'#,##0', 'Yüzde':'0.00%', 'Ondalık':'#,##0.00' };
   // Başlıklar
   birles('B2', 'F2', 'ALO 183', { kalin:true, dolgu:'FFFF00' });
   birles('G2', 'H4', 'AÇIKLAMA', { kalin:true, dolgu:'E2EFDA' });

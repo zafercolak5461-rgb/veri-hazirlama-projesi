@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* GÖRÜNÜM - sayfa çizilmeden son bilinen görünüm uygulanır; asıl değer girişten sonra
+   YETKİLENDİRME > AYARLAR > "Görünüm" satırından okunur. Varsayılan = beyaz. */
+(function(){ var g = null; try { g = localStorage.getItem('alo144-gorunum'); } catch(e){}
+  if (g !== 'Varsayılan (2)') document.documentElement.classList.add('gorunum-beyaz'); })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <title>Veri Hazırlama Projesi</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -138,6 +146,60 @@
   table.prev td input.yk-hucre.hatali{ border-color:var(--danger); color:var(--danger); background:var(--danger-soft); }
   #ykSebepKutu.tamam{ border-color:var(--ok); }
   #ykSebepKutu.vurgu{ box-shadow:0 0 0 3px var(--danger-soft); }
+</style>
+<style id="gorunumBeyazStil">
+/* ===== GÖRÜNÜM: "Varsayılan" (beyaz tasarım) =====
+   Yalnız <html class="gorunum-beyaz"> iken çalışır. Değer YETKİLENDİRME > AYARLAR > "Görünüm" satırındadır
+   (Panel > Yetkilendirme'den değiştirilir). "Varsayılan (2)" = eski görünüm (koyu sol menü, amber vurgu).
+   Günlük Tablo (.gt-tablo) ve önizleme hücre renkleri Excel'i birebir gösterdiği için değiştirilmez. */
+html.gorunum-beyaz{
+  --bg:#F7F8FA; --panel:#FFFFFF; --panel2:#F3F4F6; --line:#E5E7EB;
+  --text:#111827; --dim:#4B5563; --dim2:#6B7280;
+  --accent:#1E3A8A; --accent-soft:#EEF2FB;
+  --ok:#047857; --ok-soft:rgba(4,120,87,.10); --danger:#B91C1C; --danger-soft:rgba(185,28,28,.08);
+  --sb-bg:#FFFFFF; --sb-panel2:#F3F4F6; --sb-line:#E5E7EB; --sb-text:#111827; --sb-dim:#374151; --sb-dim2:#6B7280;
+  --gb-cerceve:#D1D5DB;
+}
+html.gorunum-beyaz body{ font-family:'Inter', 'Segoe UI', Arial, sans-serif; }
+html.gorunum-beyaz .main button, html.gorunum-beyaz .main select, html.gorunum-beyaz .main input, html.gorunum-beyaz .sidebar *{ font-family:inherit; }
+
+/* --- Sol menü --- */
+.nav-grup-yeni, .nav-item .nav-ikon{ display:none; }
+html.gorunum-beyaz .sidebar{ width:248px; background:#FFFFFF; border-right:1px solid var(--line); }
+html.gorunum-beyaz .sidebar-header{ padding:18px 20px 16px; border-bottom:1px solid #EEF0F3; }
+html.gorunum-beyaz .sidebar-header h1{ font-size:14px; letter-spacing:.02em; }
+html.gorunum-beyaz .sidebar-header .sub{ font-size:12px; color:#4B5563; }
+html.gorunum-beyaz .nav{ padding:6px 0 12px; }
+html.gorunum-beyaz .nav-grup{ font-size:11px; font-weight:600; letter-spacing:.06em; color:#6B7280; padding:12px 22px 4px; border-top:none; margin-top:4px; }
+html.gorunum-beyaz .nav-grup-yeni{ display:block; }
+html.gorunum-beyaz .nav-item{ margin:1px 10px; padding:8px 12px; border:none; border-radius:8px; color:#374151; font-weight:500; min-height:38px; }
+html.gorunum-beyaz .nav-item:hover{ background:#F3F4F6; color:#111827; }
+html.gorunum-beyaz .nav-item.active{ background:var(--accent); color:#FFFFFF; border:none; font-weight:600; }
+html.gorunum-beyaz .nav-item.disabled:hover{ background:none; color:#374151; }
+html.gorunum-beyaz .nav-item .nav-icon{ display:none; }
+html.gorunum-beyaz .nav-item .nav-ikon{ display:inline-flex; color:#9CA3AF; flex-shrink:0; }
+html.gorunum-beyaz .nav-item:hover .nav-ikon{ color:#4B5563; }
+html.gorunum-beyaz .nav-item.active .nav-ikon{ color:#FFFFFF; }
+html.gorunum-beyaz .sidebar-footer{ border-top:1px solid #EEF0F3; color:#6B7280; }
+
+/* --- İçerik --- */
+html.gorunum-beyaz .main{ padding:28px 32px 48px; }
+html.gorunum-beyaz .page-title{ font-size:24px; letter-spacing:-.01em; }
+html.gorunum-beyaz .card{ box-shadow:none; }
+html.gorunum-beyaz .btn{ background:#FFFFFF; border-color:var(--gb-cerceve); color:#374151; font-weight:600; }
+html.gorunum-beyaz .btn:hover{ background:#F9FAFB; border-color:#9CA3AF; color:#111827; }
+html.gorunum-beyaz .btn.primary{ background:var(--accent); border-color:var(--accent); color:#FFFFFF; }
+html.gorunum-beyaz .btn.primary:hover{ background:#172F70; border-color:#172F70; color:#FFFFFF; }
+html.gorunum-beyaz .btn.ok{ background:#047857; border-color:#047857; color:#FFFFFF; }
+html.gorunum-beyaz .btn.danger{ background:#FFFFFF; border-color:#FCA5A5; color:#B91C1C; }
+html.gorunum-beyaz .btn:disabled:hover{ background:#FFFFFF; border-color:var(--gb-cerceve); }
+html.gorunum-beyaz select, html.gorunum-beyaz input[type=text], html.gorunum-beyaz input[type=number], html.gorunum-beyaz .gv-gun-btn{ border-color:var(--gb-cerceve); border-radius:8px; color:#111827; }
+html.gorunum-beyaz select:focus, html.gorunum-beyaz input[type=text]:focus, html.gorunum-beyaz input[type=number]:focus{ outline:2px solid #BFDBFE; outline-offset:0; border-color:var(--accent); }
+html.gorunum-beyaz input[type=date]{ background:#FFFFFF; border:1px solid var(--gb-cerceve); border-radius:8px; padding:6px 9px; font-size:13px; color:#111827; }
+html.gorunum-beyaz .yk-sekme{ background:#FFFFFF; border-color:var(--gb-cerceve); color:#374151; font-weight:600; }
+html.gorunum-beyaz .yk-sekme.aktif{ background:var(--accent); border-color:var(--accent); color:#FFFFFF; }
+html.gorunum-beyaz table.prev th{ background:#F9FAFB; color:#374151; }
+html.gorunum-beyaz input[type="checkbox"], html.gorunum-beyaz input[type="radio"]{ accent-color:var(--accent); }
 </style>
 </head>
 <body>
@@ -2174,8 +2236,62 @@ function initGis(){
     },
   });
 }
+// ===== GÖRÜNÜM SİMGELERİ (Panel ve programlarda ortak ad listesi) =====
+// Menü öğesinin data-ikon değeri buradaki addır. Panel, programın bildirdiği adı kendi listesinden çizer.
+const GORUNUM_IKONLAR = {
+  telefon:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  pasta:'<path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+  liste:'<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+  nabiz:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  takvim:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  kisiler:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
+  kisi:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  grafik:'<path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/>',
+  kimlik:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17a4 4 0 0 1 7 0"/><path d="M15 10h3"/><path d="M15 14h3"/>',
+  pano:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/>',
+  kalkan:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  ayar:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  palet:'<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2a5.6 5.6 0 0 0 5.6-5.6C22 6 17.5 2 12 2z"/>',
+  dosya:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/>',
+  tablo:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/>',
+  onay:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  saat:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  kahve:'<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><path d="M6 1v3"/><path d="M10 1v3"/><path d="M14 1v3"/>',
+  yildiz:'<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  hedef:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  yukle:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+  kamera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  klasor:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  yenile:'<path d="M23 4v6h-6"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/>',
+  nokta:'<circle cx="12" cy="12" r="3"/>'
+};
+function gorunumIkon(ad, boyut){
+  const ic = GORUNUM_IKONLAR[ad] || GORUNUM_IKONLAR.nokta, b = boyut || 16;
+  return `<svg width="${b}" height="${b}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ic}</svg>`;
+}
+
+// ===== GÖRÜNÜM (Varsayılan = beyaz tasarım / Varsayılan (2) = eski görünüm) =====
+// Değer YETKİLENDİRME tablosu > AYARLAR > "Görünüm" satırında (herkes için tek ayar, Panel > Yetkilendirme'den
+// değiştirilir). Tarayıcıda da tutulur ki sayfa doğru görünümle açılsın. Satır yoksa "Varsayılan".
+const GORUNUM_ANAHTAR = 'alo144-gorunum';
+const GORUNUM_IKINCI = 'Varsayılan (2)';
+function gorunumBeyaz(){ return document.documentElement.classList.contains('gorunum-beyaz'); }
+function gorunumUygula(deger){
+  const beyaz = String(deger == null ? '' : deger).trim() !== GORUNUM_IKINCI;
+  try { localStorage.setItem(GORUNUM_ANAHTAR, beyaz ? 'Varsayılan' : GORUNUM_IKINCI); } catch(e){}
+  document.documentElement.classList.toggle('gorunum-beyaz', beyaz);
+  return beyaz;
+}
+async function gorunumOku(){
+  try {
+    const satirlar = await getSheetValues(AUTH_SHEET_ID, "'AYARLAR'!A1:B50");
+    const satir = satirlar.find(r => String(r[0] || '').trim().toLocaleUpperCase('tr') === 'GÖRÜNÜM');
+    return satir ? String(satir[1] || '').trim() || 'Varsayılan' : 'Varsayılan';
+  } catch(e){ return null; }
+}
 
 function onSignedIn(){
+  gorunumOku().then(g => { if (g) gorunumUygula(g); });
   document.getElementById('signinGate').style.display = 'none';
   document.getElementById('sidebarFooter').textContent = 'Oturum açık';
   (async () => {
@@ -2494,14 +2610,15 @@ function renderSidebar(){
   if (!gorulebilir.length){
     html = '<div class="empty" style="padding:20px 12px;">Görüntülenebilir proje yok.</div>';
   } else {
-    html = gorulebilir.map(p => `<div class="nav-item${(p.ad === currentProject && projeAktif) ? ' active' : ''}" data-proje="${p.ad}"><span class="nav-icon">📁</span> ${p.ad}</div>`).join('');
+    html = '<div class="nav-grup nav-grup-yeni">Projeler</div>' +   // bu başlık yalnız beyaz görünümde
+      gorulebilir.map(p => `<div class="nav-item${(p.ad === currentProject && projeAktif) ? ' active' : ''}" data-proje="${p.ad}" data-ikon="klasor"><span class="nav-icon">📁</span><span class="nav-ikon">${gorunumIkon('klasor')}</span> ${p.ad}</div>`).join('');
   }
   // Yoklama: Erişim'i olan herkes görür (yetki modelinde Erişim = excel/tablo/şablon özellikleri).
   if (userPerms && (userPerms.superYetkili || userPerms.excel)){
     html += '<div class="nav-grup">Yoklama</div>' + YK_SAYFALAR.map(s =>
-      `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}"><span class="nav-icon">${s.ikon}</span> ${s.ad}</div>`).join('');
+      `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}" data-ikon="${s.svg}"><span class="nav-icon">${s.ikon}</span><span class="nav-ikon">${gorunumIkon(s.svg)}</span> ${s.ad}</div>`).join('');
     html += '<div class="nav-grup">Günlük Veri</div>' + GV_SAYFALAR.map(s =>
-      `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}"><span class="nav-icon">${s.ikon}</span> ${s.ad}</div>`).join('');
+      `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}" data-ikon="${s.svg}"><span class="nav-icon">${s.ikon}</span><span class="nav-ikon">${gorunumIkon(s.svg)}</span> ${s.ad}</div>`).join('');
   }
   // Eski Yetkilendirme sayfası kaldırıldı (09.11.2026): yetki Panel > Yetkilendirme ekranında.
   if (false){
@@ -3139,10 +3256,10 @@ const VARDIYA_SHEET_ID = '1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ';
 const YK_TAB = { personel:'PERSONEL', plan:'PLAN', kayit:'KAYIT', gorev:'GÖREVLER', sebep:'SEBEPLER', ozel:'ÖZEL DURUMLAR',
                  manuel:'MANUEL SEBEP', gec:'GEÇ GİRİŞ', ayar:'AYARLAR', giris:'GİRİŞ' };
 const YK_SAYFALAR = [
-  { id:'gunluk',   ad:'Günlük Yoklama',   ikon:'✓' },
-  { id:'plan',     ad:'Haftalık Plan',    ikon:'📅' },
-  { id:'personel', ad:'Personel Listesi', ikon:'👥' },
-  { id:'ayar',     ad:'Yoklama Ayarları', ikon:'⚙' },
+  { id:'gunluk',   ad:'Günlük Yoklama',   ikon:'✓',  svg:'onay' },        // ikon: eski görünüm, svg: beyaz görünüm
+  { id:'plan',     ad:'Haftalık Plan',    ikon:'📅', svg:'takvim' },
+  { id:'personel', ad:'Personel Listesi', ikon:'👥', svg:'kisiler' },
+  { id:'ayar',     ad:'Yoklama Ayarları', ikon:'⚙',  svg:'ayar' },
 ];
 const YK_AYLAR = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
 const YK_LISTE_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer'];          // elle girilen yeni sebebin gidebileceği listeler
@@ -4666,10 +4783,10 @@ document.addEventListener('focusout', e => {
 // ============================================================================
 const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
 const GV_SAYFALAR = [
-  { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊' },
-  { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙' },
-  { id:'gt',     ad:'Günlük Tablo',          ikon:'📋' },
-  { id:'gtayar', ad:'Günlük Tablo Ayarları', ikon:'⚙' },
+  { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊', svg:'grafik' },
+  { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙',  svg:'ayar' },
+  { id:'gt',     ad:'Günlük Tablo',          ikon:'📋', svg:'tablo' },
+  { id:'gtayar', ad:'Günlük Tablo Ayarları', ikon:'⚙',  svg:'ayar' },
 ];
 // Raporlar: dosyayı içindeki başlıklardan tanır (dosya adına bakılmaz).
 const GV_RAPORLAR = [
@@ -6591,7 +6708,7 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
   // Görünür (yetkili) öğeler: kendisi ya da bir üstü display:none ise kutusu olmaz.
   function liste(){
     return ogeler().filter(el => el.getClientRects().length > 0).map(el => ({
-      id: CFG.id(el), ad: etiket(el), grup: CFG.grup(el),
+      id: CFG.id(el), ad: etiket(el), grup: CFG.grup(el), ikon: el.dataset.ikon || '',
       aktif: el.classList.contains('active'), pasif: el.classList.contains('disabled')
     })).filter(o => o.id);
   }
@@ -6611,6 +6728,7 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
     if (m.kaynak !== KAYNAK) return;
     if (m.tur === 'menu-iste') bildir(true);
     if (m.tur === 'oturum' && m.token) oturumUygula(m.token);
+    if (m.tur === 'gorunum' && typeof gorunumUygula === 'function') gorunumUygula(m.deger);   // panel görünümü değiştirince sayfayı yeniden yükler
     if (m.tur === 'ac'){
       const el = ogeler().find(x => CFG.id(x) === m.id);
       if (el) el.click();       // programın kendi menü düğmesine tıklanır - kendi mantığı çalışır

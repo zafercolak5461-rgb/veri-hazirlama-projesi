@@ -6491,7 +6491,7 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
     giris: '#signinGate',
     oge: '#navList .nav-item',
     id: el => el.dataset.proje ? 'proje:' + el.dataset.proje : (el.dataset.yoklama ? 'yoklama:' + el.dataset.yoklama : (el.dataset.auth ? 'auth' : '')),
-    grup: el => el.dataset.auth ? 'Yönetim' : (el.dataset.yoklama ? (/^gv/.test(el.dataset.yoklama) ? 'Günlük Veri' : 'Yoklama') : 'Projeler'),
+    grup: el => el.dataset.auth ? 'Yönetim' : (el.dataset.yoklama ? (GV_SAYFALAR.some(s => s.id === el.dataset.yoklama) ? 'Günlük Veri' : 'Yoklama') : 'Projeler'),
     yazmaPanelden: true,                              // yazma istekleri panelden izinle (authFetch)
     oturum: (token, ilk) => {
       accessToken = token;

@@ -100,6 +100,21 @@
   table.prev td .y-btn.onay{ border-color:var(--danger); color:var(--danger); }
   table.prev td input[type=text], table.prev td select{ padding:4px 7px; font-size:12px; }
   .yk-sekmeler{ display:flex; gap:6px; margin:4px 0 2px; }
+  .gt-tablo{ border-collapse:collapse; background:#fff; color:#000; font-family:Calibri, Arial, sans-serif; font-size:14px; }
+  .gt-tablo th, .gt-tablo td{ border:1px solid #000; padding:3px 8px; text-align:center; white-space:nowrap; min-width:74px; height:22px; }
+  .gt-tablo th{ font-weight:bold; }
+  .gt-tablo .gt-183{ background:#FFFF00; } .gt-tablo .gt-144{ background:#0070C0; } .gt-tablo .gt-acik{ background:#E2EFDA; }
+  .gt-tablo .gt-bu{ background:#BDD7EE; } .gt-tablo .gt-once{ background:#FFE699; font-weight:normal; }
+  .gt-tablo .gt-ad{ font-family:Arial, sans-serif; font-size:13px; color:#114533; min-width:170px; }
+  .gt-tablo .gt-alt183{ background:#00B050; color:#fff; } .gt-tablo .gt-alt144{ background:#00B0F0; color:#fff; }
+  .gt-tablo td.gt-bosluk{ border:none; }
+  .gt-tablo .gt-y{ text-align:right; }
+  .gt-ok{ float:left; font-size:12px; margin-right:6px; } .gt-ok.yukari{ color:#00B050; } .gt-ok.asagi{ color:#E03C31; }
+  .gt-tablo td.gt-g{ padding:0; }
+  .gt-tablo td.gt-g input{ width:100%; min-width:74px; box-sizing:border-box; border:none; text-align:center; font:inherit; padding:3px 6px; background:transparent; color:#000; }
+  .gt-tablo td.gt-g.bos input{ background:#FFF3CD; } .gt-tablo td.gt-g.dosya input{ background:#E2F0D9; } .gt-tablo td.gt-g.elle input{ background:#FFFFFF; font-weight:bold; }
+  .gt-tablo td.gt-g input:focus{ outline:2px solid var(--accent); }
+  .gt-renkler span{ display:inline-block; width:12px; height:12px; border:1px solid #999; vertical-align:-2px; margin:0 4px 0 10px; }
   .gv-gun-dd{ position:relative; }
   .gv-gun-btn{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer; min-width:150px; text-align:left; white-space:nowrap; }
   .gv-gun-btn::after{ content:'▾'; float:right; margin-left:12px; color:var(--dim); }
@@ -498,6 +513,27 @@
             <button class="btn ok" id="gvStilKaydet">💾 Kaydet</button>
             <span id="gvStilDurum" class="status" style="margin:0;"></span>
           </div>
+        </div>
+      </div>
+
+      <!-- ===== GÜNLÜK TABLO (16.11.2026) — ALO 183 / ALO 144 akşam tablosu; ayarlar YOKLAMA > "GÜNLÜK TABLO AYARLARI" ===== -->
+      <div id="yk-gt" class="yk-alt" style="display:none;">
+        <div class="page-title">Günlük Tablo</div>
+        <div class="page-sub">ALO 183 ve ALO 144'ün seçilen günü, bu ayın 1'inden bir önceki güne kadarki dönemi ve geçen ayın aynı aralığı. Veriler <b>Aile ve Sosyal Hizmetler Bakanlığı</b> dosyasından yalnız okunur; sütun başlıktaki tarihe, satır A sütunundaki ada göre bulunur. Günün rakamı dosyada yoksa kutuya sen yazarsın.</div>
+        <div class="card">
+          <div class="row">
+            <label>Tarih: <input type="date" id="gtTarih"></label>
+            <button class="btn primary" id="gtGetirBtn">▶ Getir</button>
+            <button class="btn" id="gtExcelBtn" disabled>⬇ Excel'e Aktar</button>
+            <button class="btn" id="gtResimKopyaBtn" disabled title="Tabloyu resim olarak panoya kopyalar (WhatsApp'a Ctrl+V)">📋 Resmi Kopyala</button>
+            <button class="btn" id="gtResimIndirBtn" disabled>🖼 Resmi İndir</button>
+            <button class="btn" id="gtTemizleBtn" style="margin-left:auto;" title="Bu gün için elle yazdığın rakamları siler">Elle Girilenleri Sil</button>
+          </div>
+          <div id="gtDurum" class="status"></div>
+          <div id="gtUyari" class="status warn"></div>
+          <div class="hint gt-renkler" style="margin:10px 0 8px;">Günün kutuları:<span style="background:#E2F0D9;"></span>bakanlık dosyasından<span style="background:#FFF3CD;"></span>dosyada yok, yaz<span style="background:#fff;"></span><b>kalın</b> = elle girildi. Enter ile sonraki kutuya geçer. Hücrenin üstüne gelince kaynağı görünür.</div>
+          <div class="prev-wrap" id="gtTabloWrap" style="max-height:none; overflow:auto;"></div>
+          <div class="hint" style="margin:12px 0 0;">Satırlar, bakanlık dosyasındaki satır adları, hesap türü (Toplam / Ortalama — OFF, boş ve 0 günler ortalamaya girmez / Gün / =formül), Yüzde sütununun paydası ve dosya bilgisi YOKLAMA tablosunun <b>GÜNLÜK TABLO AYARLARI</b> sekmesindedir.</div>
         </div>
       </div>
     </div>
@@ -3537,6 +3573,7 @@ function ykSayfaAc(id){
   if (id === 'personel') ykPersonelSayfasi();
   if (id === 'ayar') ykAyarSayfasi();
   if (id === 'gvayar') gvAyarSayfasi();
+  if (id === 'gt') gtSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
@@ -4602,6 +4639,7 @@ const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
 const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊' },
   { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙' },
+  { id:'gt',     ad:'Günlük Tablo',          ikon:'📋' },
 ];
 // Raporlar: dosyayı içindeki başlıklardan tanır (dosya adına bakılmaz).
 const GV_RAPORLAR = [
@@ -6562,6 +6600,497 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
   bildir(true);
   gonder({ tur: 'oturum-iste' });
 })();
+</script>
+<script>
+// ============================================================================
+// ===== GÜNLÜK TABLO (16.11.2026) =====
+// Akşam hazırlanan ALO 183 / ALO 144 karşılaştırma tablosu: seçilen günün sütunu, bu ayın 1'inden bir önceki güne
+// kadarki dönem ve geçen ayın aynı aralığı. Veri bakanlık dosyasından (Aile ve Sosyal Hizmetler Bakanlığı) YALNIZ OKUNUR.
+// Satırlar, hangi bakanlık satırından alınacağı ve hesap türü koda gömülü değil: YOKLAMA > "GÜNLÜK TABLO AYARLARI".
+// Bakanlık sekmelerinde sütun BAŞLIKTAKİ TARİHE ("13-Kas"), satır A SÜTUNUNDAKİ ADA göre bulunur; sayarak değil.
+// Bulunamayan / iki kez geçen tarih ya da satır tahmin edilmez: uyarı verilir, hücre boş kalır.
+// Günün sütunu: bakanlık dosyasında o günün değeri varsa oradan, yoksa ekranda elle girilir (144 akşam canlı veri).
+// ============================================================================
+const GT_TAB = 'GÜNLÜK TABLO AYARLARI';
+// Ayar sekmesi ilk kez açıldığında yazılan başlangıç değerleri (sonra yalnız sekmeden okunur).
+const GT_VARSAYILAN = {
+  baslik: ['Satır', 'Bölüm', '183 Satırı', '144 Satırı', 'Hesap', 'Biçim', '', 'Ayar', 'Değer'],
+  satirlar: [
+    ['Gelen Çağrı Sayısı', 'Üst', 'Gelen Çağrı Sayısı', 'Gelen Çağrı Sayısı', 'Toplam', 'Sayı'],
+    ['Kaçan Çağrı Sayısı', 'Üst', 'Kaçan Çağrı Sayısı', 'Kaçan Çağrı Sayısı', 'Toplam', 'Sayı'],
+    ['SL %', 'Üst', 'SL %', 'SL %', 'Ortalama', 'Sayı'],
+    ['AR%', 'Üst', 'AR%', 'AR%', 'Ortalama', 'Sayı'],
+    ['AHT', 'Üst', 'AHT (SANİYE)', 'AHT', 'Ortalama', 'Sayı'],
+    ['Köpük Çağrı Sayısı', 'Üst', 'Köpük Çağrı Sayısı', 'Köpük Çağrı Sayısı', 'Toplam', 'Sayı'],
+    ['Köpük Çağrı Oranı', 'Üst', '', '', '={Köpük Çağrı Sayısı}/({Gelen Çağrı Sayısı}-{Kaçan Çağrı Sayısı})', 'Yüzde'],
+    ['Açılan Bildirim Sayısı', 'Üst', 'Açılan Bildirim Sayısı', 'Açılan Bildirim Sayısı', 'Toplam', 'Sayı'],
+    ['Planlanan', 'Alt', 'Planlanan', 'Planlanan', 'Gün', 'Sayı'],
+    ['Gerçekleşen', 'Alt', 'Gerçekleşen', 'Gerçekleşen', 'Gün', 'Sayı'],
+    ['Fark', 'Alt', '', '', '={Planlanan}-{Gerçekleşen}', 'Sayı'],
+    ['Sapma', 'Kontrol', 'Sapma', 'Devamsızlık Adam Gün Sayısı', '={Planlanan}-{Gerçekleşen}', 'Sayı'],
+  ],
+  ayarlar: [
+    ['Bakanlık Dosyası', '1bCjx7_Mb7u7ZRdlOcUwIy2l7hL_E_YO7KQT3LyZTGGg'],
+    ['183 Sekmesi', 'Alo 183'],
+    ['144 Sekmesi', 'Alo 144'],
+  ],
+};
+const GT_TARAF = ['183', '144'];
+const GT_AY_KISA = ['OCA','ŞUB','MAR','NİS','MAY','HAZ','TEM','AĞU','EYL','EKİ','KAS','ARA'];
+
+// ---------- Saf yardımcılar (ağ yok; test edilebilir) ----------
+// Bakanlık hücresi → sayı ya da null. "1.234" binlik, "95,47" ondalık, "9,49%" yüzde; OFF / #DIV/0! / boş → null.
+function gtSayi(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).trim().replace(/\s/g, '');
+  if (!s) return null;
+  let yuzde = false;
+  if (/%$/.test(s) || /^%/.test(s)){ yuzde = true; s = s.replace(/%/g, ''); }
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, '');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return yuzde ? n / 100 : n;
+}
+// "13-Kas", "13 Kas", "13.Kas" → { gun, ay(0-11) } ; tam tarih ("13.11.2026") → { gun, ay, yil }
+function gtBaslikTarih(v){
+  const s = String(v == null ? '' : v).trim();
+  const tam = ykTarih(s);
+  if (tam && /\d{4}/.test(s)){ const [g, a, y] = tam.split('.').map(Number); return { gun:g, ay:a - 1, yil:y }; }
+  const m = s.match(/^(\d{1,2})\s*[-. ]\s*([A-Za-zÇĞİÖŞÜçğıöşü]{3,})/);
+  if (!m) return null;
+  const ay = GT_AY_KISA.indexOf(m[2].toLocaleUpperCase('tr-TR').slice(0, 3));
+  const gun = Number(m[1]);
+  return ay < 0 || gun < 1 || gun > 31 ? null : { gun, ay };
+}
+// Başlık satırı → Map("GG.AA.YYYY" → sütun no). Yılı olmayan başlıklarda yıl sıradan çıkarılır (ay geri dönerse yıl +1);
+// başlangıç yılı, aranan gün sekmede bulunacak şekilde seçilir. Aynı tarih iki kez geçerse o tarih kullanılmaz (cift).
+function gtTarihSutunlari(baslik, hedef){
+  const hy = Number(String(hedef).slice(6));
+  let enIyi = null;
+  for (const bas of [hy, hy - 1]){
+    const map = new Map(), cift = new Set();
+    let yil = bas, onceki = null;
+    baslik.forEach((v, i) => {
+      const t = gtBaslikTarih(v); if (!t) return;
+      let y;
+      if (t.yil){ y = t.yil; yil = t.yil; }
+      else { if (onceki != null && t.ay < onceki) yil++; y = yil; }
+      onceki = t.ay;
+      const k = ykIki(t.gun) + '.' + ykIki(t.ay + 1) + '.' + y;
+      if (map.has(k)) cift.add(k); else map.set(k, i);
+    });
+    cift.forEach(k => map.delete(k));
+    const sonuc = { map, cift };
+    if (map.has(hedef) || cift.has(hedef)) return sonuc;
+    if (!enIyi) enIyi = sonuc;
+  }
+  return enIyi;
+}
+// A sütunu → Map(anahtar → satır no); iki kez geçen ad cift'e girer.
+function gtSatirlar(satirlar){
+  const map = new Map(), cift = new Set();
+  satirlar.forEach((r, i) => { const k = ykAnahtar(r && r[0]); if (!k) return; if (map.has(k)) cift.add(k); else map.set(k, i); });
+  cift.forEach(k => map.delete(k));
+  return { map, cift };
+}
+// Seçilen gün → dönemler. Ayın 1'i ise dönemler boş.
+function gtDonemler(tarih){
+  const [g, a, y] = tarih.split('.').map(Number);
+  const gunler = (yil, ay, son) => { const l = []; for (let d = 1; d <= son; d++) l.push(ykIki(d) + '.' + ykIki(ay) + '.' + yil); return l; };
+  const etiket = l => !l.length ? '' : (l.length === 1 ? l[0] : `${l[0].slice(0, 2)}-${l[l.length - 1]}`);
+  const oa = a === 1 ? 12 : a - 1, oy = a === 1 ? y - 1 : y;
+  const oaSon = new Date(oy, oa, 0).getDate();
+  const bu = gunler(y, a, g - 1), once = gunler(oy, oa, Math.min(g - 1, oaSon));
+  return { gun: tarih, bu, once, buEtiket: etiket(bu), onceEtiket: etiket(once) };
+}
+// Ayar sekmesi → { satirlar:[{ad,bolum,kaynak:{183,144},hesap,formul,bicim}], ayar:{} , hatalar:[] }
+function gtAyarKur(rows){
+  const hatalar = [], satirlar = [], ayar = {};
+  const bas = (rows[0] || []).map(ykAnahtar);
+  const ix = ad => bas.indexOf(ykAnahtar(ad));
+  const c = { ad:ix('Satır'), bolum:ix('Bölüm'), k183:ix('183 Satırı'), k144:ix('144 Satırı'), hesap:ix('Hesap'), bicim:ix('Biçim'), ak:ix('Ayar'), av:ix('Değer') };
+  if (c.ad < 0 || c.hesap < 0) return { satirlar, ayar, hatalar: [`"${GT_TAB}" sekmesinde "Satır" ve "Hesap" başlıkları yok.`] };
+  rows.slice(1).forEach((r, i) => {
+    r = r || [];
+    if (c.ak >= 0 && String(r[c.ak] || '').trim()) ayar[ykAnahtar(r[c.ak])] = String(r[c.av] == null ? '' : r[c.av]).trim();
+    const ad = String(r[c.ad] || '').trim(); if (!ad) return;
+    const hesapHam = String(r[c.hesap] || '').trim();
+    const bolum = ykAnahtar(r[c.bolum]) || 'ÜST';
+    const s = { ad, bolum: bolum === 'ALT' ? 'Alt' : bolum === 'KONTROL' ? 'Kontrol' : 'Üst',
+      kaynak: { '183': String(r[c.k183] || '').trim(), '144': String(r[c.k144] || '').trim() },
+      hesap: '', formul: '', bicim: ['YÜZDE', 'ONDALIK'].includes(ykAnahtar(r[c.bicim])) ? (ykAnahtar(r[c.bicim]) === 'YÜZDE' ? 'Yüzde' : 'Ondalık') : 'Sayı' };
+    if (hesapHam.startsWith('=')) s.formul = hesapHam.slice(1);
+    else if (['TOPLAM', 'ORTALAMA', 'GÜN'].includes(ykAnahtar(hesapHam))) s.hesap = { 'TOPLAM':'Toplam', 'ORTALAMA':'Ortalama', 'GÜN':'Gün' }[ykAnahtar(hesapHam)];
+    else { hatalar.push(`Ayar ${i + 2}. satır (${ad}): Hesap "${hesapHam}" tanınmadı (Toplam / Ortalama / Gün / =formül).`); return; }
+    satirlar.push(s);
+  });
+  return { satirlar, ayar, hatalar };
+}
+// {Ad} başvurulu formülü değerlerle hesaplar. Yalnız + − × ÷ ve parantez. Eksik değer / sıfıra bölme → null.
+function gtFormul(formul, al){
+  let eksik = false;
+  const ifade = formul.replace(/\{([^}]+)\}/g, (_, ad) => { const v = al(ad.trim()); if (v == null || !isFinite(v)) { eksik = true; return '0'; } return '(' + v + ')'; })
+    .replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/,/g, '.');
+  if (eksik || !/^[\d\s+\-*/().]+$/.test(ifade)) return null;
+  try { const v = Function('"use strict";return (' + ifade + ')')(); return isFinite(v) ? v : null; } catch(e){ return null; }
+}
+// Bir dönemin değeri: Toplam = sayısal günlerin toplamı; Ortalama = sayısal ve 0'dan farklı günlerin düz ortalaması
+// (OFF / boş / 0 günler sayılmaz). Hiç sayısal gün yoksa null.
+function gtTopla(degerler, hesap){
+  const n = degerler.map(gtSayi).filter(v => v != null);
+  if (hesap === 'Ortalama'){ const m = n.filter(v => v !== 0); return m.length ? m.reduce((a, b) => a + b, 0) / m.length : null; }
+  return n.length ? n.reduce((a, b) => a + b, 0) : null;
+}
+// Ekranda / Excel'de tutulan değer: Sayı → tam sayıya yuvarlanır (şablondaki gibi), Ondalık → 2 hane, Yüzde → olduğu gibi.
+function gtYuvarla(v, bicim){
+  if (v == null) return null;
+  if (bicim === 'Sayı') return Math.round(v);
+  if (bicim === 'Ondalık') return Math.round(v * 100) / 100;
+  return v;
+}
+function gtGoster(v, bicim){
+  if (v == null || v === '') return '';
+  if (typeof v === 'string') return v;
+  if (bicim === 'Yüzde'){ const r = Math.round(v * 100); return (r < 0 ? '-' : '') + '%' + Math.abs(r).toLocaleString('tr-TR'); }
+  if (bicim === 'Ondalık') return v.toLocaleString('tr-TR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  return Math.round(v).toLocaleString('tr-TR');
+}
+// Bir tarafın (183 ya da 144) bakanlık verisinden hücreleri çıkarır.
+// sekme: { baslik:[...], satirlar:[[...]] } (satirlar: biçimsiz değerler, A sütunu ad)
+function gtTarafHesapla(taraf, sekme, ayarSatir, d){
+  const uyarilar = [], kaynakNot = {};
+  const tarihler = gtTarihSutunlari(sekme.baslik, d.gun);
+  const sat = gtSatirlar(sekme.satirlar);
+  const sutun = t => tarihler.map.get(t);
+  if (tarihler.cift.has(d.gun)) uyarilar.push(`${taraf}: ${d.gun} başlıkta iki kez geçiyor; günün verisi alınmadı.`);
+  else if (sutun(d.gun) == null) uyarilar.push(`${taraf}: ${d.gun} başlıkta bulunamadı; günün sütununu elle doldur.`);
+  [['bu', d.bu], ['once', d.once]].forEach(([, l]) => {
+    const yok = l.filter(t => sutun(t) == null);
+    if (yok.length) uyarilar.push(`${taraf}: ${yok.length === l.length ? `${l[0]} – ${l[l.length - 1]} aralığı` : yok.join(', ')} başlıkta ${tarihler.cift.size && yok.some(t => tarihler.cift.has(t)) ? 'iki kez geçiyor ya da ' : ''}bulunamadı; bu günler hesaba girmedi.`);
+  });
+  const deger = {}, ham = {};   // deger[satırAdı] = { gun, bu, once } ; ham: günün bakanlıktaki ham metni (OFF gibi)
+  const satirNo = s => {
+    const ad = s.kaynak[taraf]; if (!ad) return null;
+    const k = ykAnahtar(ad);
+    if (sat.cift.has(k)){ uyarilar.push(`${taraf}: "${ad}" satırı A sütununda iki kez geçiyor; alınmadı.`); return null; }
+    if (!sat.map.has(k)){ uyarilar.push(`${taraf}: "${ad}" satırı A sütununda bulunamadı.`); return null; }
+    return sat.map.get(k);
+  };
+  ayarSatir.filter(s => !s.formul || s.bolum === 'Kontrol').forEach(s => {
+    const r = satirNo(s); deger[s.ad] = { gun:null, bu:null, once:null };
+    if (r == null) return;
+    const row = sekme.satirlar[r] || [];
+    const al = t => { const c = sutun(t); return c == null ? null : row[c]; };
+    const g = al(d.gun);
+    deger[s.ad].gun = gtYuvarla(gtSayi(g), s.bicim);
+    if (deger[s.ad].gun == null && g != null && String(g).trim() && !/^#/.test(String(g).trim())) ham[s.ad] = String(g).trim();
+    if (s.hesap !== 'Gün' && s.bolum === 'Üst'){
+      deger[s.ad].bu = d.bu.length ? gtYuvarla(gtTopla(d.bu.map(al), s.hesap), s.bicim) : null;
+      deger[s.ad].once = d.once.length ? gtYuvarla(gtTopla(d.once.map(al), s.hesap), s.bicim) : null;
+    }
+    kaynakNot[s.ad] = `${sekme.ad} · "${s.kaynak[taraf]}" satırı`;
+  });
+  return { deger, ham, kaynakNot, uyarilar, sutunlar: { gun: sutun(d.gun) } };
+}
+// Hesaplanan (formül) hücreler ve fark/yüzde: ekran ve kontrol için. g: { gun, bu, once } değer kümesi (satır adı → sayı)
+function gtFormulDegerleri(ayarSatir, al){
+  const out = {};
+  const bul = ad => { if (out[ad] !== undefined) return out[ad]; return al(ad); };
+  ayarSatir.filter(s => s.formul && s.bolum !== 'Kontrol').forEach(s => { out[s.ad] = gtFormul(s.formul, bul); });
+  return out;
+}
+
+// ---------- Ekran ----------
+let gt = null;            // { tarih, d, ayar, taraf:{183,144}, uyarilar }
+let gtGirdi = {};         // elle girilen gün değerleri: { '183': { satırAdı: metin }, '144': {...} } (tarih başına tarayıcıda saklanır)
+const gtUst = () => gt.ayar.satirlar.filter(s => s.bolum === 'Üst');
+const gtAlt = () => gt.ayar.satirlar.filter(s => s.bolum === 'Alt');
+const gtAyarDeger = (ad, vars) => { const v = gt && gt.ayar.ayar[ykAnahtar(ad)]; return v ? v : vars; };
+// Yüzde sütununun paydası: Önceki (geçen ay) ya da Bu (bu ay). Şablonda 183 = Önceki, 144 = Bu.
+const gtPayda = taraf => ykAnahtar(gtAyarDeger(`${taraf} Yüzde Paydası`, taraf === '183' ? 'Önceki' : 'Bu')).startsWith('B') ? 'bu' : 'once';
+function gtGirdiSakla(){ try { localStorage.setItem('gtGirdi:' + gt.tarih, JSON.stringify(gtGirdi)); } catch(e){} }
+function gtGirdiYukle(t){ try { return JSON.parse(localStorage.getItem('gtGirdi:' + t) || '{}') || {}; } catch(e){ return {}; } }
+// Günün etkin değeri: elle girilen (varsa) > bakanlık dosyası. Formül satırları hesaplanır.
+function gtGunDegerleri(taraf){
+  const T = gt.taraf[taraf], el = gtGirdi[taraf] || {}, out = {};
+  gt.ayar.satirlar.filter(s => !s.formul).forEach(s => {
+    if (el[s.ad] != null && String(el[s.ad]).trim() !== '') out[s.ad] = gtYuvarla(gtSayi(el[s.ad]), s.bicim);
+    else out[s.ad] = T.deger[s.ad] ? T.deger[s.ad].gun : null;
+  });
+  Object.assign(out, gtFormulDegerleri(gt.ayar.satirlar, ad => out[ad]));
+  return out;
+}
+function gtDonemDegerleri(taraf, donem){
+  const T = gt.taraf[taraf], out = {};
+  gt.ayar.satirlar.filter(s => !s.formul).forEach(s => { out[s.ad] = T.deger[s.ad] ? T.deger[s.ad][donem] : null; });
+  Object.assign(out, gtFormulDegerleri(gt.ayar.satirlar, ad => out[ad]));
+  return out;
+}
+function gtKontroller(){
+  const u = [];
+  GT_TARAF.forEach(taraf => {
+    const g = gtGunDegerleri(taraf);
+    gt.ayar.satirlar.filter(s => s.bolum === 'Kontrol' && s.formul).forEach(s => {
+      const dosya = gt.taraf[taraf].deger[s.ad] ? gt.taraf[taraf].deger[s.ad].gun : null;
+      const hesap = gtFormul(s.formul, ad => g[ad]);
+      if (dosya != null && hesap != null && Math.round(dosya) !== Math.round(hesap))
+        u.push(`${taraf} kontrol: ${s.formul.replace(/[{}]/g, '')} = ${hesap}, bakanlık dosyasındaki "${s.kaynak[taraf]}" = ${dosya}. Tutmuyor; rakamları kontrol et.`);
+    });
+  });
+  return u;
+}
+function gtUyariCiz(){
+  const l = gt.uyarilar.concat(gtKontroller());
+  document.getElementById('gtUyari').textContent = l.map(x => '⚠ ' + x).join('\n');
+}
+const gtOk = v => v == null ? '' : `<span class="gt-ok ${v < 0 ? 'asagi' : 'yukari'}">${v < 0 ? '▼' : '▲'}</span>`;
+// statik: resim için kutusuz düz metin
+function gtTabloHtml(statik){
+  const ust = gtUst(), alt = gtAlt(), d = gt.d;
+  const v = { '183': { g: gtGunDegerleri('183'), bu: gtDonemDegerleri('183', 'bu'), once: gtDonemDegerleri('183', 'once') },
+              '144': { g: gtGunDegerleri('144'), bu: gtDonemDegerleri('144', 'bu'), once: gtDonemDegerleri('144', 'once') } };
+  const fark = (t, ad) => v[t].bu[ad] == null || v[t].once[ad] == null ? null : v[t].bu[ad] - v[t].once[ad];
+  const yuzde = (t, ad) => { const f = fark(t, ad), p = v[t][gtPayda(t)][ad]; return f == null || !p ? null : f / p; };
+  const gunHucre = (t, s) => {
+    const deger = v[t].g[s.ad];
+    if (s.formul) return `<td>${ykEsc(gtGoster(deger, s.bicim))}</td>`;
+    const el = (gtGirdi[t] || {})[s.ad], T = gt.taraf[t], dosya = T.deger[s.ad] ? T.deger[s.ad].gun : null, ham = T.ham[s.ad];
+    const elSayi = el != null ? gtYuvarla(gtSayi(el), s.bicim) : null;
+    const metin = el != null && String(el).trim() !== '' ? (elSayi != null ? gtGoster(elSayi, s.bicim) : String(el)) : (dosya != null ? gtGoster(dosya, s.bicim) : (ham || ''));
+    if (statik) return `<td>${ykEsc(metin)}</td>`;
+    const tur = el != null && String(el).trim() !== '' ? 'elle' : (dosya != null || ham ? 'dosya' : 'bos');
+    const ipucu = tur === 'dosya' ? `${T.kaynakNot[s.ad] || ''} · ${d.gun}` : tur === 'elle' ? 'Elle girildi' + (dosya != null ? ` (dosyada: ${gtGoster(dosya, s.bicim)})` : '') : 'Bakanlık dosyasında yok: canlı rakamı yaz';
+    return `<td class="gt-g ${tur}"><input data-gt="${t}" data-ad="${ykEsc(s.ad)}" value="${ykEsc(metin)}" title="${ykEsc(ipucu)}" autocomplete="off"></td>`;
+  };
+  const kayHucre = (t, donem, s) => { const T = gt.taraf[t]; const not = !s.formul && T.kaynakNot[s.ad] ? ` title="${ykEsc(T.kaynakNot[s.ad] + ' · ' + (donem === 'bu' ? d.buEtiket : d.onceEtiket))}"` : ''; return `<td${not}>${ykEsc(gtGoster(v[t][donem][s.ad], s.bicim))}</td>`; };
+  const fBic = s => s.bicim === 'Yüzde' ? 'Yüzde' : s.bicim;
+  let h = `<table class="gt-tablo"><tr><th colspan="5" class="gt-183">ALO 183</th><th rowspan="2" colspan="2" class="gt-acik">AÇIKLAMA</th><th colspan="5" class="gt-144">ALO 144</th></tr>`;
+  h += `<tr><th>Yüzde</th><th>Fark</th><th class="gt-once">${ykEsc(d.onceEtiket)}</th><th class="gt-bu">${ykEsc(d.buEtiket)}</th><th class="gt-bu">${ykEsc(d.gun)}</th>`;
+  h += `<th class="gt-bu">${ykEsc(d.gun)}</th><th class="gt-bu">${ykEsc(d.buEtiket)}</th><th class="gt-once">${ykEsc(d.onceEtiket)}</th><th>Fark</th><th>Yüzde</th></tr>`;
+  ust.forEach(s => {
+    const y183 = yuzde('183', s.ad), y144 = yuzde('144', s.ad);
+    h += `<tr><td class="gt-y">${gtOk(y183)}${ykEsc(gtGoster(y183, 'Yüzde'))}</td><td>${ykEsc(gtGoster(fark('183', s.ad), fBic(s)))}</td>` +
+      kayHucre('183', 'once', s) + kayHucre('183', 'bu', s) + gunHucre('183', s) +
+      `<td colspan="2" class="gt-ad">${ykEsc(s.ad)}</td>` +
+      gunHucre('144', s) + kayHucre('144', 'bu', s) + kayHucre('144', 'once', s) +
+      `<td>${ykEsc(gtGoster(fark('144', s.ad), fBic(s)))}</td><td class="gt-y">${gtOk(y144)}${ykEsc(gtGoster(y144, 'Yüzde'))}</td></tr>`;
+  });
+  if (alt.length){
+    const bos = n => n > 0 ? `<td colspan="${n}" class="gt-bosluk"></td>` : '';
+    const ara = 12 - 2 * alt.length;   // 183 altı soldan, 144 altı I sütunundan başlar (şablondaki gibi)
+    h += `<tr><td colspan="12" class="gt-bosluk" style="height:14px;"></td></tr>`;
+    h += '<tr>' + alt.map(s => `<th class="gt-alt183">${ykEsc(s.ad)}</th>`).join('') + bos(7 - alt.length) + alt.map(s => `<th class="gt-alt144">${ykEsc(s.ad)}</th>`).join('') + bos(ara - (7 - alt.length)) + '</tr>';
+    h += '<tr>' + alt.map(s => gunHucre('183', s).replace('<td', '<td style="font-weight:bold;"')).join('') + bos(7 - alt.length) + alt.map(s => gunHucre('144', s).replace('<td', '<td style="font-weight:bold;"')).join('') + bos(ara - (7 - alt.length)) + '</tr>';
+  }
+  return h + '</table>';
+}
+function gtCiz(){
+  const w = document.getElementById('gtTabloWrap');
+  const odak = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.gt ? [document.activeElement.dataset.gt, document.activeElement.dataset.ad] : null;
+  w.innerHTML = gtTabloHtml(false);
+  if (odak){ const el = w.querySelector(`input[data-gt="${odak[0]}"][data-ad="${CSS.escape(odak[1])}"]`); if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
+  gtUyariCiz();
+  ['gtExcelBtn', 'gtResimKopyaBtn', 'gtResimIndirBtn'].forEach(id => document.getElementById(id).disabled = false);
+}
+document.getElementById('gtTabloWrap').addEventListener('change', e => {
+  const el = e.target.closest('input[data-gt]'); if (!el || !gt) return;
+  const t = el.dataset.gt, ad = el.dataset.ad;
+  gtGirdi[t] = gtGirdi[t] || {};
+  const T = gt.taraf[t], dosya = T.deger[ad] ? T.deger[ad].gun : null;
+  const metin = el.value.trim();
+  if (!metin || (dosya != null && gtSayi(metin) === dosya) || metin === T.ham[ad]) delete gtGirdi[t][ad];   // boş ya da dosyadakiyle aynıysa elle sayılmaz
+  else gtGirdi[t][ad] = metin;
+  if (metin && gtSayi(metin) == null && !/^off$/i.test(metin)) ykDurum('gtDurum', `"${metin}" sayı olarak okunamadı (${t} · ${ad}).`, 'warn');
+  else ykDurum('gtDurum', '');
+  gtGirdiSakla(); gtCiz();
+});
+document.getElementById('gtTabloWrap').addEventListener('keydown', e => {
+  const el = e.target.closest('input[data-gt]'); if (!el || e.key !== 'Enter') return;
+  e.preventDefault();
+  const l = [...document.querySelectorAll('#gtTabloWrap input[data-gt]')], i = l.indexOf(el);
+  el.blur(); const s = document.querySelectorAll('#gtTabloWrap input[data-gt]')[i + 1]; if (s) s.focus();
+});
+
+// ---------- Ayarlar ve bakanlık dosyası ----------
+async function gtAyarOku(){
+  let rows;
+  try { [rows] = await ykOku([`'${GT_TAB}'!A1:Z200`]); }
+  catch(err){ if (!/Unable to parse range|400/.test(err.message)) throw err; rows = null; }
+  if (!rows){
+    const satirlar = [GT_VARSAYILAN.baslik].concat(GT_VARSAYILAN.satirlar.map((r, i) => r.concat(['', ...(GT_VARSAYILAN.ayarlar[i] || ['', ''])])));
+    try {
+      await gvSekmeHazir(GT_TAB);
+      await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${YOKLAMA_SHEET_ID}/values/${encodeURIComponent(`'${GT_TAB}'!A1`)}?valueInputOption=RAW`, {
+        method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ values: satirlar }) });
+    } catch(err){ /* yazılamazsa bu açılışta varsayılanlarla devam */ }
+    rows = satirlar;
+  }
+  return gtAyarKur(rows);
+}
+async function gtSekmeOku(dosya, ad){
+  const u = (aralik, bicim) => `https://sheets.googleapis.com/v4/spreadsheets/${dosya}/values/${encodeURIComponent(`'${ad}'!${aralik}`)}?valueRenderOption=${bicim}`;
+  const [b, g] = await Promise.all([authFetch(u('A1:ZZ1', 'FORMATTED_VALUE')), authFetch(u('A1:ZZ100', 'UNFORMATTED_VALUE'))]);
+  return { ad, baslik: (b.values || [[]])[0] || [], satirlar: g.values || [] };
+}
+async function gtGetir(){
+  const t = ykIsoToTarih(document.getElementById('gtTarih').value);
+  if (!t){ ykDurum('gtDurum', 'Tarih seç.', 'err'); return; }
+  ykDurum('gtDurum', 'Ayarlar ve bakanlık dosyası okunuyor…');
+  document.getElementById('gtUyari').textContent = '';
+  try {
+    const ayar = await gtAyarOku();
+    if (ayar.hatalar.length && !ayar.satirlar.length){ ykDurum('gtDurum', '✗ ' + ayar.hatalar.join('\n'), 'err'); return; }
+    const dosya = ayar.ayar[ykAnahtar('Bakanlık Dosyası')] || GT_VARSAYILAN.ayarlar[0][1];
+    const d = gtDonemler(t), taraf = {}, uyarilar = ayar.hatalar.slice();
+    for (const tr of GT_TARAF){
+      const sekmeAd = ayar.ayar[ykAnahtar(`${tr} Sekmesi`)] || `Alo ${tr}`;
+      try { const sk = await gtSekmeOku(dosya, sekmeAd); taraf[tr] = gtTarafHesapla(tr, sk, ayar.satirlar, d); }
+      catch(err){ taraf[tr] = { deger:{}, ham:{}, kaynakNot:{}, uyarilar: [`${tr}: "${sekmeAd}" sekmesi okunamadı (${err.message.slice(0, 120)}).`] }; }
+      uyarilar.push(...taraf[tr].uyarilar);
+    }
+    if (!d.bu.length) uyarilar.unshift('Ayın 1. günü: dönem sütunları boş.');
+    gt = { tarih: t, d, ayar, taraf, uyarilar };
+    gtGirdi = gtGirdiYukle(t);
+    const bos = GT_TARAF.map(tr => [tr, gt.ayar.satirlar.filter(s => !s.formul && s.bolum !== 'Kontrol' && gtGunDegerleri(tr)[s.ad] == null && !gt.taraf[tr].ham[s.ad]).length]).filter(x => x[1]);
+    ykDurum('gtDurum', `✓ ${t} hazır.` + (bos.length ? ` Elle girilecek: ${bos.map(([tr, n]) => `${tr} → ${n} kutu`).join(', ')} (sarı kutular).` : ' Günün bütün rakamları dosyadan geldi.'), 'ok');
+    gtCiz();
+  } catch(err){ ykDurum('gtDurum', '✗ ' + err.message, 'err'); }
+}
+document.getElementById('gtGetirBtn').addEventListener('click', gtGetir);
+document.getElementById('gtTarih').addEventListener('change', () => { if (gt) gtGetir(); });
+document.getElementById('gtTemizleBtn').addEventListener('click', () => {
+  if (!gt) return; gtGirdi = {}; gtGirdiSakla(); gtCiz(); ykDurum('gtDurum', 'Elle girilen rakamlar silindi; dosyadaki değerler kaldı.', 'ok');
+});
+function gtSayfasi(){
+  const el = document.getElementById('gtTarih');
+  if (!el.value) el.value = ykTarihToIso(ykTarih(new Date()));
+  if (!gt) gtGetir();
+}
+
+// ---------- Excel (şablon düzeni: B–F ALO 183, G:H açıklama, I–M ALO 144) ----------
+async function gtExcel(){
+  const ust = gtUst(), alt = gtAlt(), d = gt.d, n = ust.length, R0 = 5;
+  const wb = new ExcelJS.Workbook(); wb.creator = wb.lastModifiedBy = ykKaydeden() || 'Veri Hazırlama';
+  const ws = wb.addWorksheet('Günlük', { views: [{ showGridLines:false }] });
+  [4.2, 10.8, 11, 13, 13, 11.5, 12, 12, 11.5, 13, 13, 10, 12.5].forEach((w, i) => ws.getColumn(i + 1).width = w);
+  const ince = { style:'thin', color:{ argb:'FF000000' } }, kenar = { top:ince, left:ince, bottom:ince, right:ince };
+  const dolgu = h => ({ type:'pattern', pattern:'solid', fgColor:{ argb:'FF' + h } });
+  const hucre = (ref, deger, o) => {
+    o = o || {}; const c = ws.getCell(ref);
+    if (deger !== undefined) c.value = deger;
+    c.font = { name: o.font || 'Calibri', size: o.size || 11, bold: !!o.kalin, color: o.renk ? { argb:'FF' + o.renk } : undefined };
+    c.alignment = { horizontal:'center', vertical:'middle', wrapText: !!o.sar };
+    if (o.dolgu) c.fill = dolgu(o.dolgu);
+    if (o.bicim) c.numFmt = o.bicim;
+    c.border = kenar; return c;
+  };
+  // Birleştirilen alanın bütün hücrelerine kenarlık (Excel kenarlığı her hücreden okur)
+  const birles = (a, b, deger, o) => {
+    const [c1, r1] = [a.replace(/\d/g, ''), +a.replace(/\D/g, '')], [c2, r2] = [b.replace(/\d/g, ''), +b.replace(/\D/g, '')];
+    for (let r = r1; r <= r2; r++) for (let c = c1.charCodeAt(0); c <= c2.charCodeAt(0); c++) hucre(String.fromCharCode(c) + r, undefined, o);
+    ws.mergeCells(`${a}:${b}`); hucre(a, deger, o);
+  };
+  const NF = { 'Sayı':'#,##0', 'Yüzde':'0%', 'Ondalık':'#,##0.00' };
+  // Başlıklar
+  birles('B2', 'F2', 'ALO 183', { kalin:true, dolgu:'FFFF00' });
+  birles('G2', 'H4', 'AÇIKLAMA', { kalin:true, dolgu:'E2EFDA' });
+  birles('I2', 'M2', 'ALO 144', { kalin:true, dolgu:'0070C0' });
+  const bas = [['B', 'Yüzde'], ['C', 'Fark'], ['D', d.onceEtiket, 'FFE699', false], ['E', d.buEtiket, 'BDD7EE'], ['F', d.gun, 'BDD7EE'],
+               ['I', d.gun, 'BDD7EE'], ['J', d.buEtiket, 'BDD7EE'], ['K', d.onceEtiket, 'FFE699', false], ['L', 'Fark'], ['M', 'Yüzde']];
+  bas.forEach(([c, m, f, k]) => birles(`${c}3`, `${c}4`, m, { kalin: k !== false, dolgu: f }));
+  // Satır no: Üst satırlar R0'dan; formüllerde {Ad} → aynı sütunun o satırı
+  const satirNo = new Map(ust.map((s, i) => [s.ad, R0 + i]));
+  const exFormul = (formul, col, tablo) => formul.replace(/\{([^}]+)\}/g, (_, ad) => { const r = tablo.get(ad.trim()); return r ? `${col}${r}` : '0'; });
+  const veri = { '183': { g: gtGunDegerleri('183'), bu: gtDonemDegerleri('183', 'bu'), once: gtDonemDegerleri('183', 'once') },
+                 '144': { g: gtGunDegerleri('144'), bu: gtDonemDegerleri('144', 'bu'), once: gtDonemDegerleri('144', 'once') } };
+  const ham = (t, s) => { const el = (gtGirdi[t] || {})[s.ad]; return el != null && String(el).trim() !== '' && gtSayi(el) == null ? String(el) : (gt.taraf[t].ham[s.ad] || null); };
+  const sutunlar = { '183': { once:'D', bu:'E', g:'F' }, '144': { g:'I', bu:'J', once:'K' } };
+  const dPaydasi = { '183': gtPayda('183') === 'bu' ? 'E' : 'D', '144': gtPayda('144') === 'bu' ? 'J' : 'K' };
+  ust.forEach((s, i) => {
+    const r = R0 + i, nf = NF[s.bicim];
+    for (const t of GT_TARAF) for (const [donem, col] of Object.entries(sutunlar[t])){
+      const o = { bicim: nf };
+      if (s.formul){ hucre(`${col}${r}`, { formula: `IFERROR(${exFormul(s.formul, col, satirNo)},"")` }, o); continue; }
+      const v = donem === 'g' ? (veri[t].g[s.ad] != null ? veri[t].g[s.ad] : ham(t, s)) : veri[t][donem][s.ad];
+      hucre(`${col}${r}`, v == null ? null : v, o);
+    }
+    hucre(`C${r}`, { formula: `IF(OR(E${r}="",D${r}=""),"",E${r}-D${r})` }, { bicim: nf });
+    hucre(`B${r}`, { formula: `IFERROR(C${r}/${dPaydasi['183']}${r},"")` }, { bicim:'0%' });
+    hucre(`L${r}`, { formula: `IF(OR(J${r}="",K${r}=""),"",J${r}-K${r})` }, { bicim: nf });
+    hucre(`M${r}`, { formula: `IFERROR(L${r}/${dPaydasi['144']}${r},"")` }, { bicim:'0%' });
+    birles(`G${r}`, `H${r}`, s.ad, { font:'Arial', size:10, renk:'114533' });
+  });
+  const ok = { type:'iconSet', iconSet:'3Arrows', cfvo:[{ type:'percent', value:0 }, { type:'num', value:0 }, { type:'num', value:0 }] };
+  ws.addConditionalFormatting({ ref: `B${R0}:B${R0 + n - 1}`, rules: [Object.assign({ priority:1 }, ok)] });
+  ws.addConditionalFormatting({ ref: `M${R0}:M${R0 + n - 1}`, rules: [Object.assign({ priority:2 }, ok)] });
+  // Alt: Planlanan / Gerçekleşen / Fark — 183 B'den, 144 I'dan
+  if (alt.length){
+    const rb = R0 + n + 1, rv = rb + 1;
+    for (const [t, ilk, renk] of [['183', 'B', '00B050'], ['144', 'I', '00B0F0']]){
+      const cols = alt.map((s, k) => String.fromCharCode(ilk.charCodeAt(0) + k));
+      const exAlt = f => f.replace(/\{([^}]+)\}/g, (_, ad) => { const k = alt.findIndex(x => x.ad === ad.trim()); return k >= 0 ? `${cols[k]}${rv}` : '0'; });
+      alt.forEach((s, k) => {
+        hucre(`${cols[k]}${rb}`, s.ad, { kalin:true, dolgu: renk, renk:'FFFFFF' });
+        if (s.formul) hucre(`${cols[k]}${rv}`, { formula: `IFERROR(${exAlt(s.formul)},"")` }, { kalin:true, bicim: NF[s.bicim] });
+        else { const v = veri[t].g[s.ad]; hucre(`${cols[k]}${rv}`, v != null ? v : ham(t, s), { kalin:true, bicim: NF[s.bicim] }); }
+      });
+    }
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = `Günlük Tablo ${gt.tarih}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+document.getElementById('gtExcelBtn').addEventListener('click', async () => {
+  if (!gt) return;
+  try { await gtExcel(); ykDurum('gtDurum', '✓ Excel indirildi.', 'ok'); } catch(err){ ykDurum('gtDurum', '✗ Excel oluşturulamadı: ' + err.message, 'err'); }
+});
+
+// ---------- Resim (WhatsApp için) ----------
+let gtH2cYuk = null;
+function gtH2c(){
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (!gtH2cYuk) gtH2cYuk = new Promise((ok, hata) => {
+    const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.onload = () => ok(window.html2canvas); s.onerror = () => { gtH2cYuk = null; hata(new Error('Resim aracı yüklenemedi (internet bağlantısı?).')); };
+    document.head.appendChild(s);
+  });
+  return gtH2cYuk;
+}
+async function gtResim(){
+  const h2c = await gtH2c();
+  const kap = document.createElement('div');
+  kap.style.cssText = 'position:fixed; left:-10000px; top:0; background:#fff; padding:12px; display:inline-block;';
+  kap.innerHTML = gtTabloHtml(true);
+  document.body.appendChild(kap);
+  try {
+    const canvas = await h2c(kap, { backgroundColor:'#ffffff', scale:2, logging:false });
+    return await new Promise(ok => canvas.toBlob(ok, 'image/png'));
+  } finally { kap.remove(); }
+}
+document.getElementById('gtResimKopyaBtn').addEventListener('click', async () => {
+  if (!gt) return;
+  ykDurum('gtDurum', 'Resim hazırlanıyor…');
+  try {
+    const blob = await gtResim();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    ykDurum('gtDurum', '✓ Resim panoya kopyalandı; WhatsApp\'ta sohbete Ctrl+V ile yapıştırabilirsin.', 'ok');
+  } catch(err){ ykDurum('gtDurum', '✗ Kopyalanamadı: ' + err.message + ' "Resmi İndir" ile kaydedebilirsin.', 'err'); }
+});
+document.getElementById('gtResimIndirBtn').addEventListener('click', async () => {
+  if (!gt) return;
+  ykDurum('gtDurum', 'Resim hazırlanıyor…');
+  try {
+    const blob = await gtResim(), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `Günlük Tablo ${gt.tarih}.png`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    ykDurum('gtDurum', '✓ Resim indirildi.', 'ok');
+  } catch(err){ ykDurum('gtDurum', '✗ Resim oluşturulamadı: ' + err.message, 'err'); }
+});
 </script>
 </body>
 </html>

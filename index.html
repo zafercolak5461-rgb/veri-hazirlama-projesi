@@ -853,6 +853,18 @@ function kisiListesiKur(ref, src, proje, takimSecim){
   });
   if (eksik.length) uyarilar.push(`${eksik.length} kişi Çıktı Şablonu'nda (referans listede) yok, bilgi sütunları (TCKN, UNVAN…) boş: ${eksik.join(', ')}.`);
   if (T && srcTakim >= 0 && !src.rows.some(rw => ad(rw[srcTakim]) === T)) uyarilar.push(`"${takimSecim}" bu ayın kaynağında hiçbir kişinin takımında yazmıyor.`);
+  // Sıralama (Projeler J): değer sırasına göre grup, grup içinde ad A→Z
+  const sk = kisiKuraliAyir(proje.siralama);
+  if (sk){
+    const sc = basliktaBul(ref.header, sk.sutun);
+    if (sc < 0) uyarilar.push(`Sıralama sütunu "${sk.sutun}" Çıktı Şablonu'nda yok; sıralama yapılmadı.`);
+    else {
+      const sira = new Map([...sk.degerler].map((d, i) => [d, i]));
+      const grup = rw => { const g = sira.get(trUpperDict(rw[sc])); return g === undefined ? sira.size : g; };
+      const adi = rw => String(refAd >= 0 ? (rw[refAd] == null ? '' : rw[refAd]) : '').trim();
+      out.sort((a, b) => grup(a) - grup(b) || adi(a).localeCompare(adi(b), 'tr', { sensitivity: 'base' }));
+    }
+  }
   const siraCol = proje.siraSutunu ? basliktaBul(ref.header, proje.siraSutunu) : -1;
   if (siraCol >= 0) out.forEach((rw, i) => { rw[siraCol] = i + 1; });
   return { rows: [ref.header, ...out], uyarilar, takimlar: [...takimlar].sort((a, b) => a.localeCompare(b, 'tr')) };
@@ -2624,9 +2636,12 @@ function parseProjeRow(r){
   //  G Takım Sütunu: kaynakta takım liderinin adının yazdığı sütun (doluysa "Takım Lideri" seçimi çıkar)
   //  H Ad Sütunları: kişi adının yazdığı sütun başlıkları, virgülle (kaynak ve Çıktı Şablonu için, ör. "Personel, ADI SOYADI")
   //  I Sıra Sütunu: yeniden 1'den numaralanacak sütun (ör. "Sıra No")
+  //  J Sıralama: "Sütun: Değer1, Değer2…" — satırlar bu değer sırasına göre gruplanır, grup içinde ad A→Z
+  //    (listede olmayan değerler sonra, kendi aralarında A→Z; boşsa Çıktı Şablonu sırası korunur)
   const al = i => normalizeKey(r[i]);
   return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]), anahtarAdi: normalizeKey(r[3]) || 'Sicil',
-           kisiKaynagi: al(4), herAyEkle: String(r[5] == null ? '' : r[5]).trim(), takimSutunu: al(6), adSutunlari: String(r[7] == null ? '' : r[7]).trim(), siraSutunu: al(8) };
+           kisiKaynagi: al(4), herAyEkle: String(r[5] == null ? '' : r[5]).trim(), takimSutunu: al(6), adSutunlari: String(r[7] == null ? '' : r[7]).trim(), siraSutunu: al(8),
+           siralama: String(r[9] == null ? '' : r[9]).trim() };
 }
 function parseKaynakRow(r){
   return {
@@ -2653,7 +2668,7 @@ async function loadConfigAndSidebar(){
   nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Projeler yükleniyor…</div>';
   try {
     const [projRows, kaynakRows, hesRows] = await Promise.all([
-      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:I200`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:J200`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:H500`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:F1000`),
     ]);

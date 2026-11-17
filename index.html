@@ -249,6 +249,8 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         <div class="row">
           <button class="btn primary" id="computeBtn">▶ Hesapla (Önizle)</button>
           <button class="btn" id="refreshConfigBtn">↻ Proje Ayarlarını Yenile</button>
+          <label id="takimFiltreWrap" style="display:none;">Takım Lideri:
+            <select id="takimFiltre" style="margin-left:6px;"><option value="">Tümü</option></select></label>
         </div>
         <div id="computeStatus" class="status"></div>
       </div>
@@ -798,6 +800,62 @@ function indexKaynak(rows, anahtarAdi){
     if (!byKey.has(key)) byKey.set(key, row);
   }
   return { header, keyCol, byKey, rows: rows.slice(1) };
+}
+
+// ---------- Kişi listesini kaynaktan kurma (Projeler E-I) ----------
+// ref: Çıktı Şablonu (indexKaynak) — bilgi deposu (TCKN, UNVAN…); src: seçilen sekmedeki kişi kaynağı (ör. o ayın VARDİYA'sı).
+// Kişiler src'den gelir (o ay kim varsa o); ref'te olanlar ref sırasıyla, ref'te olmayanlar sona eklenir.
+// takimSecim: takım liderinin adı ("" = Tümü) — src'de Takım sütunu o ad olanlar + adı o olan kişinin kendisi.
+function kisiKuraliAyir(s){
+  const m = String(s || '').match(/^([^:]+):(.*)$/);
+  return m ? { sutun: m[1].trim(), degerler: new Set(m[2].split(',').map(x => trUpperDict(x)).filter(Boolean)) } : null;
+}
+function basliktaBul(header, adlar){
+  const l = String(adlar || '').split(',').map(x => trUpper(x)).filter(Boolean);
+  return (header || []).findIndex(h => l.includes(trUpper(h)));
+}
+function kisiListesiKur(ref, src, proje, takimSecim){
+  const uyarilar = [];
+  const ekle = kisiKuraliAyir(proje.herAyEkle);
+  const ekleCol = ekle ? basliktaBul(ref.header, ekle.sutun) : -1;
+  if (ekle && ekleCol < 0) uyarilar.push(`"${ekle.sutun}" sütunu Çıktı Şablonu'nda yok; "Her Ay Eklenecekler" uygulanmadı.`);
+  const srcTakim = proje.takimSutunu ? basliktaBul(src.header, proje.takimSutunu) : -1;
+  if (proje.takimSutunu && srcTakim < 0) uyarilar.push(`"${proje.takimSutunu}" sütunu kişi kaynağında yok; takım seçimi yapılamaz.`);
+  const srcAd = basliktaBul(src.header, proje.adSutunlari), refAd = basliktaBul(ref.header, proje.adSutunlari);
+  const ad = v => trUpperDict(v == null ? '' : v);
+  const T = takimSecim ? ad(takimSecim) : '';
+  const srcKisiler = new Map();
+  src.rows.forEach(rw => { const k = normalizeMatchKey(rw[src.keyCol]); if (k && !srcKisiler.has(k)) srcKisiler.set(k, rw); });
+  const takimlar = new Set();
+  if (srcTakim >= 0) src.rows.forEach(rw => { const t = String(rw[srcTakim] == null ? '' : rw[srcTakim]).trim(); if (t) takimlar.add(t); });
+  const filtre = (sr, rr) => !T
+    || (sr && srcTakim >= 0 && ad(sr[srcTakim]) === T)
+    || (sr && srcAd >= 0 && ad(sr[srcAd]) === T)
+    || (rr && refAd >= 0 && ad(rr[refAd]) === T);
+  const out = [], gorulen = new Set();
+  ref.rows.forEach(rw => {
+    const k = normalizeMatchKey(rw[ref.keyCol]); if (!k || gorulen.has(k)) return;
+    const sr = srcKisiler.get(k);
+    const sabit = ekleCol >= 0 && ekle.degerler.has(trUpperDict(rw[ekleCol]));
+    if ((!sr && !sabit) || !filtre(sr, rw)) return;
+    const satir = rw.slice(); while (satir.length < ref.header.length) satir.push('');
+    out.push(satir); gorulen.add(k);
+  });
+  const eksik = [];
+  srcKisiler.forEach((sr, k) => {
+    if (gorulen.has(k) || !filtre(sr, null)) return;
+    const satir = new Array(ref.header.length).fill('');
+    ref.header.forEach((h, c) => { const sc = (src.header || []).findIndex(x => trUpper(x) === trUpper(h)); if (sc >= 0) satir[c] = sr[sc]; });
+    satir[ref.keyCol] = sr[src.keyCol];
+    if (refAd >= 0 && srcAd >= 0 && !String(satir[refAd] || '').trim()) satir[refAd] = sr[srcAd];
+    out.push(satir); gorulen.add(k);
+    eksik.push(displayKey(sr[src.keyCol]) + (srcAd >= 0 ? ' ' + sr[srcAd] : ''));
+  });
+  if (eksik.length) uyarilar.push(`${eksik.length} kişi Çıktı Şablonu'nda (referans listede) yok, bilgi sütunları (TCKN, UNVAN…) boş: ${eksik.join(', ')}.`);
+  if (T && srcTakim >= 0 && !src.rows.some(rw => ad(rw[srcTakim]) === T)) uyarilar.push(`"${takimSecim}" bu ayın kaynağında hiçbir kişinin takımında yazmıyor.`);
+  const siraCol = proje.siraSutunu ? basliktaBul(ref.header, proje.siraSutunu) : -1;
+  if (siraCol >= 0) out.forEach((rw, i) => { rw[siraCol] = i + 1; });
+  return { rows: [ref.header, ...out], uyarilar, takimlar: [...takimlar].sort((a, b) => a.localeCompare(b, 'tr')) };
 }
 
 // Bir Ay/Yıl aralığı için (dahil), tüm günleri satır olarak üretir. Sheets'e HİÇBİR ŞEY
@@ -2559,7 +2617,16 @@ function parseProjeRow(r){
   const sira = parseFloat(r[1]);
   // D sütunu: bu projenin satır eşleme ANAHTARI (Sicil, Tarih, Plaka, İsim... herhangi bir
   // sütun başlığı olabilir). Boş bırakılırsa geriye dönük uyum için "Sicil" varsayılır.
-  return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]), anahtarAdi: normalizeKey(r[3]) || 'Sicil' };
+  // E-I (opsiyonel, Puantaj gibi kişi listeli projeler için):
+  //  E Kişi Listesi Kaynağı: kişiler Çıktı Şablonu'ndan değil, seçilen sekmedeki bu kaynaktan gelir (ör. VARDIYA) —
+  //    bilgi sütunları (TCKN, UNVAN…) yine Çıktı Şablonu'ndan anahtarla (Sicil) alınır
+  //  F Her Ay Eklenecekler: "Sütun: Değer1, Değer2" — kaynakta olmasa da Çıktı Şablonu'ndan her zaman eklenecekler (ör. "UNVAN: Grup Yöneticisi")
+  //  G Takım Sütunu: kaynakta takım liderinin adının yazdığı sütun (doluysa "Takım Lideri" seçimi çıkar)
+  //  H Ad Sütunları: kişi adının yazdığı sütun başlıkları, virgülle (kaynak ve Çıktı Şablonu için, ör. "Personel, ADI SOYADI")
+  //  I Sıra Sütunu: yeniden 1'den numaralanacak sütun (ör. "Sıra No")
+  const al = i => normalizeKey(r[i]);
+  return { ad: normalizeKey(r[0]), sira: isNaN(sira) ? null : sira, varsayilanSablon: normalizeKey(r[2]), anahtarAdi: normalizeKey(r[3]) || 'Sicil',
+           kisiKaynagi: al(4), herAyEkle: String(r[5] == null ? '' : r[5]).trim(), takimSutunu: al(6), adSutunlari: String(r[7] == null ? '' : r[7]).trim(), siraSutunu: al(8) };
 }
 function parseKaynakRow(r){
   return {
@@ -2586,7 +2653,7 @@ async function loadConfigAndSidebar(){
   nav.innerHTML = '<div class="empty" style="padding:20px 12px;">Projeler yükleniyor…</div>';
   try {
     const [projRows, kaynakRows, hesRows] = await Promise.all([
-      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:D200`),
+      getSheetValues(CONFIG_SHEET_ID, `'${TAB_PROJELER}'!A2:I200`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_KAYNAKLAR}'!A2:H500`),
       getSheetValues(CONFIG_SHEET_ID, `'${TAB_HESAPLAMALAR}'!A2:F1000`),
     ]);
@@ -2648,6 +2715,9 @@ function selectProject(projeAdi){
   lastComputeResult = null;
   lastKaynaklarData = null;
   selectedDateRange = null;
+  lastKisiKaynakli = false;
+  { const f = document.getElementById('takimFiltre'); f.innerHTML = '<option value="">Tümü</option>'; }
+  { const pr = projeler.find(p => p.ad === projeAdi) || {}; document.getElementById('takimFiltreWrap').style.display = pr.kisiKaynagi && pr.takimSutunu ? '' : 'none'; }
   renderSidebar();
   document.getElementById('page-auth').style.display = 'none';
   document.getElementById('page-project').style.display = 'block';
@@ -2756,9 +2826,11 @@ function renderKaynakSecim(){
 // ============================================================================
 
 let lastComputeResult = null;
+let lastKisiKaynakli = false;   // kişi listesi kaynaktan kuruldu: satırlar Çıktı Şablonu'yla aynı sırada değil, Sheets'e yazılamaz
 let lastKaynaklarData = null;   // { kaynakAdi: { header, keyCol, byKey, rows } }
 let lastKaynaklarConfig = null; // bu projenin Kaynaklar satırları (compute anındaki)
 
+document.getElementById('takimFiltre').addEventListener('change', () => document.getElementById('computeBtn').click());
 document.getElementById('computeBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('computeStatus');
   if (!currentProject){ statusEl.textContent = '✗ Önce sol menüden bir proje seç.'; statusEl.className = 'status err'; return; }
@@ -2810,7 +2882,27 @@ document.getElementById('computeBtn').addEventListener('click', async () => {
         : [];
     }
 
+    // Kişi listesi kaynaktan (Projeler E): o ayın sekmesindeki kişiler + takım lideri seçimi
+    const proje = projeler.find(p => p.ad === currentProject) || {};
+    let kisiUyarilar = [];
+    lastKisiKaynakli = false;
+    if (proje.kisiKaynagi && !isDatePeriyot(ciktiCfg.periyotDeseni)){
+      const src = kaynaklarData[proje.kisiKaynagi];
+      if (!src) throw new Error(`Projeler > Kişi Listesi Kaynağı "${proje.kisiKaynagi}" bu projenin Kaynaklar'ında yok.`);
+      if (src.keyCol === -1) throw new Error(`"${proje.kisiKaynagi}" kaynağında "${anahtarAdi}" başlığı bulunamadı.`);
+      const fSel = document.getElementById('takimFiltre');
+      const kl = kisiListesiKur(ciktiKaynakData, src, proje, fSel.value);
+      ciktiRows = kl.rows; kisiUyarilar = kl.uyarilar; lastKisiKaynakli = true;
+      if (proje.takimSutunu){
+        const secili = fSel.value;
+        fSel.innerHTML = '<option value="">Tümü</option>' + kl.takimlar.map(t => `<option${t === secili ? ' selected' : ''}>${ykEsc(t)}</option>`).join('');
+        if (secili && !kl.takimlar.includes(secili)){ fSel.value = ''; kisiUyarilar.push(`"${secili}" bu ayın takım listesinde yok; Tümü gösterildi — yeniden hesapla.`); }
+      }
+    }
+    document.getElementById('takimFiltreWrap').style.display = proje.kisiKaynagi && proje.takimSutunu ? '' : 'none';
+
     const result = computeGeneric(kaynaklarData, kaynaklar, hesaplamalar, ciktiRows, anahtarAdi);
+    result.warnings.unshift(...kisiUyarilar);
     lastComputeResult = result;
     lastKaynaklarData = kaynaklarData;
     lastKaynaklarConfig = kaynaklar;
@@ -2881,6 +2973,7 @@ function renderPreview(result){
 document.getElementById('writeBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('writeStatus');
   if (!lastComputeResult || !lastKaynaklarConfig){ return; }
+  if (lastKisiKaynakli){ statusEl.textContent = '✗ Kişi listesi kaynaktan (ör. VARDİYA) kurulduğu için satırlar Çıktı Şablonu sırasında değil; Sheets\'e yazmak referans listeyi bozar. "Excel\'e Aktar"ı kullan.'; statusEl.className = 'status err'; return; }
   const ciktiCfg = lastKaynaklarConfig.find(k => k.rolu === 'Çıktı Şablonu');
   const tab = (!ciktiCfg.sekmeAdi || ciktiCfg.sekmeAdi.startsWith('(')) ? resolvedTabs[ciktiCfg.kaynakAdi] : ciktiCfg.sekmeAdi;
   if (!confirm(`${lastComputeResult.results.length} satırlık veri "${tab}" sekmesine YAZILACAK. Emin misin?`)) return;

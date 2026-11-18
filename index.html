@@ -4336,11 +4336,12 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
   });
   // Sütun genişlikleri DÜZENLEME sayfasındaki gibi
   [27.6, 11.5, 21.5, 11.8, 14.5, 21.1, 15, 9, 30.8, 24.5, 40.4, 38].forEach((w, i) => ws.getColumn(i + 1).width = w);
-  // Grafik: ExcelJS gerçek grafik çizemediği için resim olarak, sebep sütunlarının sağına (N1)
+  // Grafik: ExcelJS gerçek grafik çizemediği için resim olarak, sebep tablosunun (I–L) altına, bir satır boşlukla.
+  // Yalnız Excel; mail kopyası ayrı çizilir.
   try {
     const g = ykGrafikCanvas(s);
     const resim = wb.addImage({ base64: g.canvas.toDataURL('image/png'), extension: 'png' });
-    ws.addImage(resim, { tl: { col: 13, row: 0 }, ext: { width: g.en, height: g.boy } });
+    ws.addImage(resim, { tl: { col: 8, row: 2 + uz + 1 }, ext: { width: g.en, height: g.boy } });   // 0 tabanlı: toplam satırı (2+uz) + 1 boş satır
   } catch(err){ console.warn('Grafik Excel\'e eklenemedi:', err); }
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a');

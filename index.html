@@ -661,6 +661,24 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           <div class="prev-wrap" style="max-height:none;" id="kpTabloWrap"></div>
         </div>
       </div>
+
+      <!-- ===== KÖPÜK PERSONEL LİSTESİ (18.11.2026) — KÖPÜK TALEP DAĞILIMI > PERSONEL sekmesi ===== -->
+      <div id="yk-kopukper" class="yk-alt" style="display:none;">
+        <div class="page-title">Köpük Personel Listesi</div>
+        <div class="page-sub">Köpük çağrıların hangi ile sayılacağı bu listeden bulunur (<b>KÖPÜK TALEP DAĞILIMI</b> &gt; <b>PERSONEL</b>). İşten ayrılanlar silinmez; eski dosyalar da doğru sayılsın diye listede kalır. Soyadı değişen personelin adını burada düzelt: bakanlık sistemi eski kayıtları da yeni adla verir, yeni satır açmaya gerek yok. Ad ve Lokasyon zorunlu, Sicil isteğe bağlı.</div>
+        <div class="card">
+          <div class="row">
+            <input type="text" id="kpPerAra" placeholder="Ara (ad, sicil)…" style="min-width:240px;">
+            <select id="kpPerLok"><option value="">Tüm lokasyonlar</option></select>
+            <button class="btn" id="kpPerEkleBtn">+ Kişi Ekle</button>
+            <button class="btn ok" id="kpPerKaydet" disabled>💾 Kaydet</button>
+            <button class="btn" id="kpPerYenile" title="Kaydedilmemiş değişiklikleri bırakır, tablodan yeniden okur">↻ Yenile</button>
+            <span id="kpPerDurum" class="status" style="margin:0;"></span>
+          </div>
+          <div class="hint" style="margin:10px 0 0;">Değiştirdiğin satırlar sarı görünür; <b>Kaydet</b> deyince yalnız onlar tabloya yazılır (aynı satırın üzerine).</div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="kpPerTablo" style="width:auto;"></table></div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== Yetkilendirme sayfası — sadece Süper Yetkili görür. Kişi/proje/özellik erişimini
@@ -3910,6 +3928,7 @@ function ykSayfaAc(id){
   if (id === 'gt') gtSayfasi();
   if (id === 'gtayar') gtAyarSayfasi();
   if (id === 'kopuk') kpSayfasi();
+  if (id === 'kopukper') kpPerSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
@@ -4995,7 +5014,7 @@ document.addEventListener('focusout', e => {
 // Kişiler Yoklama'nın Personel Listesi'nden (Tegsoft Adı → Sicil, Görev, Takım Lideri) gelir.
 // ============================================================================
 const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
-const KP_SAYFALAR = [ { id:'kopuk', ad:'Köpük Çağrı', ikon:'☎', svg:'telefon' } ];   // Köpük Çağrı bölümü (en alttaki script)
+const KP_SAYFALAR = [ { id:'kopuk', ad:'Köpük Çağrı', ikon:'☎', svg:'telefon' }, { id:'kopukper', ad:'Köpük Personel Listesi', ikon:'👥', svg:'kisiler' } ];   // Köpük Çağrı bölümü (en alttaki script)
 const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊', svg:'grafik' },
   { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙',  svg:'ayar' },
@@ -7872,14 +7891,35 @@ function kpEksikCiz(){
     const tr = b.closest('tr'), e = liste[Number(tr.dataset.i)];
     const lokasyon = tr.querySelector('.kpLok').value, sicil = tr.querySelector('.kpSicil').value.trim();
     if (!lokasyon){ ykDurum('kpDurum', `"${e.ad}" için lokasyon seç.`, 'err'); return; }
-    b.disabled = true; ykDurum('kpDurum', `"${e.ad}" PERSONEL'e ekleniyor…`);
+    // Girilen sicil listede varsa (ör. evlilikle soyadı değişen personel): yeni satır yerine mevcut kaydın adı değiştirilir.
+    const mevcut = sicil ? kpTablo.personel.find(p => p.satir && String(p.sicil).trim() === sicil) : null;
+    if (mevcut){
+      const lokNot = ykAnahtar(mevcut.lokasyon) !== ykAnahtar(lokasyon) ? `\nLokasyon: ${mevcut.lokasyon} → ${lokasyon}` : '';
+      if (!confirm(`${sicil} sicili "${mevcut.ad}" (${mevcut.lokasyon}) adına kayıtlı.\nAdı "${e.ad}" olarak değiştirilsin mi?${lokNot}\n\n(Yeni satır açılmaz; mevcut kaydın üzerine yazılır.)`)){
+        ykDurum('kpDurum', 'Vazgeçildi; hiçbir şey yazılmadı.'); return;
+      }
+    }
+    b.disabled = true; ykDurum('kpDurum', `"${e.ad}" PERSONEL'e ${mevcut ? 'yazılıyor' : 'ekleniyor'}…`);
     try {
-      await authFetch(KP_URL(`'${KP_PERSONEL}'!A1:C1`, ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [[e.ad, sicil, lokasyon]] }),
-      });
-      kpTablo.personel.push({ ad: e.ad, sicil, lokasyon, satir: 0 });
-      ykDurum('kpDurum', `✓ "${e.ad}" ${lokasyon} olarak eklendi.`, 'ok');
+      if (mevcut){
+        // Yazmadan önce o satırın hâlâ aynı kişi olduğu kontrol edilir
+        const r = await authFetch(KP_URL(`'${KP_PERSONEL}'!A${mevcut.satir}:C${mevcut.satir}`));
+        const simdi = ((r.values || [[]])[0] || [])[0] || '';
+        if (String(simdi).trim() !== mevcut.ad) throw new Error(`PERSONEL ${mevcut.satir}. satır değişmiş ("${simdi}"). Köpük Personel Listesi'nden kontrol et.`);
+        await batchUpdateValues(KP_DOSYA, [{ range: `'${KP_PERSONEL}'!A${mevcut.satir}:C${mevcut.satir}`, values: [[e.ad, sicil, lokasyon]] }]);
+        const eskiAd = mevcut.ad;
+        mevcut.ad = e.ad; mevcut.lokasyon = lokasyon;
+        ykDurum('kpDurum', `✓ ${sicil} sicilli kaydın adı "${eskiAd}" → "${e.ad}" olarak değiştirildi.`, 'ok');
+      } else {
+        const r = await authFetch(KP_URL(`'${KP_PERSONEL}'!A1:C1`, ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: [[e.ad, sicil, lokasyon]] }),
+        });
+        const m = String((r.updates || {}).updatedRange || '').match(/!A(\d+)/);
+        kpTablo.personel.push({ ad: e.ad, sicil, lokasyon, satir: m ? Number(m[1]) : 0 });
+        ykDurum('kpDurum', `✓ "${e.ad}" ${lokasyon} olarak eklendi.`, 'ok');
+      }
+      if (!kpPerDegisti()) kpPer = null;   // Köpük Personel Listesi açılınca tablodan yeniden okunsun
       kpYenidenHesapla();
     } catch(err){ b.disabled = false; ykDurum('kpDurum', '✗ ' + err.message, 'err'); }
   }));
@@ -7969,6 +8009,119 @@ document.getElementById('kpYazBtn').addEventListener('click', async () => {
     ykDurum('kpYazDurum', `✓ Yazıldı. ${ozet.join(' · ')}.` + (sirasiz.length ? ` Not: ${sirasiz.length} tarih tablodaki son tarihten önce olduğu için sona eklendi (sıralı değil).` : ''), 'ok');
   } catch(err){ ykDurum('kpYazDurum', '✗ ' + err.message, 'err'); }
   finally { btn.disabled = !(kpSonuc && !kpSonuc.sorunlar.length && kpSonuc.sayilan === kpSonuc.toplam); }
+});
+// ---------- Köpük Personel Listesi (PERSONEL sekmesi düzenleme) ----------
+// Satırlar tablodaki satır numarasıyla tutulur; Kaydet yalnız değişen satırları AYNI SATIRIN üzerine yazar,
+// yeni eklenenleri sona ekler. Kaydetmeden önce tablo yeniden okunur: arada biri satırı değiştirdiyse yazılmaz.
+let kpPer = null;   // { satirlar:[{satir, ad, sicil, lokasyon, orj}] } — orj null = yeni kişi
+function kpPerFarkli(p){ return !p.orj || p.ad !== p.orj.ad || String(p.sicil) !== String(p.orj.sicil) || p.lokasyon !== p.orj.lokasyon; }
+function kpPerDegisti(){ return !!(kpPer && kpPer.satirlar.some(kpPerFarkli)); }
+async function kpPerSayfasi(){ if (!kpPerDegisti()) await kpPerYukle(); }
+async function kpPerYukle(){
+  ykDurum('kpPerDurum', 'Okunuyor…');
+  try {
+    kpTablo = await kpTabloOku();
+    kpPer = { satirlar: kpTablo.personel.map(p => Object.assign({}, p, { orj: { ad: p.ad, sicil: p.sicil, lokasyon: p.lokasyon } })) };
+    const sel = document.getElementById('kpPerLok'), once = sel.value;
+    sel.innerHTML = '<option value="">Tüm lokasyonlar</option>' + kpLokasyonlar().map(l => `<option>${ykEsc(l)}</option>`).join('');
+    if ([...sel.options].some(o => o.value === once)) sel.value = once;
+    ykDurum('kpPerDurum', `${kpPer.satirlar.length} kişi.`, 'ok');
+    kpPerCiz();
+  } catch(err){ ykDurum('kpPerDurum', '✗ ' + err.message, 'err'); }
+}
+// Kaydetmeyi engelleyen sorunlar: boş ad/lokasyon, aynı sicil iki satırda, aynı ad iki farklı lokasyonla.
+function kpPerSorunlar(){
+  const sorun = new Map();   // satır nesnesi → mesaj
+  const ekle = (p, m) => sorun.set(p, (sorun.get(p) ? sorun.get(p) + ' · ' : '') + m);
+  const sicil = new Map(), ad = new Map();
+  kpPer.satirlar.forEach(p => {
+    if (!p.ad.trim()) ekle(p, 'Ad boş');
+    if (!p.lokasyon) ekle(p, 'Lokasyon boş');
+    const sc = String(p.sicil).trim();
+    if (sc){ if (!sicil.has(sc)) sicil.set(sc, []); sicil.get(sc).push(p); }
+    const k = kpAdAnahtar(p.ad);
+    if (k){ if (!ad.has(k)) ad.set(k, []); ad.get(k).push(p); }
+  });
+  sicil.forEach((l, sc) => { if (l.length > 1) l.forEach(p => ekle(p, `${sc} sicili ${l.length} satırda`)); });
+  ad.forEach(l => { const lk = new Set(l.map(p => ykAnahtar(p.lokasyon))); if (lk.size > 1) l.forEach(p => ekle(p, 'Aynı ad farklı lokasyonla da var')); });
+  return sorun;
+}
+function kpPerSira(p){ return !p.orj ? 0 : (kpPerFarkli(p) ? 1 : 2); }
+function kpPerCiz(){
+  if (!kpPer) return;
+  const ara = kpAdAnahtar(document.getElementById('kpPerAra').value), aras = document.getElementById('kpPerAra').value.trim();
+  const lokF = document.getElementById('kpPerLok').value;
+  const lok = kpLokasyonlar(), sorun = kpPerSorunlar();
+  const goster = kpPer.satirlar.map((p, i) => [p, i])
+    .filter(([p]) => kpPerFarkli(p) || ((!lokF || ykAnahtar(p.lokasyon) === ykAnahtar(lokF)) && (!ara || kpAdAnahtar(p.ad).includes(ara) || String(p.sicil).includes(aras))))
+    .sort((a, b) => kpPerSira(a[0]) - kpPerSira(b[0]));   // yeniler, sonra değişenler üstte
+  const t = document.getElementById('kpPerTablo');
+  t.innerHTML = '<tr><th>Satır</th><th>Ad</th><th>Sicil</th><th>Lokasyon</th><th>Uyarı</th></tr>' + goster.map(([p, i]) => {
+    const lokOpts = (lok.some(l => l === p.lokasyon) || !p.lokasyon ? lok : [p.lokasyon].concat(lok));
+    const renk = kpPerFarkli(p) ? ' style="background:#FFF3CD;"' : '';
+    return `<tr data-i="${i}"><td${renk}>${p.orj ? p.satir : 'yeni'}</td>
+      <td${renk}><input type="text" class="kpPerAd" value="${ykEsc(p.ad)}" style="width:260px;"></td>
+      <td${renk}><input type="text" class="kpPerSc" value="${ykEsc(p.sicil)}" style="width:80px;"></td>
+      <td${renk}><select class="kpPerLk"><option value="">— seç —</option>${lokOpts.map(l => `<option${l === p.lokasyon ? ' selected' : ''}>${ykEsc(l)}</option>`).join('')}</select></td>
+      <td class="kpPerUyari" style="color:var(--danger);">${ykEsc(sorun.get(p) || '')}</td></tr>`;
+  }).join('');
+  t.querySelectorAll('tr[data-i]').forEach(tr => {
+    const p = kpPer.satirlar[Number(tr.dataset.i)];
+    const guncelle = () => {
+      p.ad = tr.querySelector('.kpPerAd').value; p.sicil = tr.querySelector('.kpPerSc').value.trim(); p.lokasyon = tr.querySelector('.kpPerLk').value;
+      const f = kpPerFarkli(p); tr.querySelectorAll('td').forEach((td, j) => { if (j < 4) td.style.background = f ? '#FFF3CD' : ''; });
+      kpPerDugme();
+    };
+    tr.querySelector('.kpPerAd').addEventListener('input', guncelle);
+    tr.querySelector('.kpPerSc').addEventListener('input', guncelle);
+    tr.querySelector('.kpPerLk').addEventListener('change', guncelle);
+    // Uyarılar odak kaybında yenilenir (yazarken tablo yeniden çizilmez)
+    tr.querySelectorAll('input').forEach(x => x.addEventListener('change', () => kpPerUyariYenile()));
+  });
+  kpPerDugme();
+}
+function kpPerUyariYenile(){
+  const sorun = kpPerSorunlar();
+  document.querySelectorAll('#kpPerTablo tr[data-i]').forEach(tr => { tr.querySelector('.kpPerUyari').textContent = sorun.get(kpPer.satirlar[Number(tr.dataset.i)]) || ''; });
+  kpPerDugme();
+}
+function kpPerDugme(){
+  const n = kpPer ? kpPer.satirlar.filter(kpPerFarkli).length : 0;
+  const b = document.getElementById('kpPerKaydet');
+  b.disabled = !n; b.textContent = n ? `💾 Kaydet (${n})` : '💾 Kaydet';
+}
+document.getElementById('kpPerAra').addEventListener('input', kpPerCiz);
+document.getElementById('kpPerLok').addEventListener('change', kpPerCiz);
+document.getElementById('kpPerYenile').addEventListener('click', kpPerYukle);
+document.getElementById('kpPerEkleBtn').addEventListener('click', () => {
+  if (!kpPer) return;
+  kpPer.satirlar.push({ satir: 0, ad: '', sicil: '', lokasyon: document.getElementById('kpPerLok').value || '', orj: null });
+  kpPerCiz();
+  const ilk = document.querySelector('#kpPerTablo .kpPerAd'); if (ilk) ilk.focus();
+});
+document.getElementById('kpPerKaydet').addEventListener('click', async () => {
+  if (!kpPer) return;
+  const degisen = kpPer.satirlar.filter(kpPerFarkli);
+  if (!degisen.length) return;
+  degisen.forEach(p => { p.ad = p.ad.replace(/ /g, ' ').trim(); p.sicil = String(p.sicil).trim(); });
+  const sorun = kpPerSorunlar();
+  const tumSorun = [...sorun.values()];
+  if (tumSorun.length){ kpPerUyariYenile(); ykDurum('kpPerDurum', `✗ Kaydedilmedi: ${tumSorun.length} satırda uyarı var (kırmızı yazılar).`, 'err'); return; }
+  const btn = document.getElementById('kpPerKaydet'); btn.disabled = true;
+  ykDurum('kpPerDurum', 'Tablo kontrol ediliyor…');
+  try {
+    const guncel = await kpTabloOku();
+    const satirAd = new Map(guncel.personel.map(p => [p.satir, p.ad]));
+    const bozuk = degisen.filter(p => p.orj && satirAd.get(p.satir) !== p.orj.ad);
+    if (bozuk.length){ ykDurum('kpPerDurum', `✗ Tablo sen düzenlerken değişmiş (${bozuk.map(p => p.satir + '. satır').join(', ')}). Yenile'ye basıp tekrar dene.`, 'err'); btn.disabled = false; return; }
+    const eski = degisen.filter(p => p.orj), yeni = degisen.filter(p => !p.orj);
+    if (eski.length) await batchUpdateValues(KP_DOSYA, eski.map(p => ({ range: `'${KP_PERSONEL}'!A${p.satir}:C${p.satir}`, values: [[p.ad, p.sicil, p.lokasyon]] })));
+    if (yeni.length) await authFetch(KP_URL(`'${KP_PERSONEL}'!A1:C1`, ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: yeni.map(p => [p.ad, p.sicil, p.lokasyon]) }) });
+    await kpPerYukle();
+    ykDurum('kpPerDurum', `✓ Kaydedildi: ${eski.length} kişi güncellendi, ${yeni.length} kişi eklendi.`, 'ok');
+    if (kpKayit) kpYenidenHesapla();   // Köpük Çağrı sayfasında yüklü dosya varsa sayım yeni listeyle yenilenir
+  } catch(err){ ykDurum('kpPerDurum', '✗ ' + err.message, 'err'); kpPerDugme(); }
 });
 </script>
 

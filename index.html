@@ -570,7 +570,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
             <label>Gece vardiyası erken giriş penceresi (dk): <input type="number" id="gvStilGece" min="0" step="5" style="width:70px;"></label>
             <label title="Detaylı Durum'da sistemde olunmayan bu süreyi aşan aralıklar Sistem Dışı Süreler sekmesinde sorulur">Sistem dışı süre eşiği (dk): <input type="number" id="gvStilSd" min="1" step="5" style="width:70px;"></label>
-            <label title="Vardiya Kontrolü: girişi vardiya başından bu kadar dakika geç olan (ya da giriş ve çıkışı bu kadar erken olan) listelenir">Vardiya kontrolü eşiği (dk): <input type="number" id="gvStilVkEsik" min="1" step="5" style="width:70px;"></label>
+            <label title="Vardiya Kontrolü: girişi vardiya başından bu kadar dakika geç olan, giriş ve çıkışı bu kadar erken olan ya da son çıkışı vardiya bitişinden bu kadar geç olan listelenir">Vardiya kontrolü eşiği (dk): <input type="number" id="gvStilVkEsik" min="1" step="5" style="width:70px;"></label>
             <label title="Son çıkış, eşikten bu kadar az kaymışsa da aynı yöne kaymış sayılır (vardiya yanlış olabilir)">Pay (dk): <input type="number" id="gvStilVkPay" min="0" step="5" style="width:60px;"></label>
             <label title="Erken Çıkanlar: son çıkışı vardiya bitişinden bu kadar dakikadan fazla önce olanlar listelenir (0 = bir saniye bile)">Erken çıkış toleransı (dk): <input type="number" id="gvStilEcTol" min="0" step="1" style="width:60px;"></label>
             <label title="{AY} = Kasım, {YIL} = 2026, {TAKIM} = takım lideri (ya da Tümü)">Aylık dosya adı: <input type="text" id="gvStilAylikAd" style="width:300px;"></label>
@@ -4931,7 +4931,7 @@ const GV_KAYNAKLAR = ['Tarih', 'Personel Listesi', 'Durum Raporu', 'Müşteri Te
 // Günlük veriye özel notlar (Yoklama'yı etkilemez): Tarih | Sicil | Ad Soyad | Tür | Değer | Kaydeden | Zaman
 // Tür: Sebep (gelmeyenin elle seçilen sebebi) · Geç Değil (geç giriş sistem sorunu, yeşil) · Vardiya Süresi Kontrolü Kapalı (Sicil GENEL)
 const GV_NOT_TAB = 'GÜNLÜK VERİ NOTLAR';
-const GV_NOT_TUR = { sebep:'Sebep', gecDegil:'Geç Değil', staffKapali:'Vardiya Süresi Kontrolü Kapalı', saatlik:'Saatlik İzin' };
+const GV_NOT_TUR = { sebep:'Sebep', gecDegil:'Geç Değil', vkUygun:'Vardiya Doğru', staffKapali:'Vardiya Süresi Kontrolü Kapalı', saatlik:'Saatlik İzin' };
 // Saatlik İzin notunun değeri: "Kullandı 13:10-14:05" ya da "Kullanmadı 13:10-14:05" (her aralık ayrı satır)
 const GV_SD = '__sd';   // Sistem Dışı Süreler sekmesi
 // Koşullu biçimlendirme kuralları: Sütun | Koşul | Değer | Değer 2 | Dolgu | Yazı | Kalın | Ana | Asistan | SM | Uzman (boşsa hepsi)
@@ -4944,6 +4944,9 @@ const GV_GEC = '__gec';   // Geç Girenler sekmesi
 // Vardiya Kontrolü sekmesi: vardiyası yanlış girilmiş olabilecekler (tek gün yeter).
 //  Geç yön : giriş, vardiya başından AYARLAR'daki eşik (45 dk) ve fazlası geç.
 //  Erken yön: giriş de son çıkış da vardiyadan eşik kadar erken (çıkışta eşik − pay).
+//  Geç çıkış: giriş geç/erken yöne girmedi ama son çıkış vardiya bitişinden eşik kadar geç (ör. 08:00-16:00 girilmiş, 18:00'de çıkmış).
+//            Daha uygun vardiya bulunursa "Vardiya yanlış olabilir", bulunmazsa "Geç çıkış / fazla çalışma".
+//  Erken ve geç çıkış satırları "Vardiya doğru" ile işaretlenebilir: listede yeşil kalır, sekme sayısına girmez.
 //  Değerlendirme: son çıkış da aynı yöne (eşik − pay) kaymışsa "Vardiya yanlış olabilir" + o günün vardiyalarından en uyanı.
 //  "Geç değil" işaretli, saatlik izin "Kullandı" (vardiya başı) ya da o gün sebebi olan listelenmez.
 const GV_VK = '__vk';
@@ -5687,12 +5690,13 @@ async function gvSebepKaynaklari(tarih, planGun, onbellek){
   if (!ob.ortak) ob.ortak = Promise.all([oku(`'${GV_NOT_TAB}'!A1:G10000`), oku(`'${YK_TAB.kayit}'!A1:H20000`)]);
   ob.drv = ob.drv || {};
   const [[notlar, kayit], drive] = await Promise.all([ob.ortak, ykDriveGun(tarih, ob.drv)]);
-  const elleM = new Map(), kayitM = new Map(), kayitGirisM = new Map(), gecDegil = new Set(), saatlik = new Map(); let staffKapali = false;
+  const elleM = new Map(), kayitM = new Map(), kayitGirisM = new Map(), gecDegil = new Set(), vkUygun = new Set(), saatlik = new Map(); let staffKapali = false;
   (notlar || []).slice(1).forEach(r => {
     if (!r || ykTarih(r[0]) !== tarih || !r[1] || !String(r[4] || '').trim()) return;
     const sc = String(r[1]).trim(), tur = ykAnahtar(r[3]), v = String(r[4]).trim();
     if (tur === ykAnahtar(GV_NOT_TUR.sebep)) elleM.set(sc, v);
     else if (tur === ykAnahtar(GV_NOT_TUR.gecDegil)) gecDegil.add(sc);
+    else if (tur === ykAnahtar(GV_NOT_TUR.vkUygun)) vkUygun.add(sc);
     else if (tur === ykAnahtar(GV_NOT_TUR.staffKapali)) staffKapali = true;
     else if (tur === ykAnahtar(GV_NOT_TUR.saatlik)){
       const m = v.match(/^(\S+)\s+(\d{2}:\d{2}-\d{2}:\d{2})$/); if (!m) return;
@@ -5715,7 +5719,7 @@ async function gvSebepKaynaklari(tarih, planGun, onbellek){
     const sebep = a.split('·').map(x => x.trim()).filter(x => x && !not(x))[0] || d;
     kayitM.set(String(r[cS]).trim(), ykAnahtar(d) === 'ÇALIŞMIYOR' ? { calismiyor: true, sebep } : sebep);
   });
-  return { tarih, elle: elleM, kayit: kayitM, kayitGiris: kayitGirisM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, staffKapali, saatlik, planVar: !!planGun };
+  return { tarih, elle: elleM, kayit: kayitM, kayitGiris: kayitGirisM, drive: drive || new Map(), plan: planGun || new Map(), gecDegil, vkUygun, staffKapali, saatlik, planVar: !!planGun };
 }
 // Sebep sırası: Drive VARDİYA kodu (sistemden gelir, esas) > Günlük Veri'de elle > Yoklama kaydı > Haftalık Plan kodu > özel durum
 function gvSebepBul(k, kay){
@@ -5849,7 +5853,7 @@ function gvSebepleriUygula(sonuc, kay){
   sonuc.kisiler = sonuc.kisiler.filter(k => !(k.yok && k.calismiyor));
   // Vardiya (geç giriş ve vardiya süresi kuralları için): Haftalık Plan, yoksa Drive VARDİYA
   sonuc.kisiler.forEach(k => { k.vardiya = ykVardiya(kay.plan.get(k.sicil)) || ''; });   // kay.plan: Drive esas, boşsa Haftalık Plan
-  sonuc.notlar = { gecDegil: kay.gecDegil, staffKapali: kay.staffKapali, saatlik: kay.saatlik, planVar: kay.planVar };
+  sonuc.notlar = { gecDegil: kay.gecDegil, vkUygun: kay.vkUygun, staffKapali: kay.staffKapali, saatlik: kay.saatlik, planVar: kay.planVar };
 }
 // Elle seçilen sebebi yazar (boş = siler). Yalnız GÜNLÜK VERİ SEBEP sekmesi.
 // Not yazar (değer boşsa siler). Yalnız GÜNLÜK VERİ NOTLAR sekmesi.
@@ -6009,7 +6013,7 @@ function gvSonucCiz(){
   const tk = sel.value;
   const gecSay = gvHerGun(lg, () => gvGecListe()).length;
   const sdHep = gvHerGun(lg, g => g.kisiler.filter(k => !k.yok && (!tk || k.takim === tk)).flatMap(k => gvSdAraliklar(k, g).map(a => ({ k, a, g }))));
-  const vkSay = gvHerGun(lg, () => gvVkListe()).length, ecSay = gvHerGun(lg, () => gvEcListe()).length;
+  const vkSay = gvHerGun(lg, () => gvVkListe().filter(o => !o.uygun)).length, ecSay = gvHerGun(lg, () => gvEcListe()).length;
   const sdBekleyen = sdHep.filter(o => !gvSdDurum(o.k, o.a, o.g)).length;
   document.getElementById('gvSekmeler').innerHTML = gor.concat(gvGecSutun() ? [GV_GEC] : []).concat([GV_EC, GV_SD]).concat(gvGecSutun() ? [GV_VK] : []).map(g => {
     if (g === GV_EC) return `<button class="yk-sekme${gvAktifGrup === GV_EC ? ' aktif' : ''}" data-gvgrup="${GV_EC}" title="Son çıkışı vardiya bitişinden önce olanlar">Erken Çıkanlar (${ecSay})</button>`;
@@ -6056,6 +6060,19 @@ document.getElementById('gvTablo').addEventListener('change', async e => {
     if (el.checked) s.notlar.gecDegil.add(k.sicil); else s.notlar.gecDegil.delete(k.sicil);
     ykDurum('gvKayitDurum', `✓ ${k.ad} (${s.tarih}): ${el.checked ? 'geç değil (yeşil)' : 'geç giriş (kırmızı)'} kaydedildi.`, 'ok');
     gvSonucCiz();   // Sistem Dışı ve Vardiya Kontrolü sayıları da değişir
+  } catch(err){ el.checked = !el.checked; el.disabled = false; ykDurum('gvKayitDurum', '✗ Kaydedilemedi: ' + err.message, 'err'); }
+});
+document.getElementById('gvTablo').addEventListener('change', async e => {
+  const el = e.target.closest('[data-gvvk]'); if (!el || !gvSonuc) return;
+  const s = gvGunler.get(el.dataset.tarih) || gvSonuc;
+  const k = s.kisiler.find(x => x.sicil === el.dataset.gvvk); if (!k) return;
+  el.disabled = true;
+  try {
+    await gvNotYaz(s.tarih, k.sicil, k.ad, GV_NOT_TUR.vkUygun, el.checked ? 'EVET' : '');
+    s.notlar = s.notlar || {}; s.notlar.vkUygun = s.notlar.vkUygun || new Set();
+    if (el.checked) s.notlar.vkUygun.add(k.sicil); else s.notlar.vkUygun.delete(k.sicil);
+    ykDurum('gvKayitDurum', `✓ ${k.ad} (${s.tarih}): ${el.checked ? 'vardiya doğru olarak işaretlendi' : 'işaret kaldırıldı'}.`, 'ok');
+    gvSonucCiz();
   } catch(err){ el.checked = !el.checked; el.disabled = false; ykDurum('gvKayitDurum', '✗ Kaydedilemedi: ' + err.message, 'err'); }
 });
 document.getElementById('gvStaffKapali').addEventListener('change', async e => {
@@ -6110,8 +6127,9 @@ function gvVkListe(hepsi){
     const cik = (bas, sure) => c == null ? null : c - Math.min(bas + sure, 86400);
     const gk = gir(vs.bas, g0), ck = cik(vs.bas, vs.sure);
     let yon = '';
-    if (gk >= E) yon = 'geç'; else if (gk <= -E && ck != null && ck <= -(E - P)) yon = 'erken';
+    if (gk >= E) yon = 'geç'; else if (gk <= -E && ck != null && ck <= -(E - P)) yon = 'erken'; else if (ck != null && ck >= E) yon = 'çıkış';
     if (!yon) return [];
+    const uygun = yon !== 'geç' && !!(not.vkUygun && not.vkUygun.has(k.sicil));
     const kaymis = ck != null && (yon === 'geç' ? ck >= E - P : true);
     let olasi = '';
     if (kaymis){
@@ -6123,20 +6141,21 @@ function gvVkListe(hepsi){
       const en = adaylar.concat([{ v: kv, bas: yb, sure: vs.sure }]).filter(a => a.v !== k.vardiya).sort((a, b) => puan(a) - puan(b))[0];
       if (en && puan(en) < puan(vs)) olasi = en.v;
     }
-    return [{ k, giris: k.degerler[x.baslik], gk, ck, yon, olasi,
-              deger: ck == null ? 'Çıkış bilgisi yok' : kaymis ? 'Vardiya yanlış olabilir' : 'Geç giriş / izin olabilir' }];
+    return [{ k, giris: k.degerler[x.baslik], gk, ck, yon, olasi, uygun,
+              deger: uygun ? 'Vardiya doğru (işaretlendi)' : ck == null ? 'Çıkış bilgisi yok' : yon === 'çıkış' ? (olasi ? 'Vardiya yanlış olabilir' : 'Geç çıkış / fazla çalışma') : kaymis ? 'Vardiya yanlış olabilir' : 'Geç giriş / izin olabilir' }];
   });
 }
 function gvVkCiz(){
   const gunler = gvListeGunleri(), cok = gunler.length > 1;
   const liste = gvHerGun(gunler, g => gvVkListe().map(o => Object.assign(o, { g })));
-  const renk = { 'Vardiya yanlış olabilir':'#FFC000', 'Geç giriş / izin olabilir':'#DDEBF7', 'Çıkış bilgisi yok':'' };
-  document.getElementById('gvTablo').innerHTML = '<tr>' + (cok ? '<th>Tarih</th>' : '') + '<th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Giriş</th><th>Son Çıkış</th><th>Giriş farkı</th><th>Çıkış farkı</th><th>Değerlendirme</th><th>Olası vardiya</th><th>Geç değil</th></tr>' +
+  const renk = { 'Vardiya yanlış olabilir':'#FFC000', 'Geç giriş / izin olabilir':'#DDEBF7', 'Geç çıkış / fazla çalışma':'#FCE4D6', 'Vardiya doğru (işaretlendi)':'#92D050', 'Çıkış bilgisi yok':'' };
+  document.getElementById('gvTablo').innerHTML = '<tr>' + (cok ? '<th>Tarih</th>' : '') + '<th>Sicil</th><th>Ad Soyad</th><th>Takım Lideri</th><th>Vardiya</th><th>Giriş</th><th>Son Çıkış</th><th>Giriş farkı</th><th>Çıkış farkı</th><th>Değerlendirme</th><th>Olası vardiya</th><th>Geç değil / Vardiya doğru</th></tr>' +
     (liste.length ? liste.map(o => `<tr>${cok ? `<td>${o.g.tarih.slice(0, 5)} ${gvGunAdi(o.g.tarih)}</td>` : ''}<td>${ykEsc(o.k.sicil)}</td><td>${ykEsc(o.k.ad)}</td><td>${ykEsc(o.k.takim || '')}</td>` +
       `<td style="text-align:center;">${ykEsc(o.k.vardiya)}</td><td style="text-align:center;">${ykEsc(ykSaat(o.giris))}</td><td style="text-align:center;">${ykEsc(o.k.sonCikis || '—')}</td>` +
       `<td style="text-align:center;">${gvDkYaz(o.gk)}</td><td style="text-align:center;">${o.ck == null ? '—' : gvDkYaz(o.ck)}</td>` +
       `<td style="${renk[o.deger] ? `background:${renk[o.deger]};color:#000;` : ''}">${ykEsc(o.deger)}</td><td style="text-align:center;font-weight:bold;">${ykEsc(o.olasi)}</td>` +
-      `<td style="text-align:center;">${o.yon === 'geç' ? `<input type="checkbox" data-gvgec="${ykEsc(o.k.sicil)}" data-tarih="${o.g.tarih}" title="Geç değil: Geç Girenler'de yeşil olur, Saatlik İzin ve bu listeden düşer">` : ''}</td></tr>`).join('')
+      `<td style="text-align:center;">${o.yon === 'geç' ? `<input type="checkbox" data-gvgec="${ykEsc(o.k.sicil)}" data-tarih="${o.g.tarih}" title="Geç değil: Geç Girenler'de yeşil olur, Saatlik İzin ve bu listeden düşer">`
+        : `<input type="checkbox" data-gvvk="${ykEsc(o.k.sicil)}" data-tarih="${o.g.tarih}"${o.uygun ? ' checked' : ''} title="Vardiya doğru (ör. gerçekten fazla çalıştı): yeşil olur, sekme sayısına girmez">`}</td></tr>`).join('')
       : `<tr><td colspan="${cok ? 12 : 11}" class="soluk">${!cok && (gunler[0].notlar || {}).planVar === false ? 'Bu gün için Drive VARDİYA ve Haftalık Plan yok; vardiya kontrolü yapılamadı.' : 'Vardiyası yanlış girilmiş olabilecek kimse yok.'}</td></tr>`);
   const ck = gunler.some(g => g.kisiler.some(k => !k.yok && k.sonCikis));
   document.getElementById('gvSayi').textContent = `${liste.length} kayıt${cok ? ` · ${gunler.length} gün` : ''} · eşik ${gvStil.vkEsik} dk, pay ${gvStil.vkPay} dk` +

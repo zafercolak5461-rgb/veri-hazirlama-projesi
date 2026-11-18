@@ -7771,8 +7771,9 @@ function kpSatirDegerleri(baslik, gunSayim){
 // ---------- Tablo okuma ----------
 const KP_URL = (aralik, ek) => `https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}/values/${encodeURIComponent(aralik)}${ek || ''}`;
 async function kpTabloOku(){
-  const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}?fields=sheets.properties.title`);
+  const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}?fields=sheets.properties(title,sheetId)`);
   const adlar = (meta.sheets || []).map(s => s.properties.title);
+  const sheetId = new Map((meta.sheets || []).map(s => [s.properties.title, s.properties.sheetId]));
   if (!adlar.includes(KP_PERSONEL)) throw new Error(`KÖPÜK TALEP DAĞILIMI'nda "${KP_PERSONEL}" sekmesi yok.`);
   const ilAdlar = adlar.filter(a => a !== KP_PERSONEL);
   const ranges = [`'${KP_PERSONEL}'!A1:C`].concat(ilAdlar.map(a => `'${a}'!A1:Z`));
@@ -7793,7 +7794,7 @@ async function kpTabloOku(){
     if (!baslik.length || !/^TAR[İI]H$/.test(ykAnahtar(baslik[0])) || !baslik.some(h => /^GENEL TOPLAM$/.test(ykAnahtar(h)))) return;
     const tarihSatir = new Map(); let sonSatir = 1;
     v.forEach((r, i) => { if (i === 0) return; if (r.some(x => String(x).trim() !== '')) sonSatir = i + 1; const t = ykTarih(r[0]); if (t && !tarihSatir.has(t)) tarihSatir.set(t, i + 1); });
-    sekmeler[ad] = { baslik, tarihSatir, sonSatir };
+    sekmeler[ad] = { baslik, tarihSatir, sonSatir, sheetId: sheetId.get(ad) };
   });
   if (!Object.keys(sekmeler).length) throw new Error('Tabloda il sekmesi bulunamadı (A1 = Tarih, başlıklarda Genel Toplam olan sekmeler aranır).');
   return { personel, sekmeler };
@@ -7936,7 +7937,7 @@ document.getElementById('kpYazBtn').addEventListener('click', async () => {
     const yeni = kpHesapla(kpKayit.satirlar, kpTablo.personel, kpTablo.sekmeler);
     if (yeni.sorunlar.length || yeni.sayilan !== yeni.toplam){ kpSonuc = yeni; kpEksikCiz(); kpOnizlemeCiz(); ykDurum('kpYazDurum', '✗ Tablo değişmiş; önizlemeyi kontrol et.', 'err'); return; }
     kpSonuc = yeni;
-    const data = [], ozet = [], sirasiz = [];
+    const data = [], ozet = [], sirasiz = [], bicim = [];
     Object.entries(kpTablo.sekmeler).forEach(([sk, t]) => {
       let sonraki = t.sonSatir + 1, guncel = 0, eklenen = 0;
       const sonTarih = [...t.tarihSatir.keys()].sort((a, b) => ykSira(b) - ykSira(a))[0];
@@ -7948,10 +7949,21 @@ document.getElementById('kpYazBtn').addEventListener('click', async () => {
         else { satir = sonraki++; eklenen++; if (sonTarih && ykSira(g) < ykSira(sonTarih)) sirasiz.push(`${sk} ${g}`); }
         data.push({ range: `'${sk}'!A${satir}:${sonHarf}${satir}`, values: [[g].concat(deger)] });
       });
+      // Yazılan satırlar tablodaki önceki satırların biçimini alır (kenarlık, hizalama, yazı tipi, tarih biçimi):
+      // örnek satır = bu dosyada yazılmayan en son tarihli satır, yoksa 2. satır.
+      const yazilan = new Set(yeni.gunler.map(g => t.tarihSatir.get(g)).filter(Boolean));
+      const ornek = [...t.tarihSatir.values()].filter(r => !yazilan.has(r)).sort((a, b) => b - a)[0] || 2;
+      const hedef = data.filter(d => d.range.startsWith(`'${sk}'!`)).map(d => Number(d.range.match(/!A(\d+):/)[1]));
+      if (t.sheetId != null) hedef.forEach(r => bicim.push({ copyPaste: {
+        source: { sheetId: t.sheetId, startRowIndex: ornek - 1, endRowIndex: ornek, startColumnIndex: 0, endColumnIndex: t.baslik.length },
+        destination: { sheetId: t.sheetId, startRowIndex: r - 1, endRowIndex: r, startColumnIndex: 0, endColumnIndex: t.baslik.length },
+        pasteType: 'PASTE_FORMAT' } }));
       ozet.push(`${sk}: ${guncel} gün güncellendi, ${eklenen} gün eklendi`);
     });
     ykDurum('kpYazDurum', 'Yazılıyor…');
     await batchUpdateValues(KP_DOSYA, data);
+    if (bicim.length) await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}:batchUpdate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: bicim }) });
     kpTablo = await kpTabloOku();
     kpOnizlemeCiz();
     ykDurum('kpYazDurum', `✓ Yazıldı. ${ozet.join(' · ')}.` + (sirasiz.length ? ` Not: ${sirasiz.length} tarih tablodaki son tarihten önce olduğu için sona eklendi (sıralı değil).` : ''), 'ok');

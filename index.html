@@ -326,7 +326,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         <div id="ykSonuc" style="display:none;">
           <div class="card" id="ykSebepKutu">
             <h2 id="ykSebepBaslik">Sebebi Girilmemiş Kişiler</h2>
-            <div class="hint" style="margin-bottom:4px;">VARDİYA tablosuna henüz girilmemiş rapor, izin vb. sebepleri buradan yaz. Kutuya tıklayınca liste açılır; listede olmayan bir şey yazarsan hangi sütuna gideceğini seç. Sebep yazınca rapor hemen yeniden hesaplanır. Kişi listesindeki herkese <b>Sebep</b> düğmesiyle buradan sebep girebilirsin.</div>
+            <div class="hint" style="margin-bottom:4px;">VARDİYA tablosuna henüz girilmemiş rapor, izin vb. sebepleri buradan yaz. Kutuya tıklayınca liste açılır; listede olmayan bir şey yazarsan hangi sütuna gideceğini seç. Sebep yazınca rapor hemen yeniden hesaplanır. Kişi listesindeki herkese <b>Sebep</b> düğmesiyle buradan sebep girebilirsin. Girişi olan birine sebep girersen (hattan çıktı) o gün eksik sayılır. Drive'da kodu olup giriş yapanlar sarı satırda <b>Hattan çıktı</b> düğmesiyle çıkar. Girilen sebepler <b>yalnız bu gün</b> için geçerlidir.</div>
             <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykSebepGiris"></table></div>
             <div class="row" style="margin-top:12px;">
               <button class="btn ok" id="ykSebepKaydetBtn">💾 Sebepleri Kaydet</button>
@@ -3654,22 +3654,32 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     if (!calismiyor && !gercekVardiya && !sebepGrup && (gD === 'Çalışmıyor' || gP === 'Çalışmıyor')) calismiyor = true;
     // Vardiya yerine kod yazılmışsa (Dİ, Rapor…) kişi kodun "Sayılacak Vardiya"sında sayılır.
     const vardiya = gercekVardiya || (sebepGrup ? kodVardiyasi(sebepAd) : '');
-    const login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), vardiya);
+    let vardiyaSon = vardiya;
+    let login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), vardiya);
     const planli = !!vardiya || !!sebepGrup;
     let durum, aciklama = [];
     let girisSebep = '';                       // izinli/raporlu göründüğü halde giriş yapmış: geldi sayılır
-    if (sebepGrup && login){ girisSebep = sebepAd; sebepGrup = ''; sebepAd = ''; }
+    let hattanCikti = false;                   // giriş yapmış ama o gün için elle sebep girilmiş (hattan çıktı): eksik sayılır
+    if (sebepGrup && login){
+      if (man){
+        hattanCikti = true;
+        // Eksik, kişinin o günkü gerçek vardiyasından düşülür: Haftalık Plan → aynı haftada Drive'da yazan vardiya → kodun Sayılacak Vardiya'sı.
+        const gercek = ykVardiya(planGun ? planGun.get(p.sicil) : '') || (driveGun && driveGun.hafta ? (driveGun.hafta.get(p.sicil) || '') : '');
+        if (gercek){ vardiyaSon = gercek; login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), gercek); }
+      } else { girisSebep = sebepAd; sebepGrup = ''; sebepAd = ''; }
+    }
     if (sebepGrup){ durum = sebepGrup; aciklama.push(sebepAd); }
     else if (girisSebep){ durum = 'Geldi'; aciklama.push(`Sebep: ${girisSebep}`); }
     else if (calismiyor){ durum = 'Çalışmıyor'; aciklama.push(man ? man.sebep : (planVal || driveVal)); if (login) aciklama.push('plan dışı giriş'); }
     else if (!planli){ durum = 'Plan yok'; if (login) aciklama.push('giriş var'); }
     else if (login) durum = 'Geldi';
     else durum = 'Gelmedi';
+    if (hattanCikti) aciklama.push(`giriş var ${login.slice(0,5)} (hattan çıktı)`);
     if (man) aciklama.push('elle girildi');
     if (ozelAktif && !ozelIzin) aciklama.push(p.ozel);
-    kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, gorev: p.gorev, takim: p.takim || '', rg, vardiya, gercekVardiya, planVal, driveVal, login,
-                   durum, sebepGrup, sebepAd, girisSebep, manuel: man, aciklama: aciklama.filter(Boolean).join(' · '),
-                   planli: planli && !calismiyor, satirAd: vardiya && !calismiyor ? `${vardiya} (${rg})` : '',
+    kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, gorev: p.gorev, takim: p.takim || '', rg, vardiya: vardiyaSon, gercekVardiya, planVal, driveVal, login,
+                   durum, sebepGrup, sebepAd, girisSebep, hattanCikti, manuel: man, aciklama: aciklama.filter(Boolean).join(' · '),
+                   planli: planli && !calismiyor, satirAd: vardiyaSon && !calismiyor ? `${vardiyaSon} (${rg})` : '',
                    geldi: !!login && planli && !calismiyor && !sebepGrup });
   }
   // DÜZENLEME sayfasındaki "Açıklama" sütunu: büyük harf değer + renk türü (izin / sm / off / bilgi).
@@ -3725,7 +3735,7 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
   const plandisi = kisiler.filter(k => k.login && (k.durum === 'Çalışmıyor' || k.durum === 'Plan yok'));
   if (plandisi.length) uyarilar.push(`Planda çalışmadığı halde giriş yapan: ${plandisi.map(k => `${k.ad} (${k.login.slice(0,5)})`).join(', ')}.`);
   const sebepliGiris = kisiler.filter(k => k.girisSebep);
-  if (sebepliGiris.length) uyarilar.push(`İzinli/raporlu göründüğü halde giriş yapan: ${sebepliGiris.map(k => `${k.ad} (${k.girisSebep}, ${k.login.slice(0,5)})`).join(', ')}. Geldi sayıldı; VARDİYA tablosu kontrol edilmeli.`);
+  if (sebepliGiris.length) uyarilar.push(`İzinli/raporlu göründüğü halde giriş yapan: ${sebepliGiris.map(k => `${k.ad} (${k.girisSebep}, ${k.login.slice(0,5)})`).join(', ')}. Geldi sayıldı; hattan çıktıysa yukarıdaki kutudan "Hattan çıktı" de.`);
   if (listeEksik !== toplam.eksik) uyarilar.unshift(`Kontrol: listelerdeki eksik (${listeEksik}) ile tablodaki eksik (${toplam.eksik}) tutmuyor.`);
   return { tarih, kisiler, satirlar, toplam, listeler, listeEksik, gec, sebepsiz, uyarilar };
 }
@@ -3806,6 +3816,18 @@ async function ykDriveGun(tarih, onbellek){
     if (ci < 0 || si < 0) return null;
     const out = new Map();
     rows.slice(1).forEach(r => { const s = String(r[si] || '').trim(); if (s) out.set(s, String(r[ci] == null ? '' : r[ci]).trim()); });
+    // out.hafta: sicil → aynı haftanın (Pzt–Paz) başka bir gününde Drive'da yazan vardiya (en yakın gün).
+    // O gün hücresinde kod (Rapor…) yazan ama giriş yapıp hattan çıkan kişinin gerçek vardiyasını bulmak için.
+    const gunNo = t => { const x = String(t).match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return x ? Date.UTC(+x[3], +x[2] - 1, +x[1]) / 86400000 : null; };
+    const bugun = gunNo(tarih), haftaBas = bugun - ((new Date(bugun * 86400000).getUTCDay() + 6) % 7);
+    const komsu = bas.map((h, i) => ({ i, g: gunNo(ykTarih(h)) }))
+      .filter(x => x.i !== ci && x.g != null && x.g >= haftaBas && x.g < haftaBas + 7)
+      .sort((a, b) => Math.abs(a.g - bugun) - Math.abs(b.g - bugun) || a.g - b.g);
+    out.hafta = new Map();
+    rows.slice(1).forEach(r => {
+      const s = String(r[si] || '').trim(); if (!s) return;
+      for (const x of komsu){ const v = ykVardiya(r[x.i]); if (v){ out.hafta.set(s, v); break; } }
+    });
     return out;
   } catch(e){ console.warn('VARDİYA okunamadı:', e.message); return null; }
 }
@@ -3971,16 +3993,22 @@ function ykSebepKutuCiz(){
   const bilinenKod = new Set(ayar.sebepler.map(x => ykAnahtar(x.deger)));
   // Çalışmıyor grubundaki kodlar (HT, OFF) yalnız planı okumak içindir; sebep listesinde gösterilmez.
   document.getElementById('ykSebepListe').innerHTML = ayar.sebepler.filter(x => x.grup !== 'Çalışmıyor').map(x => `<option value="${ykEsc(x.deger)}">${ykEsc(x.grup)}</option>`).join('');
-  const siciller = new Set([...s.sebepsiz.map(k => k.sicil), ...ykManuel.keys(), ...ykSebepEk]);
-  const kisiler = s.kisiler.filter(k => siciller.has(k.sicil)).sort((a, b) => (a.exAciklama === 'SEBEP YOK' ? 0 : 1) - (b.exAciklama === 'SEBEP YOK' ? 0 : 1) || a.ad.localeCompare(b.ad, 'tr'));
+  const girisli = s.kisiler.filter(k => k.girisSebep);   // Drive'da kod var + giriş yapmış: Geldi sayıldı, "Hattan çıktı" denebilir
+  const siciller = new Set([...s.sebepsiz.map(k => k.sicil), ...girisli.map(k => k.sicil), ...ykManuel.keys(), ...ykSebepEk]);
+  const sirasi = k => k.exAciklama === 'SEBEP YOK' ? 0 : k.girisSebep ? 1 : 2;
+  const kisiler = s.kisiler.filter(k => siciller.has(k.sicil)).sort((a, b) => sirasi(a) - sirasi(b) || a.ad.localeCompare(b.ad, 'tr'));
   const kutu = document.getElementById('ykSebepKutu');
   kutu.classList.toggle('tamam', !s.sebepsiz.length);
-  document.getElementById('ykSebepBaslik').textContent = s.sebepsiz.length
-    ? `Sebebi Girilmemiş Kişiler (${s.sebepsiz.length})` : 'Sebebi Girilmemiş Kişi Yok ✓';
+  document.getElementById('ykSebepBaslik').textContent = (s.sebepsiz.length
+    ? `Sebebi Girilmemiş Kişiler (${s.sebepsiz.length})` : 'Sebebi Girilmemiş Kişi Yok ✓') +
+    (girisli.length ? ` · Giriş Yapıp Sebebi Olan (${girisli.length})` : '');
   if (!kisiler.length){ document.getElementById('ykSebepGiris').innerHTML = '<tr><td class="soluk">Herkesin sebebi belli. Başka birine sebep girmek için Kişi Listesi\'nde "Sebep" düğmesine bas.</td></tr>'; return; }
   document.getElementById('ykSebepGiris').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Görev</th><th>Vardiya</th><th>Login</th><th>Sebep</th><th>Liste</th><th></th></tr>' +
     kisiler.map(k => {
       const m = ykManuel.get(k.sicil);
+      if (k.girisSebep && !m) return `<tr style="background:rgba(234,179,8,.14);"><td>${k.sicil}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.gorev)}</td><td>${ykEsc(k.vardiya || k.planVal || k.driveVal)}</td>` +
+        `<td>${k.login}</td><td>${ykEsc(k.girisSebep)} <span class="soluk">· şu an Geldi sayılıyor</span></td><td></td>` +
+        `<td><button class="btn" data-ykhattan="${k.sicil}" title="Kişi o gün eksik sayılır, ${ykEsc(k.girisSebep)} listesine yazılır">Hattan çıktı</button></td></tr>`;
       const deger = m ? m.sebep : '';
       const yeni = deger && !bilinenKod.has(ykAnahtar(deger));
       const grup = m ? (m.grup || 'Diğer') : 'Diğer';
@@ -4010,6 +4038,15 @@ document.getElementById('ykSebepGiris').addEventListener('change', e => {
   }
 });
 document.getElementById('ykSebepGiris').addEventListener('click', e => {
+  const h = e.target.closest('[data-ykhattan]');
+  if (h){
+    const k = ykSonuc.kisiler.find(x => x.sicil === h.dataset.ykhattan); if (!k || !k.girisSebep) return;
+    const kod = ykGirdi.ayar.sebepler.find(x => ykAnahtar(x.deger) === ykAnahtar(k.girisSebep));
+    ykManuel.set(k.sicil, { sebep: kod ? kod.deger : k.girisSebep, grup: '' });
+    ykDurum('ykSebepDurum', 'Kaydedilmedi', 'warn');
+    ykYenidenHesapla();
+    return;
+  }
   const b = e.target.closest('[data-yksebsil]'); if (!b) return;
   ykManuel.delete(b.dataset.yksebsil);
   ykDurum('ykSebepDurum', 'Kaydedilmedi', 'warn');

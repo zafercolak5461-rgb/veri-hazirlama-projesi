@@ -451,7 +451,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         </div>
         <div class="card">
           <h2>Özel Durumlar</h2>
-          <div class="hint">Personel listesinde seçilen özel durumlar. <b>İzin</b>: kişi o gün izinli sayılır (Diğer listesine girer). <b>Bilgi</b>: yalnız Açıklama'da görünür. <b>Vardiya Yok Saati</b>: Haftalık Plan'daki "Vardiya Yok" düğmesi bu kişilere hafta içi bu saati yazar; boşsa Genel'deki varsayılan yazılır.</div>
+          <div class="hint">Personel listesinde seçilen özel durumlar. <b>İzin</b>: kişi o gün izinli sayılır (Diğer listesine girer). <b>Bilgi</b>: yalnız Açıklama'da görünür. <b>Vardiya Yok Saati</b>: Haftalık Plan'daki "Vardiya Yok" düğmesi bu kişilere hafta içi bu saati yazar; boşsa Genel'deki varsayılan yazılır. <b>Drive Karşılığı</b> (yalnız İzin): bu özel durum Drive VARDİYA'da başka adla yazılıyorsa o ad (ör. Doğum Öncesi İzin → Rapor; birden çoksa virgülle). O gün Drive'da bu yazıyorsa kişi Drive koduyla değil özel durumuyla sayılır; Drive'da başka bir şey yazıyorsa Drive esastır.</div>
           <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykAyarOzelTablo"></table></div>
           <div class="row" style="margin-top:12px;">
             <button class="btn" id="ykAyarOzelEkle">+ Özel Durum Ekle</button>
@@ -3443,6 +3443,13 @@ function ykDriveEsdeger(sebepler, elle, drive){
   const s = (sebepler || []).find(x => ykAnahtar(x.deger) === ykAnahtar(elle));
   return !!s && String(s.drive || '').split(',').some(d => d.trim() && ykAnahtar(d) === ykAnahtar(drive));
 }
+// Kişinin aktif "İzin" türü özel durumu, Drive VARDİYA'daki kodun yerine geçer mi? (ÖZEL DURUMLAR > Drive Karşılığı)
+// ör. Doğum Öncesi İzin ↔ Rapor: sistem "Rapor" yazar, yoklamada "Doğum Öncesi İzin" olarak sayılır.
+function ykOzelDriveEsdeger(ozelListe, ozel, drive){
+  if (!ozel || !drive) return false;
+  const o = (ozelListe || []).find(x => ykAnahtar(x.ad) === ykAnahtar(ozel));
+  return !!o && ykAnahtar(o.tur) === 'İZİN' && String(o.drive || '').split(',').some(d => d.trim() && ykAnahtar(d) === ykAnahtar(drive));
+}
 function ykSutun(baslik, ad){ const a = ykAnahtar(ad); return (baslik || []).findIndex(h => ykAnahtar(h) === a); }
 
 // Sheets satırlarından ayar tabloları.
@@ -3476,11 +3483,12 @@ function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
   const vyHaftaSonu = String(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.vyHaftaSonu)) || '').trim();
   const ugHam = ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.uyariGun));
   const uyariGun = (ugHam !== undefined && ugHam !== '' && !isNaN(Number(ugHam))) ? Number(ugHam) : 2;
-  // ÖZEL DURUMLAR: Özel Durum | Tür | Vardiya Yok Saati
+  // ÖZEL DURUMLAR: Özel Durum | Tür | Vardiya Yok Saati | Drive Karşılığı
+  // Drive Karşılığı: İzin türü özel durum, Drive VARDİYA'da bu kod(lar) yazıyorsa onun yerine geçer (virgülle birden çok).
   const ob = (ozelRows && ozelRows[0]) || [];
-  const cvy = ykSutun(ob, 'Vardiya Yok Saati');
+  const cvy = ykSutun(ob, 'Vardiya Yok Saati'), codk = ykSutun(ob, 'Drive Karşılığı');
   const ozelListe = (ozelRows || []).slice(1).filter(r => r && temiz(r[0]))
-    .map(r => ({ ad: temiz(r[0]), tur: temiz(r[1]), vySaat: cvy >= 0 ? ykVardiya(r[cvy]) : '' }));
+    .map(r => ({ ad: temiz(r[0]), tur: temiz(r[1]), vySaat: cvy >= 0 ? ykVardiya(r[cvy]) : '', drive: codk >= 0 ? temiz(r[codk]) : '' }));
   return {
     personel,
     gorevGrup: harita(gorevRows),         // GÖREV → Rapor Grubu (Asistan / SM / Uzman)
@@ -3628,7 +3636,9 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     // Sebep önceliği: Drive VARDİYA'daki kod (sistemden gelir, esas) > elle girilen (Drive henüz güncellenmemişken) > plandaki kod > özel durum (İzin türü)
     // Elle girilen, Drive kodunun eşdeğeriyse (SEBEPLER > Drive Karşılığı) elle girilen ad esas alınır, uyarı çıkmaz.
     const esdeger = !!man && ykDriveEsdeger(ayar.sebepler, man.sebep, driveVal);
-    const gD = ykVardiya(driveVal) || esdeger ? '' : grupOf(driveVal);
+    // İzin türü özel durumun Drive Karşılığı o gün Drive'da yazıyorsa (ör. Doğum Öncesi İzin ↔ Rapor) Drive kodu yok sayılır, özel durum geçerli olur.
+    const ozelEsdeger = ozelIzin && ykOzelDriveEsdeger(ayar.ozelListe, p.ozel, driveVal);
+    const gD = ykVardiya(driveVal) || esdeger || ozelEsdeger ? '' : grupOf(driveVal);
     const gM = man && !gD ? (man.grup || grupOf(man.sebep) || 'Diğer') : '';
     const gP = ykVardiya(planVal) ? '' : grupOf(planVal);
     if (man && gD && ykAnahtar(man.sebep) !== ykAnahtar(driveVal)) uyarilar.push(`${p.ad}: elle "${man.sebep}" girilmiş, Drive VARDİYA'da "${driveVal}" yazıyor; Drive esas alındı.`);
@@ -3749,7 +3759,7 @@ async function ykGunSatirlariniYaz(sekme, tarih, yeni, sutun){
 }
 let ykAyar = null;
 async function ykAyarYukle(){
-  const [p, g, s, o, a] = await ykOku([`'${YK_TAB.personel}'!A1:G2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:D500`, `'${YK_TAB.ozel}'!A1:C200`, `'${YK_TAB.ayar}'!A1:B100`]);
+  const [p, g, s, o, a] = await ykOku([`'${YK_TAB.personel}'!A1:G2000`, `'${YK_TAB.gorev}'!A1:B200`, `'${YK_TAB.sebep}'!A1:D500`, `'${YK_TAB.ozel}'!A1:D200`, `'${YK_TAB.ayar}'!A1:B100`]);
   ykAyar = ykAyarlariKur(p, g, s, o, a);
   return ykAyar;
 }
@@ -4726,9 +4736,9 @@ document.getElementById('ykPerKaydetBtn').addEventListener('click', async () => 
     const tur = document.getElementById('ykPerOzelTur').value;
     try {
       ykDurum('ykPerDurum', 'Yeni özel durum ekleniyor…');
-      const [rows] = await ykOku([`'${YK_TAB.ozel}'!A1:C500`]);
+      const [rows] = await ykOku([`'${YK_TAB.ozel}'!A1:D500`]);
       const mevcut = rows.slice(1).filter(r => r && String(r[0] || '').trim());
-      if (!mevcut.some(r => ykAnahtar(r[0]) === ykAnahtar(ozelHam))) await ykSekmeYaz(YK_TAB.ozel, mevcut.map(r => [r[0], r[1] || '', r[2] || '']).concat([[ozelHam, tur, '']]));
+      if (!mevcut.some(r => ykAnahtar(r[0]) === ykAnahtar(ozelHam))) await ykSekmeYaz(YK_TAB.ozel, mevcut.map(r => [r[0], r[1] || '', r[2] || '', r[3] || '']).concat([[ozelHam, tur, '', '']]));
     } catch(err){ ykDurum('ykPerDurum', '✗ Özel durum eklenemedi: ' + err.message, 'err'); return; }
   }
   const eski = ykPerDuzenlenen;
@@ -4783,10 +4793,11 @@ function ykAyarKodCiz(){
       `<td><button class="btn y-btn" data-kodsil="${i}">Sil</button></td></tr>`).join('');
 }
 function ykAyarOzelCiz(){
-  document.getElementById('ykAyarOzelTablo').innerHTML = '<tr><th>Özel Durum</th><th>Tür</th><th>Vardiya Yok Saati</th><th></th></tr>' +
+  document.getElementById('ykAyarOzelTablo').innerHTML = '<tr><th>Özel Durum</th><th>Tür</th><th>Vardiya Yok Saati</th><th>Drive Karşılığı</th><th></th></tr>' +
     ykAyarOzeller.map((x, i) => `<tr><td><input type="text" data-ozel="${i}" data-alan="ad" value="${ykEsc(x.ad)}" style="min-width:220px;"></td>` +
       `<td><select data-ozel="${i}" data-alan="tur">${['Bilgi','İzin'].map(g => `<option${g === x.tur ? ' selected' : ''}>${g}</option>`).join('')}</select></td>` +
       `<td><input type="text" data-ozel="${i}" data-alan="vySaat" value="${ykEsc(x.vySaat || '')}" placeholder="varsayılan" style="width:120px;"></td>` +
+      `<td><input type="text" data-ozel="${i}" data-alan="drive" value="${ykEsc(x.drive || '')}" placeholder="—" style="min-width:160px;"${x.tur === 'İzin' ? '' : ' disabled title="Yalnız İzin türünde kullanılır"'}></td>` +
       `<td><button class="btn y-btn" data-ozelsil="${i}">Sil</button></td></tr>`).join('');
 }
 document.getElementById('ykAyarKodTablo').addEventListener('input', e => {
@@ -4828,13 +4839,14 @@ document.getElementById('ykAyarOzelTablo').addEventListener('input', e => {
 document.getElementById('ykAyarOzelTablo').addEventListener('change', e => {
   const el = e.target.closest('[data-ozel]'); if (!el) return;
   ykAyarOzeller[+el.dataset.ozel][el.dataset.alan] = el.value; ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
+  if (el.dataset.alan === 'tur') ykAyarOzelCiz();
 });
 document.getElementById('ykAyarOzelTablo').addEventListener('click', e => {
   const b = e.target.closest('[data-ozelsil]'); if (!b) return;
   ykAyarOzeller.splice(+b.dataset.ozelsil, 1); ykAyarOzelCiz(); ykDurum('ykAyarOzelDurum', 'Kaydedilmedi', 'warn');
 });
 document.getElementById('ykAyarOzelEkle').addEventListener('click', () => {
-  ykAyarOzeller.push({ ad:'', tur:'Bilgi', vySaat:'' }); ykAyarOzelCiz();
+  ykAyarOzeller.push({ ad:'', tur:'Bilgi', vySaat:'', drive:'' }); ykAyarOzelCiz();
   const son = document.querySelectorAll('#ykAyarOzelTablo [data-alan="ad"]'); if (son.length) son[son.length - 1].focus();
 });
 document.getElementById('ykAyarOzelKaydet').addEventListener('click', async () => {
@@ -4845,10 +4857,12 @@ document.getElementById('ykAyarOzelKaydet').addEventListener('click', async () =
     gorulen.add(ykAnahtar(d));
     const vHam = String(x.vySaat || '').trim(), v = ykVardiya(vHam);
     if (vHam && !v){ ykDurum('ykAyarOzelDurum', `✗ "${d}" için Vardiya Yok saati saat aralığı olmalı (ör. 08:00-17:00).`, 'err'); return; }
-    satirlar.push([d, x.tur || 'Bilgi', v]);
+    const tur = x.tur || 'Bilgi';
+    const dk = tur === 'İzin' ? String(x.drive || '').split(',').map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean) : [];
+    satirlar.push([d, tur, v, dk.join(', ')]);
   }
   ykDurum('ykAyarOzelDurum', 'Kaydediliyor…');
-  try { await ykSekmeYaz(YK_TAB.ozel, satirlar); await ykAyarSayfasi(); ykDurum('ykAyarOzelDurum', `✓ ${satirlar.length} özel durum kaydedildi.`, 'ok'); }
+  try { await ykBaslikYaz(YK_TAB.ozel, ['Özel Durum', 'Tür', 'Vardiya Yok Saati', 'Drive Karşılığı']); await ykSekmeYaz(YK_TAB.ozel, satirlar); await ykAyarSayfasi(); ykDurum('ykAyarOzelDurum', `✓ ${satirlar.length} özel durum kaydedildi.`, 'ok'); }
   catch(err){ ykDurum('ykAyarOzelDurum', '✗ ' + err.message, 'err'); }
 });
 document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () => {
@@ -4957,6 +4971,7 @@ const GV_EC = '__ec';
 const GV_LISTE = () => [GV_GEC, GV_EC, GV_SD, GV_VK];
 const GV_YOK = 'YOK';
 let gvSebepSecenek = [];   // Yoklama SEBEPLER listesi (yalnız okunur)
+let gvOzelListe = [];      // Yoklama ÖZEL DURUMLAR listesi (yalnız okunur; Drive Karşılığı için)
 const GV_PERSONEL_ALAN = ['Sicil', 'Tegsoft Adı', 'Ad Soyad', 'Görev', 'Takım Lideri'];
 const GV_DD_ALAN = ['Giriş Saati', 'Çıkış Saati', 'Gece Eki', 'Gece Düşümü'];
 // Gece vardiyası (00:00'da başlayan) düzeltmesi, yalnız yüklenen Detaylı Durum'dan (önceki günün dosyası istenmez):
@@ -5523,7 +5538,7 @@ async function gvArsivdenAc(){
   ykDurum('gvDurum', 'Arşiv okunuyor…');
   try {
     const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
-    gvSebepSecenek = ayar.sebepler || [];
+    gvSebepSecenek = ayar.sebepler || []; gvOzelListe = ayar.ozelListe || [];
     const arsiv = await gvArsivOku(t1, t2);
     if (!arsiv.size){ ykDurum('gvDurum', `${t1} – ${t2} için arşivde kayıt yok.`, 'warn'); return; }
     const pm = new Map(ayar.personel.map(p => [p.sicil, p]));
@@ -5614,7 +5629,7 @@ async function gvSonuGetir(){
   if (gvSonuc) return;
   try {
     const { ayar } = await gvAyarlariOku();
-    gvSebepSecenek = ayar.sebepler || [];
+    gvSebepSecenek = ayar.sebepler || []; gvOzelListe = ayar.ozelListe || [];
     const son = await gvSonOku();
     if (!son || !son.gunler.length || gvSonuc) return;
     let planlar = null;
@@ -5733,6 +5748,8 @@ function gvSebepBul(k, kay){
     if (ykDriveEsdeger(gvSebepSecenek, kay.elle.get(k.sicil), dv)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
     const kv = kay.kayit.get(k.sicil), ks = kv && typeof kv === 'object' ? kv.sebep : kv;
     if (ykDriveEsdeger(gvSebepSecenek, ks, dv)) return { sebep: ks, kaynak: 'Yoklama' };
+    // İzin türü özel durumun Drive Karşılığı (ör. Doğum Öncesi İzin ↔ Rapor): özel durum gösterilir
+    if (k.ozel && (!k.bitis || ykSira(k.bitis) >= ykSira(kay.tarih)) && ykOzelDriveEsdeger(gvOzelListe, k.ozel, dv)) return { sebep: k.ozel, kaynak: 'Özel durum' };
     return { sebep: dv, kaynak: 'VARDİYA' };
   }
   if (kay.elle.has(k.sicil)) return { sebep: kay.elle.get(k.sicil), kaynak: 'elle' };
@@ -5957,7 +5974,7 @@ async function gvHazirla(){
   try {
     const [{ ayar }, plan] = await Promise.all([gvAyarlariOku(), ykPlanlariOku()]);
     if (!gvSutunlar.length){ ykDurum('gvDurum', 'Sütun ayarı yok. "Günlük Veri Ayarları" sayfasından sütunları tanımla.', 'err'); return; }
-    gvSebepSecenek = ayar.sebepler || [];
+    gvSebepSecenek = ayar.sebepler || []; gvOzelListe = ayar.ozelListe || [];
     const aralik = new Set(tarihler), ob = {}, yeni = new Map();
     for (const tarih of tarihler){
       if (tarihler.length > 1) ykDurum('gvDurum', `${tarih} hesaplanıyor… (${yeni.size + 1}/${tarihler.length})`);

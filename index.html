@@ -632,6 +632,35 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           <span id="gtAyarDurum" class="status" style="margin:0;"></span>
         </div>
       </div>
+
+      <!-- ===== KÖPÜK ÇAĞRI (18.11.2026) — bakanlıktan inen KopukCagriDetay dosyası → Drive > ALO-144 > KÖPÜK TALEP DAĞILIMI ===== -->
+      <div id="yk-kopuk" class="yk-alt" style="display:none;">
+        <div class="page-title">Köpük Çağrı</div>
+        <div class="page-sub">Bakanlık sisteminden indirdiğin <b>KopukCagriDetay</b> dosyasını olduğu gibi yükle. Her çağrı, temsilcinin adıyla <b>KÖPÜK TALEP DAĞILIMI</b> tablosunun <b>PERSONEL</b> sekmesinden iline bağlanır; il × gün × neden sayıları o ilin sekmesine yazılır. Aynı tarih tabloda varsa üzerine yazılır, yoksa sona eklenir.</div>
+        <div class="card">
+          <div class="row">
+            <label class="btn primary" style="cursor:pointer;">📂 Köpük Çağrı Dosyası Seç<input type="file" id="kpDosya" accept=".xls,.xlsx,.xml" style="display:none;"></label>
+            <span id="kpDosyaBilgi" class="hint" style="margin:0;"></span>
+          </div>
+          <div id="kpDurum" class="status"></div>
+        </div>
+        <div class="card" id="kpEksikKart" style="display:none;">
+          <h2>Listede Olmayan Personel</h2>
+          <div class="hint">Bu adlar PERSONEL sekmesinde yok; çağrıları hiçbir ile sayılmadı. Lokasyonu seçip <b>Ekle</b> de (Sicil boş kalabilir). Ad, dosyadaki haliyle kaydedilir. Eklenince sayım hemen yenilenir; liste boşalmadan tabloya yazılmaz.</div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="kpEksikTablo" style="width:auto;"></table></div>
+        </div>
+        <div class="card" id="kpSonucKart" style="display:none;">
+          <h2>Önizleme</h2>
+          <div id="kpKontrol" class="status"></div>
+          <div class="row" style="margin:10px 0 4px;">
+            <label>İl: <select id="kpIlSec"></select></label>
+            <button class="btn ok" id="kpYazBtn" disabled>💾 Tabloya Yaz</button>
+            <span id="kpYazDurum" class="status" style="margin:0;"></span>
+          </div>
+          <div class="hint" style="margin:6px 0 0;"><b>Durum</b> sütunu: <i>üzerine yazılır</i> = bu tarih tabloda zaten var · <i>yeni satır</i> = tabloya eklenecek. Dosyada hiç çağrı olmayan günler (ilk ve son gün arasında) 0 olarak yazılır.</div>
+          <div class="prev-wrap" style="max-height:none;" id="kpTabloWrap"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== Yetkilendirme sayfası — sadece Süper Yetkili görür. Kişi/proje/özellik erişimini
@@ -2705,6 +2734,8 @@ function renderSidebar(){
       `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}" data-ikon="${s.svg}"><span class="nav-icon">${s.ikon}</span><span class="nav-ikon">${gorunumIkon(s.svg)}</span> ${s.ad}</div>`).join('');
     html += '<div class="nav-grup">Günlük Veri</div>' + GV_SAYFALAR.map(s =>
       `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}" data-ikon="${s.svg}"><span class="nav-icon">${s.ikon}</span><span class="nav-ikon">${gorunumIkon(s.svg)}</span> ${s.ad}</div>`).join('');
+    html += '<div class="nav-grup">Köpük Çağrı</div>' + KP_SAYFALAR.map(s =>
+      `<div class="nav-item${ykAktifSayfa === s.id ? ' active' : ''}" data-yoklama="${s.id}" data-ikon="${s.svg}"><span class="nav-icon">${s.ikon}</span><span class="nav-ikon">${gorunumIkon(s.svg)}</span> ${s.ad}</div>`).join('');
   }
   // Eski Yetkilendirme sayfası kaldırıldı (09.11.2026): yetki Panel > Yetkilendirme ekranında.
   if (false){
@@ -3871,13 +3902,14 @@ function ykSayfaAc(id){
   document.getElementById('page-project').style.display = 'none';
   document.getElementById('page-auth').style.display = 'none';
   document.getElementById('page-yoklama').style.display = 'block';
-  YK_SAYFALAR.concat(GV_SAYFALAR).forEach(s => { document.getElementById('yk-' + s.id).style.display = s.id === id ? 'block' : 'none'; });
+  YK_SAYFALAR.concat(GV_SAYFALAR, KP_SAYFALAR).forEach(s => { document.getElementById('yk-' + s.id).style.display = s.id === id ? 'block' : 'none'; });
   if (id === 'plan') ykPlanSayfasi();
   if (id === 'personel') ykPersonelSayfasi();
   if (id === 'ayar') ykAyarSayfasi();
   if (id === 'gvayar') gvAyarSayfasi();
   if (id === 'gt') gtSayfasi();
   if (id === 'gtayar') gtAyarSayfasi();
+  if (id === 'kopuk') kpSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
@@ -4963,6 +4995,7 @@ document.addEventListener('focusout', e => {
 // Kişiler Yoklama'nın Personel Listesi'nden (Tegsoft Adı → Sicil, Görev, Takım Lideri) gelir.
 // ============================================================================
 const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
+const KP_SAYFALAR = [ { id:'kopuk', ad:'Köpük Çağrı', ikon:'☎', svg:'telefon' } ];   // Köpük Çağrı bölümü (en alttaki script)
 const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊', svg:'grafik' },
   { id:'gvayar', ad:'Günlük Veri Ayarları',  ikon:'⚙',  svg:'ayar' },
@@ -6857,7 +6890,7 @@ document.getElementById('gvKosulKaydet').addEventListener('click', async () => {
     giris: '#signinGate',
     oge: '#navList .nav-item',
     id: el => el.dataset.proje ? 'proje:' + el.dataset.proje : (el.dataset.yoklama ? 'yoklama:' + el.dataset.yoklama : (el.dataset.auth ? 'auth' : '')),
-    grup: el => el.dataset.auth ? 'Yönetim' : (el.dataset.yoklama ? (GV_SAYFALAR.some(s => s.id === el.dataset.yoklama) ? 'Günlük Veri' : 'Yoklama') : 'Projeler'),
+    grup: el => el.dataset.auth ? 'Yönetim' : (el.dataset.yoklama ? (GV_SAYFALAR.some(s => s.id === el.dataset.yoklama) ? 'Günlük Veri' : (KP_SAYFALAR.some(s => s.id === el.dataset.yoklama) ? 'Köpük Çağrı' : 'Yoklama')) : 'Projeler'),
     yazmaPanelden: true,                              // yazma istekleri panelden izinle (authFetch)
     oturum: (token, ilk) => {
       accessToken = token;
@@ -7597,5 +7630,335 @@ document.getElementById('gtAyarYenile').addEventListener('click', () => {
 });
 function gtAyarSayfasi(){ if (!gtAy || !gtAy.degisti) gtAyarYukle(); }
 </script>
+<script>
+// ============================================================================
+// ===== KÖPÜK ÇAĞRI (18.11.2026) =====
+// Bakanlık sisteminden inen "KopukCagriDetay_GG.AA.YYYY.xls" (Excel 2003 XML biçimi; .xlsx de olur) okunur.
+// Her satır temsilcinin ADI ile Drive > ALO-144 > KÖPÜK TALEP DAĞILIMI > PERSONEL sekmesinden (Ad | Sicil | Lokasyon)
+// iline bağlanır (raporda sicil yok, bu yüzden eşleşme adla). Ad karşılaştırmasında görünmez boşluk, büyük/küçük harf,
+// Türkçe harf ve boşluk farkı yok sayılır ("BUSRADOKUYUCU" = "Büşra Dokuyucu").
+// Lokasyon → sekme: lokasyon adı sekme adıyla eşleşir (Osmaniye → OSMANİYE). Neden → sütun: sekmenin 1. satırındaki
+// başlıklar (Tarih | nedenler… | Genel Toplam). Nedenler koda yazılı değildir; tabloya yeni sütun eklenirse onu da kullanır.
+// Yazma şartı: listede olmayan ad, sekmesi olmayan lokasyon ya da sütunu olmayan neden kalmaması (il toplamları = dosya toplamı).
+// Aynı tarih tabloda varsa üzerine yazılır, yoksa sona eklenir. Dosyanın ilk ve son günü arasında hiç çağrı olmayan gün 0 yazılır.
+// ============================================================================
+const KP_DOSYA = '1c_UbNhrzunhYFkGfXEyMTvvfDhT3a1hkoLdJXy9tl1w';   // KÖPÜK TALEP DAĞILIMI
+const KP_PERSONEL = 'PERSONEL';
+// Raporun sütunları başlık adıyla bulunur (sıraya bakılmaz).
+const KP_RAPOR = { neden:'SECENEK_VALUE', ad:'AD', tarih:'TARIH', cagri:'CAGRI_ID' };
+// KP_SAYFALAR menü tanımı GV_SAYFALAR'ın yanında (panel köprüsü bu script'ten önce çalışır).
+
+let kpKayit = null;      // { dosya, satirlar:[{ad, neden, tarih}], tekrar }
+let kpTablo = null;      // { personel:[{ad,sicil,lokasyon,satir}], sekmeler:{ ad: {baslik, tarihSatir:Map, sonSatir} } }
+let kpSonuc = null;
+let kpEksikGirdi = new Map();   // eksik personel satırlarına yazılan sicil/lokasyon (yeniden çizimde korunur)
+
+// ---------- Saf yardımcılar (ağ yok) ----------
+function kpAdAnahtar(v){ return ykAd(v).replace(/\s+/g, ''); }
+function kpEntity(s){
+  return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+    return ({ nbsp:' ', amp:'&', lt:'<', gt:'>', quot:'"', apos:"'" })[e.toLowerCase()] ?? m;
+  });
+}
+// Excel 2003 XML (SpreadsheetML) → satır dizisi. Bakanlık dosyası &nbsp; içerdiği için XML ayrıştırıcısı kullanılmaz.
+function kpXmlSatirlar(metin){
+  const ws = metin.match(/<(?:ss:)?Worksheet[\s\S]*?<\/(?:ss:)?Worksheet>/);
+  const govde = ws ? ws[0] : metin;
+  const satirlar = [];
+  const rowRe = /<(?:ss:)?Row\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:ss:)?Row>)/g;
+  let r;
+  while ((r = rowRe.exec(govde))){
+    const out = [];
+    const cellRe = /<(?:ss:)?Cell\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:ss:)?Cell>)/g;
+    let c;
+    while ((c = cellRe.exec(r[1] || ''))){
+      const idx = (c[1] || '').match(/ss:Index="(\d+)"/);
+      if (idx) while (out.length < Number(idx[1]) - 1) out.push('');
+      const d = (c[2] || '').match(/<(?:ss:)?Data\b[^>]*>([\s\S]*?)<\/(?:ss:)?Data>/);
+      out.push(d ? kpEntity(d[1].replace(/<[^>]+>/g, '')) : '');
+    }
+    satirlar.push(out);
+  }
+  return satirlar;
+}
+// Satır dizisinden köpük kayıtları: başlık satırı aranır, sütunlar adıyla bulunur.
+function kpKayitlar(satirlar){
+  const A = v => ykAnahtar(v);
+  const bi = satirlar.findIndex(r => r && [KP_RAPOR.neden, KP_RAPOR.ad, KP_RAPOR.tarih].every(h => r.some(x => A(x) === A(h))));
+  if (bi < 0) throw new Error(`Dosyada başlık satırı bulunamadı (${KP_RAPOR.neden}, ${KP_RAPOR.ad}, ${KP_RAPOR.tarih} sütunları aranıyor). Bakanlık sisteminden indirilen KopukCagriDetay dosyası mı?`);
+  const b = satirlar[bi].map(A);
+  const iN = b.indexOf(A(KP_RAPOR.neden)), iA = b.indexOf(A(KP_RAPOR.ad)), iT = b.indexOf(A(KP_RAPOR.tarih)), iC = b.indexOf(A(KP_RAPOR.cagri));
+  const kayit = [], gorulen = new Set(), tarihsiz = [];
+  let tekrar = 0;
+  for (let i = bi + 1; i < satirlar.length; i++){
+    const r = satirlar[i]; if (!r) continue;
+    const ad = String(r[iA] == null ? '' : r[iA]).replace(/\u00A0/g, ' ').trim();
+    const neden = String(r[iN] == null ? '' : r[iN]).replace(/\u00A0/g, ' ').trim();
+    if (!ad && !neden) continue;
+    const tarih = ykTarih(typeof r[iT] === 'string' ? r[iT].replace(/\u00A0/g, ' ') : r[iT]);
+    if (!tarih){ tarihsiz.push(i + 1); continue; }
+    if (iC >= 0 && r[iC] != null && r[iC] !== ''){
+      const id = String(r[iC]).trim();
+      if (gorulen.has(id)){ tekrar++; continue; }
+      gorulen.add(id);
+    }
+    kayit.push({ ad, neden, tarih });
+  }
+  return { satirlar: kayit, tekrar, tarihsiz };
+}
+// PERSONEL sekmesi → ad anahtarı → lokasyon. Aynı ad iki farklı lokasyonla geçiyorsa çakışma.
+function kpPersonelHarita(personel){
+  const harita = new Map(), cakisma = new Map();
+  personel.forEach(p => {
+    const k = kpAdAnahtar(p.ad); if (!k || !p.lokasyon) return;
+    const var_ = harita.get(k);
+    if (var_ && ykAnahtar(var_) !== ykAnahtar(p.lokasyon)){
+      if (!cakisma.has(k)) cakisma.set(k, { ad: p.ad, lokasyonlar: new Set([var_]) });
+      cakisma.get(k).lokasyonlar.add(p.lokasyon);
+    } else if (!var_) harita.set(k, p.lokasyon);
+  });
+  return { harita, cakisma };
+}
+function kpGunler(ilk, son){
+  const out = []; let t = ilk, g = 0;
+  while (t && ykSira(t) <= ykSira(son) && g++ < 400){ out.push(t); t = ykTarihEkle(t, 1); }
+  return out;
+}
+// Asıl hesap: kayıtlar + personel + sekme başlıkları → il × gün × neden sayıları ve yazmayı engelleyen sorunlar.
+function kpHesapla(kayit, personel, sekmeler){
+  const { harita, cakisma } = kpPersonelHarita(personel);
+  const sekmeAd = new Map(Object.keys(sekmeler).map(ad => [ykAnahtar(ad), ad]));
+  const eksik = new Map(), lokasyonsuz = new Map(), nedensiz = new Map();
+  const sayim = {};   // sekme → tarih → neden(başlık) → sayı
+  let sayilan = 0;
+  const tarihler = kayit.map(k => k.tarih).sort((a, b) => ykSira(a) - ykSira(b));
+  kayit.forEach(k => {
+    const ak = kpAdAnahtar(k.ad);
+    if (cakisma.has(ak)) return;
+    const lok = harita.get(ak);
+    if (!lok){
+      const e = eksik.get(ak) || { ad: k.ad, sayi: 0, gunler: new Set() };
+      e.sayi++; e.gunler.add(k.tarih); eksik.set(ak, e); return;
+    }
+    const sk = sekmeAd.get(ykAnahtar(lok));
+    if (!sk){ lokasyonsuz.set(lok, (lokasyonsuz.get(lok) || 0) + 1); return; }
+    const baslik = sekmeler[sk].baslik;
+    const col = baslik.find(h => ykAnahtar(h) === ykAnahtar(k.neden));
+    if (!col || /^TAR[İI]H$|^GENEL TOPLAM$/.test(ykAnahtar(col))){
+      const key = sk + '|' + k.neden; nedensiz.set(key, (nedensiz.get(key) || 0) + 1); return;
+    }
+    const g = ((sayim[sk] = sayim[sk] || {})[k.tarih] = sayim[sk][k.tarih] || {});
+    g[col] = (g[col] || 0) + 1;
+    sayilan++;
+  });
+  const gunler = tarihler.length ? kpGunler(tarihler[0], tarihler[tarihler.length - 1]) : [];
+  const sorunlar = [];
+  if (eksik.size) sorunlar.push(`${eksik.size} ad PERSONEL listesinde yok (${[...eksik.values()].reduce((s, e) => s + e.sayi, 0)} çağrı).`);
+  cakisma.forEach(c => sorunlar.push(`"${c.ad}" PERSONEL'de birden fazla lokasyonla geçiyor (${[...c.lokasyonlar].join(', ')}); birini sil.`));
+  const cakSayi = kayit.filter(k => cakisma.has(kpAdAnahtar(k.ad))).length;
+  lokasyonsuz.forEach((n, l) => sorunlar.push(`"${l}" lokasyonu için tabloda sekme yok (${n} çağrı). PERSONEL'deki lokasyon adı sekme adıyla aynı olmalı.`));
+  nedensiz.forEach((n, key) => { const [sk, nd] = key.split('|'); sorunlar.push(`"${nd || '(boş)'}" nedeni ${sk} sekmesinde sütun olarak yok (${n} çağrı).`); });
+  return { sayim, gunler, eksik, sorunlar, toplam: kayit.length, sayilan, cakSayi };
+}
+// Bir sekmenin yazılacak satırı (başlık sırasıyla, Tarih hariç).
+function kpSatirDegerleri(baslik, gunSayim){
+  const genelMi = h => /^GENEL TOPLAM$/.test(ykAnahtar(h));
+  const top = baslik.slice(1).reduce((t, h) => t + (genelMi(h) ? 0 : ((gunSayim && gunSayim[h]) || 0)), 0);
+  return baslik.slice(1).map(h => genelMi(h) ? top : ((gunSayim && gunSayim[h]) || 0));
+}
+
+// ---------- Tablo okuma ----------
+const KP_URL = (aralik, ek) => `https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}/values/${encodeURIComponent(aralik)}${ek || ''}`;
+async function kpTabloOku(){
+  const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}?fields=sheets.properties.title`);
+  const adlar = (meta.sheets || []).map(s => s.properties.title);
+  if (!adlar.includes(KP_PERSONEL)) throw new Error(`KÖPÜK TALEP DAĞILIMI'nda "${KP_PERSONEL}" sekmesi yok.`);
+  const ilAdlar = adlar.filter(a => a !== KP_PERSONEL);
+  const ranges = [`'${KP_PERSONEL}'!A1:C`].concat(ilAdlar.map(a => `'${a}'!A1:Z`));
+  const q = '?' + ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&') + '&valueRenderOption=FORMATTED_VALUE';
+  const veri = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${KP_DOSYA}/values:batchGet${q}`);
+  const vr = veri.valueRanges || [];
+  const per = (vr[0] && vr[0].values) || [];
+  const pb = (per[0] || []).map(ykAnahtar);
+  const iAd = pb.indexOf('AD'), iSc = pb.indexOf('SİCİL'), iLk = pb.indexOf('LOKASYON');
+  if (iAd < 0 || iLk < 0) throw new Error(`"${KP_PERSONEL}" sekmesinin 1. satırında "Ad" ve "Lokasyon" başlıkları olmalı.`);
+  const personel = per.slice(1).map((r, i) => ({ ad: String(r[iAd] || '').trim(), sicil: iSc >= 0 ? String(r[iSc] || '').trim() : '', lokasyon: String(r[iLk] || '').trim(), satir: i + 2 }))
+    .filter(p => p.ad);
+  const sekmeler = {};
+  ilAdlar.forEach((ad, j) => {
+    const v = (vr[j + 1] && vr[j + 1].values) || [];
+    const baslik = (v[0] || []).map(h => String(h).trim());
+    // Yalnız il sekmeleri: A1 = Tarih ve bir "Genel Toplam" başlığı olan sekmeler (GENEL gibi boş sekmeler atlanır)
+    if (!baslik.length || !/^TAR[İI]H$/.test(ykAnahtar(baslik[0])) || !baslik.some(h => /^GENEL TOPLAM$/.test(ykAnahtar(h)))) return;
+    const tarihSatir = new Map(); let sonSatir = 1;
+    v.forEach((r, i) => { if (i === 0) return; if (r.some(x => String(x).trim() !== '')) sonSatir = i + 1; const t = ykTarih(r[0]); if (t && !tarihSatir.has(t)) tarihSatir.set(t, i + 1); });
+    sekmeler[ad] = { baslik, tarihSatir, sonSatir };
+  });
+  if (!Object.keys(sekmeler).length) throw new Error('Tabloda il sekmesi bulunamadı (A1 = Tarih, başlıklarda Genel Toplam olan sekmeler aranır).');
+  return { personel, sekmeler };
+}
+
+// ---------- Sayfa ----------
+function kpSayfasi(){ /* dosya seçilince çalışır */ }
+document.getElementById('kpDosya').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  e.target.value = '';
+  ykDurum('kpDurum', 'Dosya okunuyor…');
+  document.getElementById('kpYazDurum').textContent = '';
+  try {
+    const buf = await f.arrayBuffer();
+    const bas = new Uint8Array(buf.slice(0, 4));
+    let satirlar;
+    if (bas[0] === 0x50 && bas[1] === 0x4B){              // .xlsx (zip)
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0]; satirlar = [];
+      ws.eachRow({ includeEmpty: false }, row => satirlar.push(row.values.slice(1).map(x => (x && typeof x === 'object' && !(x instanceof Date)) ? (x.text || x.result || '') : x)));
+    } else if (bas[0] === 0xD0 && bas[1] === 0xCF){       // eski ikili .xls
+      throw new Error('Bu dosya eski ikili Excel (.xls) biçiminde. Excel\'de açıp "Excel Çalışma Kitabı (.xlsx)" olarak kaydedip yükle.');
+    } else {
+      satirlar = kpXmlSatirlar(new TextDecoder('utf-8').decode(buf));
+    }
+    const k = kpKayitlar(satirlar);
+    if (!k.satirlar.length) throw new Error('Dosyada köpük çağrı satırı bulunamadı.');
+    kpKayit = Object.assign({ dosya: f.name }, k);
+    ykDurum('kpDurum', 'KÖPÜK TALEP DAĞILIMI okunuyor…');
+    kpTablo = await kpTabloOku();
+    ykDurum('kpDurum', '');
+    kpYenidenHesapla();
+  } catch(err){ ykDurum('kpDurum', '✗ ' + err.message, 'err'); }
+});
+
+function kpYenidenHesapla(){
+  kpSonuc = kpHesapla(kpKayit.satirlar, kpTablo.personel, kpTablo.sekmeler);
+  const g = kpSonuc.gunler;
+  let bilgi = `${kpKayit.dosya} · ${kpSonuc.toplam.toLocaleString('tr-TR')} çağrı · ${g[0]} – ${g[g.length - 1]} (${g.length} gün)`;
+  if (kpKayit.tekrar) bilgi += ` · ${kpKayit.tekrar} tekrar eden çağrı (aynı CAGRI_ID) bir kez sayıldı`;
+  if (kpKayit.tarihsiz.length) bilgi += ` · ${kpKayit.tarihsiz.length} satırda tarih okunamadı, sayılmadı`;
+  document.getElementById('kpDosyaBilgi').textContent = bilgi;
+  kpEksikCiz();
+  kpOnizlemeCiz();
+}
+
+function kpLokasyonlar(){
+  const s = new Map();
+  kpTablo.personel.forEach(p => { if (p.lokasyon && !s.has(ykAnahtar(p.lokasyon))) s.set(ykAnahtar(p.lokasyon), p.lokasyon); });
+  Object.keys(kpTablo.sekmeler).forEach(ad => { if (![...s.keys()].includes(ykAnahtar(ad))) s.set(ykAnahtar(ad), ad); });
+  // Yalnız sekmesi olan lokasyonlar seçilebilir
+  const sek = new Set(Object.keys(kpTablo.sekmeler).map(ykAnahtar));
+  return [...s.entries()].filter(([k]) => sek.has(k)).map(([, v]) => v);
+}
+function kpEksikCiz(){
+  const kart = document.getElementById('kpEksikKart'), t = document.getElementById('kpEksikTablo');
+  const liste = [...kpSonuc.eksik.values()].sort((a, b) => b.sayi - a.sayi);
+  if (!liste.length){ kart.style.display = 'none'; t.innerHTML = ''; return; }
+  kart.style.display = 'block';
+  const lok = kpLokasyonlar();
+  const gir = kpEksikGirdi;
+  t.innerHTML = '<tr><th>Ad (dosyadaki gibi)</th><th class="sayi">Çağrı</th><th>Günler</th><th>Sicil (isteğe bağlı)</th><th>Lokasyon</th><th></th></tr>' +
+    liste.map((e, i) => `<tr data-i="${i}"><td>${ykEsc(e.ad)}</td><td class="sayi">${e.sayi}</td><td>${[...e.gunler].sort((a, b) => ykSira(a) - ykSira(b)).map(x => x.slice(0, 5)).join(', ')}</td>
+      <td><input type="text" class="kpSicil" style="width:90px;" value="${ykEsc((gir.get(kpAdAnahtar(e.ad)) || {}).sicil || '')}"></td>
+      <td><select class="kpLok"><option value="">— seç —</option>${lok.map(l => `<option${(gir.get(kpAdAnahtar(e.ad)) || {}).lok === l ? ' selected' : ''}>${ykEsc(l)}</option>`).join('')}</select></td>
+      <td><button class="btn ok kpEkle">Ekle</button></td></tr>`).join('');
+  // Başka bir satır eklenip tablo yeniden çizilince yazılanlar kaybolmasın
+  t.querySelectorAll('tr[data-i]').forEach(tr => {
+    const k = kpAdAnahtar(liste[Number(tr.dataset.i)].ad);
+    const sakla = () => gir.set(k, { sicil: tr.querySelector('.kpSicil').value, lok: tr.querySelector('.kpLok').value });
+    tr.querySelector('.kpSicil').addEventListener('input', sakla);
+    tr.querySelector('.kpLok').addEventListener('change', sakla);
+  });
+  t.querySelectorAll('.kpEkle').forEach(b => b.addEventListener('click', async () => {
+    const tr = b.closest('tr'), e = liste[Number(tr.dataset.i)];
+    const lokasyon = tr.querySelector('.kpLok').value, sicil = tr.querySelector('.kpSicil').value.trim();
+    if (!lokasyon){ ykDurum('kpDurum', `"${e.ad}" için lokasyon seç.`, 'err'); return; }
+    b.disabled = true; ykDurum('kpDurum', `"${e.ad}" PERSONEL'e ekleniyor…`);
+    try {
+      await authFetch(KP_URL(`'${KP_PERSONEL}'!A1:C1`, ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [[e.ad, sicil, lokasyon]] }),
+      });
+      kpTablo.personel.push({ ad: e.ad, sicil, lokasyon, satir: 0 });
+      ykDurum('kpDurum', `✓ "${e.ad}" ${lokasyon} olarak eklendi.`, 'ok');
+      kpYenidenHesapla();
+    } catch(err){ b.disabled = false; ykDurum('kpDurum', '✗ ' + err.message, 'err'); }
+  }));
+}
+
+function kpOnizlemeCiz(){
+  document.getElementById('kpSonucKart').style.display = 'block';
+  const s = kpSonuc, ok = !s.sorunlar.length && s.sayilan === s.toplam;
+  const ilToplam = Object.keys(kpTablo.sekmeler).map(sk => {
+    const top = s.gunler.reduce((t, g) => t + Object.values((s.sayim[sk] || {})[g] || {}).reduce((a, b) => a + b, 0), 0);
+    return [sk, top];
+  });
+  const ozet = ilToplam.map(([sk, n]) => `${sk} ${n.toLocaleString('tr-TR')}`).join(' + ');
+  const k = document.getElementById('kpKontrol');
+  k.innerHTML = ok
+    ? `✓ İl toplamları dosyayla tutuyor: ${ozet} = <b>${s.sayilan.toLocaleString('tr-TR')}</b> (dosyada ${s.toplam.toLocaleString('tr-TR')} çağrı).`
+    : `✗ Tabloya yazılamaz — il toplamı ${s.sayilan.toLocaleString('tr-TR')}, dosyada ${s.toplam.toLocaleString('tr-TR')} çağrı (fark ${(s.toplam - s.sayilan).toLocaleString('tr-TR')}).<br>` + s.sorunlar.map(ykEsc).join('<br>');
+  k.className = 'status ' + (ok ? 'ok' : 'err');
+  document.getElementById('kpYazBtn').disabled = !ok;
+  const sel = document.getElementById('kpIlSec'), onceki = sel.value;
+  sel.innerHTML = '<option value="__hepsi">Tüm iller (toplam)</option>' + ilToplam.map(([sk, n]) => `<option value="${ykEsc(sk)}">${ykEsc(sk)} (${n.toLocaleString('tr-TR')})</option>`).join('');
+  if ([...sel.options].some(o => o.value === onceki)) sel.value = onceki;
+  kpTabloCiz();
+}
+document.getElementById('kpIlSec').addEventListener('change', kpTabloCiz);
+function kpTabloCiz(){
+  const s = kpSonuc, il = document.getElementById('kpIlSec').value;
+  const sekmeler = il === '__hepsi' ? Object.keys(kpTablo.sekmeler) : [il];
+  const baslik = kpTablo.sekmeler[sekmeler[0]].baslik;
+  const satirlar = s.gunler.map(g => {
+    const toplamlar = baslik.slice(1).map(() => 0);
+    sekmeler.forEach(sk => {
+      const bs = kpTablo.sekmeler[sk].baslik;
+      const v = kpSatirDegerleri(bs, (s.sayim[sk] || {})[g]);
+      // başlık adına göre topla (sekmelerin sütun sırası farklı olsa da doğru yere düşer)
+      bs.slice(1).forEach((h, j) => { const i = baslik.slice(1).findIndex(x => ykAnahtar(x) === ykAnahtar(h)); if (i >= 0) toplamlar[i] += v[j]; });
+    });
+    const durum = il === '__hepsi' ? '' : (kpTablo.sekmeler[il].tarihSatir.has(g) ? 'üzerine yazılır' : 'yeni satır');
+    return { g, toplamlar, durum };
+  });
+  const genel = baslik.slice(1).map((_, i) => satirlar.reduce((t, r) => t + r.toplamlar[i], 0));
+  const durumTh = il === '__hepsi' ? '' : '<th>Durum</th>';
+  document.getElementById('kpTabloWrap').innerHTML = `<table class="prev"><tr><th>${ykEsc(baslik[0])}</th>${baslik.slice(1).map(h => `<th class="sayi">${ykEsc(h)}</th>`).join('')}${durumTh}</tr>` +
+    satirlar.map(r => `<tr><td>${r.g}</td>${r.toplamlar.map(v => `<td class="sayi">${v.toLocaleString('tr-TR')}</td>`).join('')}${il === '__hepsi' ? '' : `<td style="color:var(--dim);">${r.durum}</td>`}</tr>`).join('') +
+    `<tr><td><b>Toplam</b></td>${genel.map(v => `<td class="sayi"><b>${v.toLocaleString('tr-TR')}</b></td>`).join('')}${il === '__hepsi' ? '' : '<td></td>'}</tr></table>`;
+}
+
+document.getElementById('kpYazBtn').addEventListener('click', async () => {
+  const s = kpSonuc; if (!s || s.sorunlar.length || s.sayilan !== s.toplam) return;
+  const btn = document.getElementById('kpYazBtn'); btn.disabled = true;
+  ykDurum('kpYazDurum', 'Tablo yeniden okunuyor…');
+  try {
+    // Yazmadan hemen önce tablo yeniden okunur: arada eklenen satırlar/tarihler doğru yere yazılsın.
+    kpTablo = await kpTabloOku();
+    const yeni = kpHesapla(kpKayit.satirlar, kpTablo.personel, kpTablo.sekmeler);
+    if (yeni.sorunlar.length || yeni.sayilan !== yeni.toplam){ kpSonuc = yeni; kpEksikCiz(); kpOnizlemeCiz(); ykDurum('kpYazDurum', '✗ Tablo değişmiş; önizlemeyi kontrol et.', 'err'); return; }
+    kpSonuc = yeni;
+    const data = [], ozet = [], sirasiz = [];
+    Object.entries(kpTablo.sekmeler).forEach(([sk, t]) => {
+      let sonraki = t.sonSatir + 1, guncel = 0, eklenen = 0;
+      const sonTarih = [...t.tarihSatir.keys()].sort((a, b) => ykSira(b) - ykSira(a))[0];
+      const sonHarf = String.fromCharCode(64 + t.baslik.length);
+      yeni.gunler.forEach(g => {
+        const deger = kpSatirDegerleri(t.baslik, (yeni.sayim[sk] || {})[g]);
+        let satir = t.tarihSatir.get(g);
+        if (satir) guncel++;
+        else { satir = sonraki++; eklenen++; if (sonTarih && ykSira(g) < ykSira(sonTarih)) sirasiz.push(`${sk} ${g}`); }
+        data.push({ range: `'${sk}'!A${satir}:${sonHarf}${satir}`, values: [[g].concat(deger)] });
+      });
+      ozet.push(`${sk}: ${guncel} gün güncellendi, ${eklenen} gün eklendi`);
+    });
+    ykDurum('kpYazDurum', 'Yazılıyor…');
+    await batchUpdateValues(KP_DOSYA, data);
+    kpTablo = await kpTabloOku();
+    kpOnizlemeCiz();
+    ykDurum('kpYazDurum', `✓ Yazıldı. ${ozet.join(' · ')}.` + (sirasiz.length ? ` Not: ${sirasiz.length} tarih tablodaki son tarihten önce olduğu için sona eklendi (sıralı değil).` : ''), 'ok');
+  } catch(err){ ykDurum('kpYazDurum', '✗ ' + err.message, 'err'); }
+  finally { btn.disabled = !(kpSonuc && !kpSonuc.sorunlar.length && kpSonuc.sayilan === kpSonuc.toplam); }
+});
+</script>
+
 </body>
 </html>

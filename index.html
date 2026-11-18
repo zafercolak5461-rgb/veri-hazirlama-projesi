@@ -573,6 +573,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <label title="Vardiya Kontrolü: girişi vardiya başından bu kadar dakika geç olan, giriş ve çıkışı bu kadar erken olan ya da son çıkışı vardiya bitişinden bu kadar geç olan listelenir">Vardiya kontrolü eşiği (dk): <input type="number" id="gvStilVkEsik" min="1" step="5" style="width:70px;"></label>
             <label title="Son çıkış, eşikten bu kadar az kaymışsa da aynı yöne kaymış sayılır (vardiya yanlış olabilir)">Pay (dk): <input type="number" id="gvStilVkPay" min="0" step="5" style="width:60px;"></label>
             <label title="Erken Çıkanlar: son çıkışı vardiya bitişinden bu kadar dakikadan fazla önce olanlar listelenir (0 = bir saniye bile)">Erken çıkış toleransı (dk): <input type="number" id="gvStilEcTol" min="0" step="1" style="width:60px;"></label>
+            <label title="Maile Kopyala'da bu başlıklar tabloya alınmaz (virgülle ayır). Ekran ve Excel dosyaları etkilenmez.">Mailde gösterilmeyen sütunlar: <input type="text" id="gvStilMailGizle" style="width:200px;" placeholder="ör. Açıklama"></label>
             <label title="{AY} = Kasım, {YIL} = 2026, {TAKIM} = takım lideri (ya da Tümü)">Aylık dosya adı: <input type="text" id="gvStilAylikAd" style="width:300px;"></label>
             <label><input type="checkbox" id="gvStilSdOrta"> gün içi</label><label><input type="checkbox" id="gvStilSdBas"> vardiya başı</label><label><input type="checkbox" id="gvStilSdSon"> vardiya sonu</label>
             <span id="gvStilOrnek" style="padding:4px 14px; border:1px solid #000; font-family:Calibri,Arial,sans-serif; font-weight:bold; font-size:13px;">Login Time</span>
@@ -4986,8 +4987,8 @@ let gvAktifGrup = '';
 // Excel/mail görünümü: AYARLAR sekmesinden (Ayar | Değer). Boşsa 11.11 dosyasındaki renkler.
 const GV_STIL_ANAHTAR = { baslikRenk:'Günlük Veri Başlık Rengi', baslikYazi:'Günlük Veri Başlık Yazı Rengi', gecePencere:'Gece Vardiyası Erken Giriş (dk)',
   aylikAd:'Aylık Dosya Adı', arsivId:'Günlük Veri Arşivi (Sheets ID)', sdEsik:'Sistem Dışı Süre Eşiği (dk)', sdOrta:'Sistem Dışı: Gün İçi', sdBas:'Sistem Dışı: Vardiya Başı', sdSon:'Sistem Dışı: Vardiya Sonu',
-  vkEsik:'Vardiya Kontrolü Eşiği (dk)', vkPay:'Vardiya Kontrolü Payı (dk)', ecTol:'Erken Çıkış Toleransı (dk)' };
-const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', arsivId:'1IIVfbBzmfKjRh1n1cC-z1sksPKZ237447xghPR3pSRE', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true, vkEsik:45, vkPay:15, ecTol:0 };
+  vkEsik:'Vardiya Kontrolü Eşiği (dk)', vkPay:'Vardiya Kontrolü Payı (dk)', ecTol:'Erken Çıkış Toleransı (dk)', mailGizle:'Mailde Gösterilmeyen Sütunlar' };
+const GV_STIL_VARSAYILAN = { baslikRenk:'#5B9BD5', baslikYazi:'#FFFFFF', gecePencere:60, aylikAd:'{AY}_{YIL}_{TAKIM}_Takım_Verileri.xlsx', arsivId:'1IIVfbBzmfKjRh1n1cC-z1sksPKZ237447xghPR3pSRE', sdEsik:30, sdOrta:true, sdBas:true, sdSon:true, vkEsik:45, vkPay:15, ecTol:0, mailGizle:'Açıklama' };
 let gvStil = Object.assign({}, GV_STIL_VARSAYILAN);
 function gvRenk(v, yedek){ const m = String(v || '').trim().match(/^#?([0-9a-f]{6})$/i); return m ? '#' + m[1].toUpperCase() : yedek; }
 function gvStilKur(ayarRows){
@@ -5003,7 +5004,9 @@ function gvStilKur(ayarRows){
            sdBas: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdBas))),
            sdSon: (v => v == null || v === '' ? true : ykAnahtar(v) !== 'HAYIR')(m.get(ykAnahtar(GV_STIL_ANAHTAR.sdSon))),
            aylikAd: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.aylikAd)) || '').trim() || GV_STIL_VARSAYILAN.aylikAd,
-           arsivId: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.arsivId)) || '').trim() || GV_STIL_VARSAYILAN.arsivId };
+           arsivId: String(m.get(ykAnahtar(GV_STIL_ANAHTAR.arsivId)) || '').trim() || GV_STIL_VARSAYILAN.arsivId,
+           // satır hiç yoksa varsayılan (Açıklama); satır var ama boşsa hiçbir sütun gizlenmez
+           mailGizle: m.has(ykAnahtar(GV_STIL_ANAHTAR.mailGizle)) ? String(m.get(ykAnahtar(GV_STIL_ANAHTAR.mailGizle)) || '').trim() : GV_STIL_VARSAYILAN.mailGizle };
 }
 // Hizalama: metin sola, sayı/süre/saat/tarih ortaya (11.11 dosyasındaki gibi)
 function gvOrtala(bicim){ return ykAnahtar(bicim) !== 'METİN'; }
@@ -6237,8 +6240,13 @@ document.getElementById('gvSekmeler').addEventListener('click', e => {
 document.getElementById('gvTakim').addEventListener('change', () => { if (gvSonuc) gvSonucCiz(); });   // sekme sayıları da takım liderine göre
 
 // Mail: ekrandaki görünüm (sekme + takım lideri), Excel görünümüyle kenarlıklı tablo
+// AYARLAR "Mailde Gösterilmeyen Sütunlar" (virgülle) mail tablosuna alınmaz; ekran ve Excel aynen kalır
+function gvMailSutun(gorunum){
+  const gizle = new Set(String(gvStil.mailGizle || '').split(/[,;]/).map(x => ykAnahtar(x.trim())).filter(Boolean));
+  return gvGorSut(gorunum).filter(x => !gizle.has(ykAnahtar(x.baslik)));
+}
 function gvMailHtml(gorunum){
-  const sut = gvGorSut(gorunum), kisiler = gvKisiler(gorunum);
+  const sut = gvMailSutun(gorunum), kisiler = gvKisiler(gorunum);
   const yazi = 'font-family:Calibri,Arial,sans-serif;font-size:10pt;';
   const td = `${yazi}border:1px solid #000;padding:1px 6px;white-space:nowrap;`;
   const bas = `${td}font-weight:bold;text-align:center;background:${gvStil.baslikRenk};color:${gvStil.baslikYazi};`;
@@ -6675,6 +6683,7 @@ function gvStilFormu(st){
   document.getElementById('gvStilSd').value = st.sdEsik;
   document.getElementById('gvStilVkEsik').value = st.vkEsik; document.getElementById('gvStilVkPay').value = st.vkPay; document.getElementById('gvStilEcTol').value = st.ecTol;
   document.getElementById('gvStilAylikAd').value = st.aylikAd;
+  document.getElementById('gvStilMailGizle').value = st.mailGizle;
   document.getElementById('gvStilSdOrta').checked = st.sdOrta; document.getElementById('gvStilSdBas').checked = st.sdBas; document.getElementById('gvStilSdSon').checked = st.sdSon;
   gvStilOrnek();
 }
@@ -6682,7 +6691,7 @@ function gvStilOrnek(){
   const o = document.getElementById('gvStilOrnek');
   o.style.background = document.getElementById('gvStilRenk').value; o.style.color = document.getElementById('gvStilYazi').value;
 }
-['gvStilRenk','gvStilYazi','gvStilGece','gvStilAylikAd','gvStilSd','gvStilVkEsik','gvStilVkPay','gvStilEcTol','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
+['gvStilRenk','gvStilYazi','gvStilGece','gvStilAylikAd','gvStilMailGizle','gvStilSd','gvStilVkEsik','gvStilVkPay','gvStilEcTol','gvStilSdOrta','gvStilSdBas','gvStilSdSon'].forEach(id => document.getElementById(id).addEventListener('input', () => { gvStilOrnek(); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); }));
 document.getElementById('gvStilVarsayilan').addEventListener('click', () => { gvStilFormu(GV_STIL_VARSAYILAN); ykDurum('gvStilDurum', 'Kaydedilmedi', 'warn'); });
 document.getElementById('gvStilKaydet').addEventListener('click', async () => {
   const yeni = new Map([[GV_STIL_ANAHTAR.baslikRenk, gvRenk(document.getElementById('gvStilRenk').value, GV_STIL_VARSAYILAN.baslikRenk)],
@@ -6695,7 +6704,8 @@ document.getElementById('gvStilKaydet').addEventListener('click', async () => {
                         [GV_STIL_ANAHTAR.sdOrta, document.getElementById('gvStilSdOrta').checked ? 'EVET' : 'HAYIR'],
                         [GV_STIL_ANAHTAR.sdBas, document.getElementById('gvStilSdBas').checked ? 'EVET' : 'HAYIR'],
                         [GV_STIL_ANAHTAR.sdSon, document.getElementById('gvStilSdSon').checked ? 'EVET' : 'HAYIR'],
-                        [GV_STIL_ANAHTAR.aylikAd, document.getElementById('gvStilAylikAd').value.trim() || GV_STIL_VARSAYILAN.aylikAd]]);
+                        [GV_STIL_ANAHTAR.aylikAd, document.getElementById('gvStilAylikAd').value.trim() || GV_STIL_VARSAYILAN.aylikAd],
+                        [GV_STIL_ANAHTAR.mailGizle, document.getElementById('gvStilMailGizle').value.trim()]]);
   ykDurum('gvStilDurum', 'Kaydediliyor…');
   try {
     // AYARLAR'daki diğer satırlar (Yoklama ayarları) korunur; yalnız bu iki satır güncellenir.

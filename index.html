@@ -4236,7 +4236,10 @@ document.getElementById('ykKaydetBtn').addEventListener('click', async () => {
 function ykKisiSirali(s){
   const sira = { 'Yıllık İzin':0, 'Rapor':1, 'Diğer':2 };
   const turSira = x => x.exTur === 'izin' ? (sira[x.sebepGrup] ?? 3) : ({ sm:4, off:5, bilgi:6 }[x.exTur] ?? 7);
-  return s.kisiler.slice().sort((a, b) => turSira(a) - turSira(b) || a.ad.localeCompare(b.ad, 'tr'));
+  // Grup → açıklama A→Z → ad A→Z
+  return s.kisiler.slice().sort((a, b) => turSira(a) - turSira(b)
+    || String(a.exAciklama || '').localeCompare(String(b.exAciklama || ''), 'tr', { sensitivity:'base' })
+    || a.ad.localeCompare(b.ad, 'tr'));
 }
 const YK_RENK = { mavi:'#00B0F0', izin:'#FF0000', sm:'#FFC000', off:'#92D050', bilgi:'#00B0F0' };
 function ykYuzde2(x){ return (x * 100).toFixed(2).replace('.', ',') + '%'; }

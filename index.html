@@ -3758,13 +3758,16 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
   // Tek istisna DÜZENLEME düzenindeki gibi: Sosyal Medya'da o gün OFF olanlar da yazılır (eksik sayılmaz).
   const listeler = { 'Yıllık İzin': [], 'Rapor': [], 'Diğer': [], 'Sosyal Medya': [] };
   let listeEksik = 0;
+  const diger = [];   // Diğer listesi: önce sebep, sonra ad A→Z
   for (const k of kisiler){
-    if (k.sebepGrup === 'Diğer'){ listeler['Diğer'].push(`${k.ad} (${k.sebepAd})`); listeEksik++; }
+    if (k.sebepGrup === 'Diğer'){ diger.push([k.ad, k.sebepAd]); listeEksik++; }
     else if (listeler[k.sebepGrup]){ listeler[k.sebepGrup].push(k.ad); listeEksik++; }
     else if (k.rg === 'SM' && k.durum === 'Gelmedi'){ listeler['Sosyal Medya'].push(`${k.ad} (${k.vardiya.replace('-', ' - ')} VARDİYASI)`); listeEksik++; }
     else if (k.rg === 'SM' && k.durum === 'Çalışmıyor' && !k.login) listeler['Sosyal Medya'].push(`${k.ad} (OFF)`);
-    else if (k.durum === 'Gelmedi'){ listeler['Diğer'].push(`${k.ad} (SEBEP YOK)`); listeEksik++; }
+    else if (k.durum === 'Gelmedi'){ diger.push([k.ad, 'SEBEP YOK']); listeEksik++; }
   }
+  diger.sort((a, b) => String(a[1] || '').localeCompare(String(b[1] || ''), 'tr', { sensitivity:'base' }) || a[0].localeCompare(b[0], 'tr'));
+  listeler['Diğer'] = diger.map(([ad, sebep]) => `${ad} (${sebep})`);
   // Geç girenler: gerçek vardiyası olan ve gelenler; vardiya başı + tolerans (dk) ve sonrası geç.
   const gec = kisiler.filter(k => k.geldi && k.gercekVardiya && k.login)
     .map(k => ({ k, sn: ykGecikmeSn(k.gercekVardiya, k.login) }))

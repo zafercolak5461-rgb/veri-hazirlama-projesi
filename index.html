@@ -3711,11 +3711,10 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     // Drive'da kod (Dİ, HT…) varsa vardiya yoktur; Drive boşsa plandaki vardiya (planVal yalnız o durumda dolu).
     const gercekVardiya = calismiyor ? '' : (ykVardiya(driveVal) || ykVardiya(planVal));
     if (!calismiyor && !gercekVardiya && !sebepGrup && (gD === 'Çalışmıyor' || gP === 'Çalışmıyor')) calismiyor = true;
-    // Vardiya yerine kod yazılmışsa (Rapor, Yıllık İzin, Dİ…) kişi kendi vardiya satırında sayılır (23.11.2026):
-    // o günün Haftalık Plan vardiyası → aynı haftada Drive'da yazan vardiya → kodun "Sayılacak Vardiya"sı.
-    const kendiVardiyasi = () => ykVardiya(planGun ? planGun.get(p.sicil) : '')
-      || (driveGun && driveGun.hafta ? (driveGun.hafta.get(p.sicil) || '') : '')
-      || kodVardiyasi(sebepAd);
+    // Vardiya yerine kod yazılmışsa (Rapor, Yıllık İzin, Dİ…) (23.11.2026):
+    // Haftalık Plan'da o gün vardiya yazıyorsa o vardiyada sayılır; planda da kod (Yİ, Rapor…) yazıyorsa ya da plan yoksa
+    // kodun "Sayılacak Vardiya"sında (08:00-18:00) sayılır.
+    const kendiVardiyasi = () => ykVardiya(planGun ? planGun.get(p.sicil) : '') || kodVardiyasi(sebepAd);
     const vardiya = gercekVardiya || (sebepGrup ? kendiVardiyasi() : '');
     let vardiyaSon = vardiya;
     let login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), vardiya);

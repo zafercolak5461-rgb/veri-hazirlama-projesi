@@ -480,6 +480,10 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           <div class="row" style="margin-top:12px;">
             <label>Özel durum bitişine kaç gün kala uyarılsın: <input type="number" id="ykAyarUyariGun" min="0" step="1" style="width:70px;"></label>
           </div>
+          <div class="row" style="margin-top:12px;">
+            <label>Drive VARDİYA'da boş sayılacak değerler: <input type="text" id="ykAyarDriveBos" style="width:220px;" placeholder="Kayıt Yok"></label>
+          </div>
+          <div class="hint" style="margin:6px 0 0;">Drive'da bu değer yazan kişinin vardiyası Haftalık Plan'dan alınır (vardiyası olmayan hafta sisteme girilmemişse). Virgülle birden çok yazılabilir.</div>
           <div class="hint" style="margin:6px 0 0;">Personel Listesi'nin Kalan sütununda renkli görünür; panel açılınca da bu kişiler için uyarı çıkar. Bitişi geçenler uyarıya girmez.</div>
           <div class="row" style="margin-top:12px;">
             <button class="btn ok" id="ykAyarGenelKaydet">💾 Kaydet</button>
@@ -3428,7 +3432,10 @@ const YK_KOD_GRUPLARI = ['Yıllık İzin', 'Rapor', 'Diğer', 'Çalışmıyor'];
 const YK_BOLUMLER = ['Personel', 'Sosyal Medya'];                     // haftalık planın iki parçası
 const YK_AYAR_ANAHTAR = { tolerans:'Geç Giriş Toleransı (dk)', durumlar:'Geç Giriş Durumları', varsayilan:'Varsayılan Sayılacak Vardiya',
                           vyVardiya:'Vardiya Yok Varsayılan Vardiya', vyHaftaSonu:'Vardiya Yok Hafta Sonu',
-                          uyariGun:'Özel Durum Uyarı Günü' };
+                          uyariGun:'Özel Durum Uyarı Günü', driveBos:'Drive\'da Boş Sayılacak Değerler' };
+// Drive VARDİYA'da bu değerler yazıyorsa hücre boş sayılır ve vardiya Haftalık Plan'dan alınır (ör. "Kayıt Yok": sistemde vardiya girilmemiş).
+// AYARLAR'da satır yoksa varsayılan "Kayıt Yok"; ayar yüklenince ykAyarlariKur günceller.
+let ykDriveBos = ['KAYIT YOK'];
 let ykAktifSayfa = null;
 
 // ---------- Saf yardımcılar (ağ yok; test edilebilir) ----------
@@ -3532,6 +3539,9 @@ function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
   const vyHaftaSonu = String(ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.vyHaftaSonu)) || '').trim();
   const ugHam = ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.uyariGun));
   const uyariGun = (ugHam !== undefined && ugHam !== '' && !isNaN(Number(ugHam))) ? Number(ugHam) : 2;
+  const dbHam = ayarlar.get(ykAnahtar(YK_AYAR_ANAHTAR.driveBos));
+  const driveBos = (dbHam === undefined ? 'Kayıt Yok' : String(dbHam)).split(',').map(x => x.trim()).filter(Boolean);
+  ykDriveBos = driveBos.map(ykAnahtar);
   // ÖZEL DURUMLAR: Özel Durum | Tür | Vardiya Yok Saati | Drive Karşılığı
   // Drive Karşılığı: İzin türü özel durum, Drive VARDİYA'da bu kod(lar) yazıyorsa onun yerine geçer (virgülle birden çok).
   const ob = (ozelRows && ozelRows[0]) || [];
@@ -3549,7 +3559,7 @@ function ykAyarlariKur(personelRows, gorevRows, sebepRows, ozelRows, ayarRows){
     ozelVySaat: new Map(ozelListe.filter(o => o.vySaat).map(o => [ykAnahtar(o.ad), o.vySaat])),   // Özel Durum → Vardiya Yok saati
     gorevler:  (gorevRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
     ozeller:   (ozelRows || []).slice(1).map(r => temiz(r[0])).filter(Boolean),
-    tolerans, gecDurumlar, varsayilanVardiya, vyVardiya, vyHaftaSonu, uyariGun,
+    tolerans, gecDurumlar, varsayilanVardiya, vyVardiya, vyHaftaSonu, uyariGun, driveBos,
     takimlar: [...new Set(personel.map(p => p.takim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')),
   };
 }
@@ -3782,6 +3792,10 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     const plansiz = kisiler.filter(k => !String(k.driveVal).trim() && !String(k.planVal).trim() && !k.sebepGrup && !k.manuel);
     if (plansiz.length) uyarilar.push(`Drive VARDİYA'da da Haftalık Plan'da da değeri olmayan ${plansiz.length} kişi: ${plansiz.map(k => k.ad).join(', ')}.`);
   }
+  if (driveGun && driveGun.bos && driveGun.bos.size){
+    const bk = kisiler.filter(k => driveGun.bos.has(k.sicil));
+    if (bk.length) uyarilar.push(`Drive VARDİYA'da "${[...new Set(driveGun.bos.values())].join('", "')}" yazan ${bk.length} kişinin vardiyası Haftalık Plan'dan alındı: ${bk.map(k => k.ad).join(', ')}.`);
+  }
   const disari = [...giris.entries()].filter(([a, g]) => g.ilk && !bilinen.has(a)).map(([a]) => a);
   if (disari.length) uyarilar.push(`Personel listesinde olmayan ${disari.length} Tegsoft girişi: ${disari.join(', ')}. Bunlar sayılmadı; kişi listede başka adla kayıtlıysa Tegsoft Adı'nı düzelt.`);
   const plandisi = kisiler.filter(k => k.login && (k.durum === 'Çalışmıyor' || k.durum === 'Plan yok'));
@@ -3867,7 +3881,13 @@ async function ykDriveGun(tarih, onbellek){
     const si = ykSutun(bas, 'Sicil');
     if (ci < 0 || si < 0) return null;
     const out = new Map();
-    rows.slice(1).forEach(r => { const s = String(r[si] || '').trim(); if (s) out.set(s, String(r[ci] == null ? '' : r[ci]).trim()); });
+    out.bos = new Map();   // sicil → Drive'daki boş sayılan değer (ör. Kayıt Yok)
+    rows.slice(1).forEach(r => {
+      const s = String(r[si] || '').trim(); if (!s) return;
+      let v = String(r[ci] == null ? '' : r[ci]).trim();
+      if (v && ykDriveBos.includes(ykAnahtar(v))){ out.bos.set(s, v); v = ''; }
+      out.set(s, v);
+    });
     // out.hafta: sicil → aynı haftanın (Pzt–Paz) başka bir gününde Drive'da yazan vardiya (en yakın gün).
     // O gün hücresinde kod (Rapor…) yazan ama giriş yapıp hattan çıkan kişinin gerçek vardiyasını bulmak için.
     const gunNo = t => { const x = String(t).match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return x ? Date.UTC(+x[3], +x[2] - 1, +x[1]) / 86400000 : null; };
@@ -4875,6 +4895,7 @@ async function ykAyarSayfasi(){
     document.getElementById('ykAyarVyVardiya').value = a.vyVardiya;
     document.getElementById('ykAyarVyHaftaSonu').value = a.vyHaftaSonu;
     document.getElementById('ykAyarUyariGun').value = a.uyariGun;
+    document.getElementById('ykAyarDriveBos').value = (a.driveBos || []).join(', ');
     ['ykAyarKodDurum','ykAyarOzelDurum','ykAyarGenelDurum'].forEach(id => ykDurum(id, ''));
   } catch(err){ document.getElementById('ykAyarKodTablo').innerHTML = `<tr><td class="yok">✗ ${ykEsc(err.message)}</td></tr>`; }
 }
@@ -4970,6 +4991,7 @@ document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () 
   if (vyHam && !vy){ ykDurum('ykAyarGenelDurum', '✗ "Vardiya Yok" hafta içi vardiyası saat aralığı olmalı (ör. 08:00-18:00).', 'err'); return; }
   const vyHs = document.getElementById('ykAyarVyHaftaSonu').value.replace(/\s+/g, ' ').trim();
   const ug = document.getElementById('ykAyarUyariGun').value.trim();
+  const dbos = document.getElementById('ykAyarDriveBos').value.split(',').map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean).join(', ');
   if (ug === '' || isNaN(Number(ug)) || Number(ug) < 0){ ykDurum('ykAyarGenelDurum', '✗ Uyarı günü 0 ya da daha büyük bir sayı olmalı.', 'err'); return; }
   ykDurum('ykAyarGenelDurum', 'Kaydediliyor…');
   try {
@@ -4977,7 +4999,7 @@ document.getElementById('ykAyarGenelKaydet').addEventListener('click', async () 
     const [rows] = await ykOku([`'${YK_TAB.ayar}'!A1:B100`]);
     const yeni = new Map([[YK_AYAR_ANAHTAR.tolerans, String(Number(tol))], [YK_AYAR_ANAHTAR.durumlar, dur.join(', ')], [YK_AYAR_ANAHTAR.varsayilan, v],
                          [YK_AYAR_ANAHTAR.vyVardiya, vy], [YK_AYAR_ANAHTAR.vyHaftaSonu, vyHs],
-                         [YK_AYAR_ANAHTAR.uyariGun, String(Number(ug))]]);
+                         [YK_AYAR_ANAHTAR.uyariGun, String(Number(ug))], [YK_AYAR_ANAHTAR.driveBos, dbos]]);
     const satirlar = rows.slice(1).filter(r => r && String(r[0] || '').trim()).map(r => {
       const a = [...yeni.keys()].find(k => ykAnahtar(k) === ykAnahtar(r[0]));
       if (a){ const d = yeni.get(a); yeni.delete(a); return [a, d]; }

@@ -145,6 +145,7 @@
   table.prev td input.yk-hucre.degisti{ background:#FFF3CD; border-color:#F0C36D; color:inherit; }
   table.prev td input.yk-hucre.hatali{ border-color:var(--danger); color:var(--danger); background:var(--danger-soft); }
   #ykSebepKutu.tamam{ border-color:var(--ok); }
+  #ykGeceKutu{ border-color:var(--danger); }
   #ykSebepKutu.vurgu{ box-shadow:0 0 0 3px var(--danger-soft); }
 </style>
 <style id="gorunumBeyazStil">
@@ -324,6 +325,15 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           <div id="ykGunlukDurum" class="status"></div>
         </div>
         <div id="ykSonuc" style="display:none;">
+          <div class="card" id="ykGeceKutu" style="display:none;">
+            <h2 id="ykGeceBaslik">00:00 Vardiyasında Girişi Bulunamayanlar</h2>
+            <div class="hint" style="margin-bottom:4px;">Gece yarısından önce login olup oturumu açık kalanlar Detaylı Durum raporunda görünmeyebilir. Kişi hattaysa giriş saatini yazıp kaydet; rapor yeniden hesaplanır ve kişi gelmiş sayılır. Gelmediyse boş bırak. Kayıt <b>ELLE GİRİŞ</b> sekmesine yazılır, aynı gün yeniden hesaplanınca oradan okunur. Dosyada kişinin girişi varsa dosyadaki esas alınır.</div>
+            <div class="prev-wrap" style="max-height:none;"><table class="prev" id="ykGeceTablo"></table></div>
+            <div class="row" style="margin-top:12px;">
+              <button class="btn ok" id="ykGeceKaydetBtn">💾 Giriş Saatlerini Kaydet</button>
+              <span id="ykGeceDurum" class="status" style="margin:0;"></span>
+            </div>
+          </div>
           <div class="card" id="ykSebepKutu">
             <h2 id="ykSebepBaslik">Sebebi Girilmemiş Kişiler</h2>
             <div class="hint" style="margin-bottom:4px;">VARDİYA tablosuna henüz girilmemiş rapor, izin vb. sebepleri buradan yaz. Kutuya tıklayınca liste açılır; listede olmayan bir şey yazarsan hangi sütuna gideceğini seç. Sebep yazınca rapor hemen yeniden hesaplanır. Kişi listesindeki herkese <b>Sebep</b> düğmesiyle buradan sebep girebilirsin. Girişi olan birine sebep girersen (hattan çıktı) o gün eksik sayılır. Drive'da kodu olup giriş yapanlar sarı satırda <b>Hattan çıktı</b> düğmesiyle çıkar. Girilen sebepler <b>yalnız bu gün</b> için geçerlidir.</div>
@@ -3419,7 +3429,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', async () => 
 const YOKLAMA_SHEET_ID = '1QqUxdK_A2uTjXCwd9BKkf4SKTxlXsJgxpVhZXIvB010';
 const VARDIYA_SHEET_ID = '1OxOBP7oodSFx7LuRvOmBlmHZx7xWDi32BL_5OZChmQQ';
 const YK_TAB = { personel:'PERSONEL', plan:'PLAN', kayit:'KAYIT', gorev:'GÖREVLER', sebep:'SEBEPLER', ozel:'ÖZEL DURUMLAR',
-                 manuel:'MANUEL SEBEP', gec:'GEÇ GİRİŞ', ayar:'AYARLAR', giris:'GİRİŞ' };
+                 manuel:'MANUEL SEBEP', gec:'GEÇ GİRİŞ', ayar:'AYARLAR', giris:'GİRİŞ', elleGiris:'ELLE GİRİŞ' };
 const YK_SAYFALAR = [
   { id:'gunluk',   ad:'Günlük Yoklama',   ikon:'✓',  svg:'onay' },        // ikon: eski görünüm, svg: beyaz görünüm
   { id:'plan',     ad:'Haftalık Plan',    ikon:'📅', svg:'takvim' },
@@ -3676,8 +3686,9 @@ function ykGecikmeSn(vardiya, login){
 //  ayar: ykAyarlariKur çıktısı · tarih: "GG.AA.YYYY"
 //  planGun: Map(sicil→plandaki değer) ya da null (o hafta plan yok) · driveGun: Map(sicil→VARDİYA değeri) ya da null
 //  giris: Map(ykAd(Tegsoft adı)→{ilk, tarihsiz, gece}) · manuel: Map(sicil→{sebep, grup}) (panelden elle girilen)
-function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
+function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel, elleGiris){
   manuel = manuel || new Map();
+  elleGiris = elleGiris || new Map();
   const grupOf = v => ayar.sebepGrup.get(ykAnahtar(v)) || '';
   const kodVardiyasi = v => ayar.sebepVardiya.get(ykAnahtar(v)) || ayar.varsayilanVardiya || '';
   const sira = ykSira(tarih);
@@ -3721,6 +3732,9 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     const vardiya = gercekVardiya || (ozelSebep ? kodVardiyasi(sebepAd) : (sebepGrup ? kendiVardiyasi() : ''));
     let vardiyaSon = vardiya;
     let login = ykGirisSaati(giris.get(ykAd(p.tegsoft)), vardiya);
+    // Dosyada girişi yoksa elle girilen saat (ELLE GİRİŞ) kullanılır; dosyada varsa dosya esastır (24.11.2026).
+    let elleGirisVar = false;
+    if (!login && elleGiris.has(p.sicil)){ login = elleGiris.get(p.sicil); elleGirisVar = true; }
     const planli = !!vardiya || !!sebepGrup;
     let durum, aciklama = [];
     let girisSebep = '';                       // izinli/raporlu göründüğü halde giriş yapmış: geldi sayılır
@@ -3741,9 +3755,10 @@ function ykHesapla(ayar, tarih, planGun, driveGun, giris, manuel){
     else durum = 'Gelmedi';
     if (hattanCikti) aciklama.push(`giriş var ${login.slice(0,5)} (hattan çıktı)`);
     if (man) aciklama.push('elle girildi');
+    if (elleGirisVar) aciklama.push('elle giriş');
     if (ozelAktif && !ozelIzin) aciklama.push(p.ozel);
     kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, gorev: p.gorev, takim: p.takim || '', rg, vardiya: vardiyaSon, gercekVardiya, planVal, driveVal, login,
-                   durum, sebepGrup, sebepAd, girisSebep, hattanCikti, manuel: man, aciklama: aciklama.filter(Boolean).join(' · '),
+                   durum, sebepGrup, sebepAd, girisSebep, hattanCikti, manuel: man, elleGiris: elleGirisVar, aciklama: aciklama.filter(Boolean).join(' · '),
                    planli: planli && !calismiyor, satirAd: vardiyaSon && !calismiyor ? `${vardiyaSon} (${rg})` : '',
                    geldi: !!login && planli && !calismiyor && !sebepGrup });
   }
@@ -3972,6 +3987,7 @@ let ykGirdi = null;                 // son hesaplamanın girdileri (sebep girili
 let ykManuel = new Map();           // sicil → {sebep, grup} (o gün elle girilen, henüz kaydedilmemiş olabilir)
 let ykSebepEk = new Set();          // Kişi listesinden "Sebep" ile kutuya eklenen siciller
 let ykGecDurumlari = new Map();     // sicil → geç giriş durumu
+let ykElleGiris = new Map();        // sicil → elle girilen giriş saati (00:00 vardiyası, ELLE GİRİŞ sekmesi)
 document.getElementById('ykLoginDosya').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   ykDurum('ykGunlukDurum', 'Dosya okunuyor…');
@@ -4006,6 +4022,7 @@ async function ykGunlukHesapla(){
   const tarih = ykIsoToTarih(document.getElementById('ykTarih').value);
   if (!tarih){ ykDurum('ykGunlukDurum', 'Tarih seç.', 'err'); return; }
   ykDurum('ykGunlukDurum', 'Personel, plan ve VARDİYA okunuyor…');
+  ykDurum('ykGeceDurum', '');
   try {
     const [ayar, plan, driveGun, [manRows, gecRows, girRows]] = await Promise.all([ykAyarYukle(), ykPlanlariOku(), ykDriveGun(tarih),
       ykOku([`'${YK_TAB.manuel}'!A1:F100000`, `'${YK_TAB.gec}'!A1:K100000`, `'${YK_TAB.giris}'!A1:F200000`])]);
@@ -4033,6 +4050,7 @@ async function ykGunlukHesapla(){
     ykDurum('ykGunlukDurum', '');
     ykManuel = ykManuelAyristir(manRows, tarih);
     ykGecDurumlari = ykGecDurumAyristir(gecRows, tarih);
+    ykElleGiris = await ykElleGirisOku(tarih);
     ykSebepEk = new Set();
     ykGirdi = { ayar, tarih, planGun, driveGun, giris, planUyari };
     ykYenidenHesapla();
@@ -4041,7 +4059,7 @@ async function ykGunlukHesapla(){
 function ykYenidenHesapla(){
   const g = ykGirdi;
   ykDurum('ykKayitDurum', '');
-  ykSonuc = ykHesapla(g.ayar, g.tarih, g.planGun, g.driveGun, g.giris, ykManuel);
+  ykSonuc = ykHesapla(g.ayar, g.tarih, g.planGun, g.driveGun, g.giris, ykManuel, ykElleGiris);
   ykSonuc.uyarilar = g.planUyari.concat(ykSonuc.uyarilar);
   ykSonucCiz();
 }
@@ -4061,11 +4079,65 @@ function ykSonucCiz(){
   for (let i = 0; i < uz; i++) h += '<tr>' + bas.map(b => { const v = s.listeler[b][i] || ''; return `<td class="yaz${/SEBEP YOK/.test(v) ? ' yok' : ''}">${ykEsc(v)}</td>`; }).join('') + '</tr>';
   h += `<tr class="toplam"><td colspan="${bas.length}">Listelerdeki eksik: ${s.listeEksik} · Tablodaki eksik: ${s.toplam.eksik}${s.listeEksik === s.toplam.eksik ? ' ✓' : ' ✗'}</td></tr>`;
   document.getElementById('ykSebepTablo').innerHTML = h;
+  ykGeceKutuCiz();
   ykSebepKutuCiz();
   ykGrafikCiz();
   ykGecCiz();
   ykKisiCiz();
 }
+
+// ELLE GİRİŞ: Tarih | Sicil | Ad Soyad | Giriş Saati | Kaydeden | Zaman. Sekme yoksa boş döner.
+async function ykElleGirisOku(tarih){
+  const out = new Map();
+  try {
+    const adlar = await getSheetTabNames(YOKLAMA_SHEET_ID);
+    if (!adlar.includes(YK_TAB.elleGiris)) return out;
+    const [rows] = await ykOku([`'${YK_TAB.elleGiris}'!A1:F100000`]);
+    (rows || []).slice(1).forEach(r => {
+      if (!r || ykTarih(r[0]) !== tarih) return;
+      const s = String(r[1] || '').trim(), saat = ykSaat(r[3]);
+      if (s && saat) out.set(s, saat);
+    });
+  } catch(e){ console.warn('ELLE GİRİŞ okunamadı:', e.message); }
+  return out;
+}
+// 00:00 vardiyasında planlı olup Detaylı Durum'da girişi bulunamayanlar (ve elle girişi olanlar) için saat kutusu.
+function ykGeceKutuCiz(){
+  const s = ykSonuc, kutu = document.getElementById('ykGeceKutu');
+  const kisiler = s.kisiler.filter(k => String(k.vardiya || '').startsWith('00:00') && k.planli && !k.sebepGrup && (!k.login || k.elleGiris))
+    .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+  if (!kisiler.length){ kutu.style.display = 'none'; return; }
+  kutu.style.display = 'block';
+  const eksik = kisiler.filter(k => !k.login).length;
+  document.getElementById('ykGeceBaslik').textContent = eksik
+    ? `00:00 Vardiyasında Girişi Bulunamayanlar (${eksik})` : '00:00 Vardiyası Elle Girişler ✓';
+  kutu.style.borderColor = eksik ? '' : 'var(--ok)';
+  document.getElementById('ykGeceTablo').innerHTML = '<tr><th>Sicil</th><th>Ad Soyad</th><th>Görev</th><th>Vardiya</th><th>Giriş Saati</th><th></th></tr>' +
+    kisiler.map(k => `<tr><td>${k.sicil}</td><td>${ykEsc(k.ad)}</td><td>${ykEsc(k.gorev)}</td><td>${ykEsc(k.vardiya)}</td>` +
+      `<td><input type="time" step="1" data-ykgece="${k.sicil}" value="${ykEsc(k.elleGiris ? k.login : '')}"></td>` +
+      `<td>${k.elleGiris ? '<span class="soluk">elle girildi · silmek için kutuyu boşaltıp kaydet</span>' : '<span style="color:var(--danger)">giriş yok</span>'}</td></tr>`).join('');
+}
+document.getElementById('ykGeceKaydetBtn').addEventListener('click', async () => {
+  if (!ykSonuc || !ykGirdi) return;
+  const tarih = ykGirdi.tarih, zaman = new Date().toLocaleString('tr-TR');
+  const yeni = new Map(ykElleGiris);
+  for (const el of document.querySelectorAll('#ykGeceTablo [data-ykgece]')){
+    const sicil = el.dataset.ykgece, ham = el.value.trim(), saat = ykSaat(ham);
+    if (ham && !saat){ ykDurum('ykGeceDurum', `✗ ${sicil} için saat geçersiz.`, 'err'); return; }
+    if (saat) yeni.set(sicil, saat); else yeni.delete(sicil);
+  }
+  const ad = sicil => { const k = ykSonuc.kisiler.find(x => x.sicil === sicil); return k ? k.ad : ''; };
+  const satirlar = [...yeni.entries()].map(([sicil, saat]) => [tarih, sicil, ad(sicil), saat, ykKaydeden(), zaman]);
+  ykDurum('ykGeceDurum', 'Kaydediliyor…');
+  try {
+    await gvSekmeHazir(YK_TAB.elleGiris);
+    await ykBaslikYaz(YK_TAB.elleGiris, ['Tarih', 'Sicil', 'Ad Soyad', 'Giriş Saati', 'Kaydeden', 'Zaman']);
+    await ykGunSatirlariniYaz(YK_TAB.elleGiris, tarih, satirlar, 6);
+    ykElleGiris = yeni;
+    ykYenidenHesapla();
+    ykDurum('ykGeceDurum', `✓ ${tarih} için ${satirlar.length} elle giriş kaydedildi, rapor yeniden hesaplandı.`, 'ok');
+  } catch(err){ ykDurum('ykGeceDurum', '✗ ' + err.message, 'err'); }
+});
 
 // Sebebi girilmemiş kişiler kutusu: SEBEP YOK olanlar + o gün elle sebep girilenler + Kişi listesinden eklenenler.
 function ykSebepKutuCiz(){
@@ -4445,8 +4517,8 @@ document.getElementById('ykExcelBtn').addEventListener('click', async () => {
     }
     hucre(c + (2 + uz), s.listeler[g].length, Object.assign({}, baslik, { font:{ bold:true } }));
   });
-  // Kişi listesi (17. satırdan; özet uzunsa altından)
-  let k = Math.max(17, ozetSon + 3, 2 + uz + 3);
+  // Kişi listesi: ALL satırından sonra 2 boş satır (24.11.2026). Sağdaki I–L listeleri ve grafik ayrı sütunlarda, çakışmaz.
+  let k = ozetSon + 3;
   ['ADI SOYADI','Sicil','Görevi','Vardiya','Login Saati','Açıklama','Staff Süresi'].forEach((t, i) => hucre(String.fromCharCode(65 + i) + k, t, baslik));
   k++;
   const liste = ykKisiSirali(s);

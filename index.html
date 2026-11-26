@@ -551,7 +551,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         <div class="page-sub">Günlük veride hangi sütunların olacağı, nereden geleceği ve hangi tabloda kaçıncı sırada görüneceği. Değişiklikler YOKLAMA tablosunun <b>GÜNLÜK VERİ SÜTUNLAR</b> sekmesine yazılır.</div>
         <div class="card">
           <div class="hint">
-            <b>Kaynak</b>: Durum Raporu / Müşteri Temsilcisi Bazında → raporun <b>başlık adı</b> (dosyadaki sırası önemli değil). Personel Listesi → Sicil, Tegsoft Adı, Ad Soyad, Görev, Takım Lideri. Detaylı Durum → Giriş Saati (Yoklama kurallarıyla) ya da Çıkış Saati. Tarih → seçilen gün.<br>
+            <b>Kaynak</b>: Durum Raporu / Müşteri Temsilcisi Bazında → raporun <b>başlık adı</b> (dosyadaki sırası önemli değil). Personel Listesi → Sicil, Tegsoft Adı, Ad Soyad, Görev, Takım Lideri. Detaylı Durum → Giriş Saati (Yoklama kurallarıyla), Çıkış Saati ya da Gece Vardiyası (Staffed düzeltmesi). Tarih → seçilen gün.<br>
             <b>Hesap</b>: formül; <code>{Kısa Mola}+{Yemek}</code> gibi başka sütunlara, <code>{Durum Raporu.Giriş}</code> gibi raporun ham sütunlarına başvurur. Yalnız + − × ÷ ve parantez.<br>
             <b>Biçim</b>: Süre = rapordaki saniyeyi s:dd:ss gösterir · Saat = giriş/çıkış saati · Ondalık = 0,0.<br>
             <b>Ana / Personel / Sosyal Medya / Uzman</b>: o tablodaki sırası. Boş bırakırsan sütun o tabloda görünmez. Ana = herkesin olduğu Excel; diğerleri sekmeler (mail ve takım lideri Excel'i).
@@ -578,7 +578,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         </div>
         <div class="card">
           <h2>Excel, Mail, Aylık Dosya, Gece Vardiyası ve Sistem Dışı Süreler</h2>
-          <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.<br><b>Gece vardiyası penceresi</b>: o gün Haftalık Plan'da 00:00'da başlayan vardiyası olanın, önceki akşam gece yarısından bu kadar dakika önce açtığı oturum Staffed'a eklenir (<code>{Detaylı Durum.Gece Eki}</code>); ertesi gün de 00:00 vardiyası varsa bu akşamki aynı kısım bugünden düşülür (<code>{Detaylı Durum.Gece Düşümü}</code>). Yalnız yüklenen Detaylı Durum'daki oturumlar kullanılır.</div>
+          <div class="hint">Başlık satırının rengi. Bütün hücreler ince kenarlıklı; Metin biçimli sütunlar sola, diğerleri (sayı, süre, saat, tarih) ortaya hizalanır. Koşullu biçimlendirme ayrıca eklenecek.<br><b>Gece vardiyası penceresi</b>: o gün ya da ertesi gün 00:00'da başlayan vardiyası olanın Staff'ı Detaylı Durum oturumlarından hesaplanır (<code>{Detaylı Durum.Gece Vardiyası}</code> = bu hesap − Durum Raporu Giriş; diğer personel için 0). Oturum başladığı güne sayılır; gece yarısından bu kadar dakika önce açılan oturum, ertesi gün 00:00 vardiyası varsa ertesi güne sayılır. Bitişi boş (kapanmamış) oturum sayılmaz.</div>
           <div class="row">
             <label>Başlık rengi: <input type="color" id="gvStilRenk"></label>
             <label>Başlık yazı rengi: <input type="color" id="gvStilYazi"></label>
@@ -5168,13 +5168,15 @@ const GV_YOK = 'YOK';
 let gvSebepSecenek = [];   // Yoklama SEBEPLER listesi (yalnız okunur)
 let gvOzelListe = [];      // Yoklama ÖZEL DURUMLAR listesi (yalnız okunur; Drive Karşılığı için)
 const GV_PERSONEL_ALAN = ['Sicil', 'Tegsoft Adı', 'Ad Soyad', 'Görev', 'Takım Lideri'];
-const GV_DD_ALAN = ['Giriş Saati', 'Çıkış Saati', 'Gece Eki', 'Gece Düşümü'];
+const GV_DD_ALAN = ['Giriş Saati', 'Çıkış Saati', 'Gece Vardiyası'];
 // Gece vardiyası (00:00'da başlayan) düzeltmesi, yalnız yüklenen Detaylı Durum'dan (önceki günün dosyası istenmez):
-//  Gece Eki   : o gün 00:00 vardiyası olanın önceki akşam, gece yarısından önceki pencerede (AYARLAR, 60 dk)
-//               açtığı oturumların 00:00'a kadarki saniyesi (Tegsoft bunu önceki günün satırına yazar).
-//  Gece Düşümü: ertesi gün de 00:00 vardiyası olanın bu akşam aynı pencerede açtığı oturumların bu güne düşen saniyesi
-//               (ertesi günün vardiyasına ait; ertesi günün Gece Eki'ne girer, iki kez sayılmasın diye bugünden düşülür).
-//  Plan yoksa ya da vardiya 00:00'da başlamıyorsa ikisi de 0. Staffed formülünde kullanılır.
+//  Durum Raporu bir oturumun TAMAMINI başladığı güne yazar (gece yarısında bölmez) ve kapanmamış oturumu raporun
+//  çekildiği ana kadar sayar. Bu yüzden 00:00 vardiyasındakilerin Giriş'i yanlış güne kayar.
+//  Gece Vardiyası: o gün ya da ertesi gün 00:00 vardiyası olan kişi için
+//               (Detaylı Durum'dan hesaplanan Staff) − (Durum Raporu Giriş). Diğer herkes için 0.
+//  Detaylı Durum Staff'ı: LOGIN oturumları başladığı güne sayılır; gece yarısından önceki pencerede (AYARLAR, 60 dk)
+//               başlayan oturum, ertesi gün 00:00 vardiyası varsa ertesi güne sayılır; bitişi boş oturum sayılmaz.
+//  Staffed formülü: {Durum Raporu.Giriş}+{Detaylı Durum.Gece Vardiyası}
 // Biçim: Süre = rapordaki saniye → s:dd:ss ; Saat = s:dd:ss metni (giriş/çıkış) ; Ondalık = 0.0
 const GV_BICIMLER = ['Metin', 'Sayı', 'Ondalık', 'Süre', 'Saat', 'Tarih'];
 const GV_SABIT_BASLIK = ['Başlık', 'Kaynak', 'Kaynak Sütun / Formül', 'Biçim'];
@@ -5317,26 +5319,37 @@ function gvRaporTarihi(dosya){
   const en = [...say.entries()].sort((a, b) => b[1] - a[1])[0];
   return en ? en[0] : '';
 }
-// Detaylı Durum: gece yarısından önceki pencerede başlayan oturumların, başladığı güne düşen saniyesi
-// → Map(tarih → Map(ykAd → sn)). Bitişi ertesi güne geçen (ya da saatsiz ertesi gün yazan) oturum 24:00'te kesilir.
-function gvGecePencere(dosya, dk){
-  const out = new Map(); if (!dosya || !(dk > 0)) return out;
-  const bas = dosya.baslik, cAd = ykSutun(bas,'Müşteri Temsilcisi'), cBas = ykSutun(bas,'Başlangıç Tarihi'), cBit = ykSutun(bas,'Bitiş Tarihi'), cTip = ykSutun(bas,'İşlem Tipi');
+// Detaylı Durum LOGIN oturumları → Map(ykAd → [{ tarih, sn (başlangıç saniyesi), sure, acik }])
+// sure: raporun Süre sütunu (yoksa başlangıç–bitişten); acik: bitiş hücresi boş (oturum kapanmamış)
+function gvLoginOturumlari(dosya){
+  const out = new Map(); if (!dosya) return out;
+  const bas = dosya.baslik, cAd = ykSutun(bas,'Müşteri Temsilcisi'), cBas = ykSutun(bas,'Başlangıç Tarihi'), cBit = ykSutun(bas,'Bitiş Tarihi'),
+        cTip = ykSutun(bas,'İşlem Tipi'), cSure = ykSutun(bas,'Süre');
   if (cBas < 0) return out;
-  const esik = 86400 - dk * 60;
+  const mutlak = z => { const m = String(z.tarih).match(/^(\d{2})\.(\d{2})\.(\d{4})$/); return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) / 1000 + ykSaniye(z.saat) : null; };
   for (const r of dosya.rows.slice(dosya.bi + 1)){
     if (!r || !r[cAd]) continue;
     if (cTip >= 0 && r[cTip] && ykAnahtar(r[cTip]) !== 'LOGIN') continue;
-    const b = ykZamanAyir(r[cBas]); if (!b.tarih || !b.saat) continue;
-    const sb = ykSaniye(b.saat); if (sb < esik) continue;
-    const e = cBit >= 0 ? ykZamanAyir(r[cBit]) : { tarih:'' };
-    const son = (e.tarih === b.tarih && e.saat) ? ykSaniye(e.saat) : 86400;
-    if (son <= sb) continue;
-    if (!out.has(b.tarih)) out.set(b.tarih, new Map());
-    const m = out.get(b.tarih), ad = ykAd(r[cAd]);
-    m.set(ad, (m.get(ad) || 0) + (son - sb));
+    const b = ykZamanAyir(r[cBas]); if (!b.tarih) continue;
+    const bitHam = cBit >= 0 ? r[cBit] : null, acik = bitHam == null || String(bitHam).trim() === '';
+    let sure = cSure >= 0 ? gvSayi(r[cSure]) : null;
+    if (sure == null && !acik){ const e = ykZamanAyir(bitHam), x = mutlak(b), y = e.tarih ? mutlak(e) : null; sure = x != null && y != null ? Math.max(0, y - x) : 0; }
+    const ad = ykAd(r[cAd]);
+    if (!out.has(ad)) out.set(ad, []);
+    out.get(ad).push({ tarih: b.tarih, sn: ykSaniye(b.saat), sure: sure || 0, acik });
   }
   return out;
+}
+// Bir kişinin o güne ait Staff'ı (Detaylı Durum'dan). bugun00 / yarin00: o gün / ertesi gün 00:00 vardiyası var mı
+function gvGeceStaff(oturumlar, tarih, dk, bugun00, yarin00){
+  const dun = ykTarihEkle(tarih, -1), esik = 86400 - dk * 60;
+  let top = 0;
+  for (const o of oturumlar || []){
+    const pencerede = dk > 0 && o.sn >= esik;
+    const bugune = (o.tarih === tarih && !(pencerede && yarin00)) || (o.tarih === dun && pencerede && bugun00);
+    if (bugune && !o.acik) top += o.sure;
+  }
+  return top;
 }
 // Detaylı Durum: o gün biten oturumların en geç bitişi → Map(ykAd → 'SS:DD:ss')
 function gvCikislar(dosya, tarih){
@@ -5378,9 +5391,8 @@ function gvHesapla(g){
   const dd = dosyalar.dd ? ykLoginOku(dosyalar.dd.rows) : null;
   const giris = dd ? (dd.girisler.get(tarih) || new Map()) : new Map();
   const cikis = gvCikislar(dosyalar.dd, tarih);
-  const pencere = gvGecePencere(dosyalar.dd, g.gecePencere == null ? 60 : g.gecePencere);
-  const dun = pencere.get(ykTarihEkle(tarih, -1)) || new Map(), bu = pencere.get(tarih) || new Map();
-  const geceDuzeltme = [];
+  const oturum = gvLoginOturumlari(dosyalar.dd), geceDk = g.gecePencere == null ? 60 : g.gecePencere;
+  const geceDuzeltme = [], acikOturum = [];
   GV_RAPORLAR.forEach(r => { if (!dosyalar[r.id]) uyarilar.push(`${r.ad} yüklenmedi; ondan gelen sütunlar boş.`); });
   if (dr.atlanan + mt.atlanan) uyarilar.push(`${g.aralik && g.aralik.size > 1 ? 'Seçilen aralık' : tarih} dışındaki tarihe ait ${dr.atlanan + mt.atlanan} satır alınmadı (önceki günden sarkan oturumlar).`);
   [...new Set(dr.cift.concat(mt.cift))].forEach(a => uyarilar.push(`${a} raporda aynı gün iki kez var; ilk satır alındı.`));
@@ -5413,8 +5425,14 @@ function gvHesapla(g){
   for (const p of ayar.personel){
     const a = ykAd(p.tegsoft);
     const d1 = dr.veri.get(a), d2 = mt.veri.get(a), gi = giris.get(a);
-    const yok = !d1 && !d2;                         // o gün raporlarda yok: gelmeyen (yalnız kimlik sütunları hesaplanır)
     const vardiya = g.planGun ? ykVardiya(g.planGun.get(p.sicil)) : '';
+    // Gece vardiyası: o gün ya da ertesi gün 00:00 vardiyası olanın Staff'ı Detaylı Durum'dan
+    const bugun00 = vardiya.startsWith('00:00'), yarin00 = !!(g.planYarin && ykVardiya(g.planYarin.get(p.sicil)).startsWith('00:00'));
+    const geceStaff = (bugun00 || yarin00) && dosyalar.dd ? gvGeceStaff(oturum.get(a), tarih, geceDk, bugun00, yarin00) : null;
+    const geceFark = geceStaff == null ? 0 : geceStaff - (gvSayi(d1 && d1['GİRİŞ']) || 0);
+    // Kapanmamış oturum: gece vardiyasında ertesi güne aitse beklenen durum; değilse uyar (Durum Raporu rapor anına kadar saydı)
+    (oturum.get(a) || []).forEach(o => { if (o.acik && o.tarih === tarih && !((geceDk > 0 && o.sn >= 86400 - geceDk * 60) && yarin00)) acikOturum.push(`${p.ad} (${gvSureYazi(o.sn)} girişi)${geceStaff != null ? ' — gece vardiyası, Staff\'a sayılmadı (ertesi gün 00:00 vardiyası görünmüyor)' : ''}`); });
+    const yok = !d1 && !d2 && !(geceStaff > 0);     // o gün raporlarda yok: gelmeyen (yalnız kimlik sütunları hesaplanır)
     const deger = {};
     const ham = (kaynak, alan) => {
       const k = ykAnahtar(kaynak);
@@ -5431,8 +5449,7 @@ function gvHesapla(g){
           return vardiya ? ykGirisSaati(gi, vardiya) : (gi.ilk || gi.gece || (gi.tarihsiz ? '00:00:00' : ''));
         }
         if (f === 'ÇIKIŞ SAATİ') return cikis.get(a) || '';
-        if (f === 'GECE EKİ') return vardiya.startsWith('00:00') ? (dun.get(a) || 0) : 0;
-        if (f === 'GECE DÜŞÜMÜ') return (g.planYarin && ykVardiya(g.planYarin.get(p.sicil)).startsWith('00:00')) ? (bu.get(a) || 0) : 0;
+        if (f === 'GECE VARDİYASI') return geceFark;
         return '';
       }
       const m = rapor[k] && rapor[k].get(a);
@@ -5465,12 +5482,12 @@ function gvHesapla(g){
       continue;
     }
     sutunlar.forEach(s => hesapla(s, new Set()));
-    { const ek = gvSayi(ham('Detaylı Durum', 'Gece Eki')) || 0, dus = gvSayi(ham('Detaylı Durum', 'Gece Düşümü')) || 0;
-      if (ek || dus) geceDuzeltme.push(`${p.ad}${ek ? ' +' + gvSureYazi(ek) : ''}${dus ? ' −' + gvSureYazi(dus) : ''}`); }
+    if (geceFark) geceDuzeltme.push(`${p.ad} ${geceFark > 0 ? '+' : '−'}${gvSureYazi(Math.abs(geceFark))} (Staff ${gvSureYazi(geceStaff)})`);
     kisiler.push({ sicil: p.sicil, ad: p.ad, tegsoft: p.tegsoft, grup: ayar.gorevGrup.get(ykAnahtar(p.gorev)) || '', takim: p.takim, degerler: deger });
   }
   formulHata.forEach(h => uyarilar.push(h));
-  if (geceDuzeltme.length) uyarilar.push(`Gece vardiyası düzeltmesi (gece yarısından önceki ${g.gecePencere == null ? 60 : g.gecePencere} dk): ${geceDuzeltme.join(', ')}. Staffed formülünde {Detaylı Durum.Gece Eki} / {Detaylı Durum.Gece Düşümü} kullanılıyorsa uygulanır.`);
+  if (geceDuzeltme.length) uyarilar.push(`Gece vardiyası (Staff Detaylı Durum'dan, gece yarısından önceki ${geceDk} dk penceresiyle): ${geceDuzeltme.join(', ')}. Staffed formülünde {Detaylı Durum.Gece Vardiyası} kullanılıyorsa uygulanır.`);
+  if (acikOturum.length) uyarilar.push(`Kapanmamış oturum (bitişi boş): ${acikOturum.join(', ')}. Gece vardiyası olmayanlarda Durum Raporu bu oturumu raporun çekildiği ana kadar saymış olabilir; kontrol et.`);
   const grupsuz = kisiler.filter(k => !k.grup && !k.yok);
   if (grupsuz.length) uyarilar.push(`Görevinin Rapor Grubu tanımlı olmayan (yalnız Ana tabloda görünür): ${grupsuz.map(k => k.ad).join(', ')}.`);
   return { tarih, kisiler, uyarilar };

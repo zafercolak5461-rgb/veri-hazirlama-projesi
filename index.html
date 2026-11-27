@@ -86,7 +86,10 @@
   #katTabloListe tr.kat-satir:hover td{ background:#F5F8FF; }
   #katTabloListe tr.kat-satir.acik td{ background:var(--accent-soft); }
   #katTabloListe tr.kat-detay-satir > td{ padding:8px 8px 14px 26px; background:var(--panel2); white-space:normal; }
-  #katTabloListe tr.kat-detay-satir .card{ margin:0; }
+  #katTabloListe tr.kat-detay-satir .card{ margin:0; box-sizing:border-box; }
+  #katTabloListe tr.kat-detay-satir .prev-wrap{ overflow-x:auto; }
+  #katTabloListe [data-kath]{ padding:4px 9px; font-size:12px; }
+  #katTabloListe td{ vertical-align:middle; }
   .kat-ok{ display:inline-block; width:12px; color:var(--accent); }
   .kat-saglik{ margin-top:12px; padding:10px 14px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); font-size:13px; }
   .kat-saglik ul{ margin:6px 0 0; padding-left:18px; line-height:1.7; }
@@ -827,10 +830,13 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           <div id="katDetayBilgi" class="hint" style="margin:10px 0;"></div>
           <div class="kat-form" id="katDetayForm"></div>
           <div id="katDetaySaglik"></div>
+          <div id="katAlanBolum">
           <h2 style="margin-top:16px;">Alanlar</h2>
           <div class="hint">Görünen Ad: Excel'de ve seçim listelerinde görünecek ad. Tip ve Toplama: değerin nasıl okunacağı ve aya / takıma / lokasyona toplanırken ne yapılacağı. Eş Adlar: aynı alanın eski aylardaki başka adları (" | " ile). Gizli: kişisel bilgi; rapor seçimlerinde çıkmaz.</div>
           <div class="prev-wrap" style="max-height:none;"><table class="prev" id="katAlanTablo" style="width:auto;margin-top:0;"></table></div>
+          </div>
           <div class="row" style="margin-top:14px;">
+            <button class="btn ok" id="katKatalogaAl" style="display:none;">↺ Kataloğa Al</button>
             <button class="btn ok" id="katOnayla">✓ Onayla ve Kaydet</button>
             <button class="btn" id="katDetayKaydet">💾 Kaydet</button>
             <button class="btn danger" id="katKapsamDisi">Kapsam Dışı Bırak</button>
@@ -10006,7 +10012,7 @@ function katAnahtarBul(alanlar, personel){
   if (!tarih){ const t = alanlar.filter(a => a.tip === 'tarih' && !/(GIRIS|DOGUM|KAYIT|CIKIS)/.test(n(a))); if (t.length === 1 && alanlar.indexOf(t[0]) === 0) tarih = t[0].ad; }
   const ay = bul(a => a.tip === 'ay' || ['AY', 'DONEM', 'AY YIL'].includes(n(a)));
   const takim = bul(a => /(^| )TAKIM( |$)|TAKIM LIDERI|EKIP LIDERI/.test(n(a)) && a.tip === 'metin');
-  const ad = bul(a => a.ad !== sicil && a.tip === 'metin' && (/AD SOYAD|ADI SOYADI|^PERSONEL$|PERSONEL ADI/.test(n(a))));
+  const ad = bul(a => a.ad !== sicil && a.tip === 'metin' && (/AD SOYAD|ADI SOYADI|^PERSONEL$|PERSONEL ADI|^ADI?$|^ISIM$|^AD SOYADI$/.test(n(a))));
   const lokasyon = bul(a => ['IL', 'LOKASYON', 'SEHIR', 'IL ADI', 'BOLGE'].includes(n(a)) && a.tip === 'metin');
   return { sicil, tarih, ay, takim, ad, lokasyon };
 }
@@ -10258,7 +10264,7 @@ function katSaglikOzet(s){
   p.push(s.eksik.length ? `eksik ${s.eksik.length} ${s.birim || ''}`.trim() : 'eksik yok');
   if (s.cift) p.push(`çift kayıt ${s.cift}`);
   if (s.sicilsiz) p.push(`sicilsiz satır ${s.sicilsiz}`);
-  if (s.anahtarDegil) p.push('bir tarihte birden çok satır');
+  if (s.anahtarDegil) p.push('aynı anahtarla birden çok satır');
   if (s.bilinmeyen) p.push(`listede olmayan sicil ${s.bilinmeyen}`);
   return p.join('; ');
 }
@@ -10406,11 +10412,11 @@ async function katDosyaKaydet(){
 }
 
 // ---------- Tarama ----------
-async function katTara(){
+async function katTara(yalnizId){
   const btn = document.getElementById('katTara'); btn.disabled = true;
   try {
     await katYukle();
-    const aktif = KAT.dosyalar.filter(d => !d.aktif || roEvet(d.aktif));
+    const aktif = KAT.dosyalar.filter(d => (!d.aktif || roEvet(d.aktif)) && (!yalnizId || d.sheetId === yalnizId));
     if (!aktif.length) throw new Error('Aktif dosya yok.');
     ykDurum('katTaramaDurum', 'Personel Listesi okunuyor…');
     const personel = await katPersonelSeti();
@@ -10519,12 +10525,14 @@ function katListeCiz(){
     const n = KAT.alanlar.filter(a => a.tablo === t.tablo && a.durum !== 'Yok').length;
     const yeniAlan = KAT.alanlar.filter(a => a.tablo === t.tablo && a.durum === 'Yeni').length;
     const ad = String(t.tablo).includes(' › ') && roUp(t.tablo).startsWith(roUp(t.dosya)) ? String(t.tablo).split(' › ').slice(1).join(' › ') : t.tablo;
-    return `<tr class="kat-satir${KAT.acik === t.tablo ? ' acik' : ''}" data-katac="${ykEsc(t.tablo)}"><td style="padding-left:26px;"><b>${ykEsc(ad)}</b>${t.not ? `<div class="ro-not${/^Bulunamadı/.test(t.not) ? ' uyari' : ''}">${ykEsc(t.not)}</div>` : ''}</td>
-      <td>${ykEsc(t.yapi)}<div class="ro-not">${sek}</div></td><td>${ykEsc(t.tanecik)}</td><td>${ykEsc(ank)}</td>
+    return `<tr class="kat-satir${KAT.acik === t.tablo ? ' acik' : ''}" data-katac="${ykEsc(t.tablo)}"><td style="padding-left:26px;white-space:normal;max-width:300px;"><b>${ykEsc(ad)}</b>${t.not ? `<div class="ro-not${/^Bulunamadı/.test(t.not) ? ' uyari' : ''}">${ykEsc(t.not)}</div>` : ''}</td>
+      <td>${ykEsc(t.yapi)}<div class="ro-not">${sek}</div></td><td>${ykEsc(t.tanecik)}</td><td style="white-space:normal;max-width:150px;">${ykEsc(ank)}</td>
       <td>${n}${yeniAlan ? ` <span class="ro-not uyari">+${yeniAlan} yeni</span>` : ''}</td>
-      <td style="white-space:normal;max-width:340px;${katUyariVar(t) ? 'color:var(--accent);' : ''}">${ykEsc(t.kapsam || '')}</td><td>${katRozet(t.durum)}</td></tr>`;
+      <td style="white-space:normal;min-width:220px;max-width:340px;${katUyariVar(t) ? 'color:var(--accent);' : ''}">${ykEsc(t.kapsam || '')}</td><td>${katRozet(t.durum)}</td>
+      <td style="white-space:nowrap;">${(t.durum === 'Yeni' || t.durum === 'Değişti' || !t.durum) ? `<button class="btn y-btn ok" data-kath="onay" data-t="${ykEsc(t.tablo)}" title="Tabloyu olduğu gibi onayla">✓ Onayla</button> <button class="btn y-btn" data-kath="kd" data-t="${ykEsc(t.tablo)}" title="Rapor kaynağı değil">Kapsam Dışı</button>`
+        : (t.durum === 'Kapsam Dışı' ? `<button class="btn y-btn" data-kath="al" data-t="${ykEsc(t.tablo)}" title="Kataloğa geri al (dosya yeniden taranır)">↺ Kataloğa Al</button>` : '')}</td></tr>`;
   };
-  let html = '<thead><tr><th>Tablo</th><th>Yapı</th><th>Tanecik</th><th>Anahtarlar</th><th>Alan</th><th>Kapsam</th><th>Durum</th></tr></thead>';
+  let html = '<thead><tr><th>Tablo</th><th>Yapı</th><th>Tanecik</th><th>Anahtarlar</th><th>Alan</th><th>Kapsam</th><th>Durum</th><th>Karar</th></tr></thead>';
   sirala.forEach(id => {
     const hepsi = KAT.tablolar.filter(t => t.sheetId === id), gor = filtreli.filter(t => t.sheetId === id);
     if (!gor.length) return;
@@ -10533,14 +10541,14 @@ function katListeCiz(){
     const sy = d => hepsi.filter(t => (t.durum || 'Yeni') === d).length;
     const uyari = hepsi.filter(t => t.durum !== 'Kapsam Dışı' && katUyariVar(t)).length;
     const ozet = KAT_DURUMLAR.filter(d => sy(d)).map(d => `<span class="kat-rozet" style="background:${KAT_ROZET[d]}">${sy(d)} ${d.toLocaleLowerCase('tr-TR')}</span>`).join(' ');
-    html += `<tbody><tr class="kat-grup" data-katg="${ykEsc(id)}"><td colspan="7"><span class="kat-ok">${acik ? '▾' : '▸'}</span> <b>${ykEsc(dosya)}</b> <span class="ro-not">${hepsi.length} tablo</span> ${ozet}${uyari ? ` <span class="ro-not uyari">⚠ ${uyari} tabloda sağlık uyarısı</span>` : ''}</td></tr>`;
+    html += `<tbody><tr class="kat-grup" data-katg="${ykEsc(id)}"><td colspan="8"><span class="kat-ok">${acik ? '▾' : '▸'}</span> <b>${ykEsc(dosya)}</b> <span class="ro-not">${hepsi.length} tablo</span> ${ozet}${uyari ? ` <span class="ro-not uyari">⚠ ${uyari} tabloda sağlık uyarısı</span>` : ''}</td></tr>`;
     if (acik){
       const ic = gor.slice().sort((a, b) => (sira[a.durum] ?? 1) - (sira[b.durum] ?? 1) || String(a.tablo).localeCompare(String(b.tablo), 'tr'));
       const kd = KAT.filtre === 'Hepsi' ? ic.filter(t => t.durum === 'Kapsam Dışı') : [];
       ic.filter(t => !kd.includes(t)).forEach(t => html += satir(t));
       if (kd.length){
         const kdAcik = KAT.acikKD.has(id);
-        html += `<tr class="kat-altgrup" data-katkd="${ykEsc(id)}"><td colspan="7" style="padding-left:26px;"><span class="kat-ok">${kdAcik ? '▾' : '▸'}</span> Kapsam dışı (${kd.length})</td></tr>`;
+        html += `<tr class="kat-altgrup" data-katkd="${ykEsc(id)}"><td colspan="8" style="padding-left:26px;"><span class="kat-ok">${kdAcik ? '▾' : '▸'}</span> Kapsam dışı (${kd.length})</td></tr>`;
         if (kdAcik) kd.forEach(t => html += satir(t));
       }
     }
@@ -10550,14 +10558,40 @@ function katListeCiz(){
   tab.querySelectorAll('[data-katg]').forEach(r => r.onclick = () => { const g = r.dataset.katg; KAT.acikGruplar.has(g) ? KAT.acikGruplar.delete(g) : KAT.acikGruplar.add(g); katListeCiz(); });
   tab.querySelectorAll('[data-katkd]').forEach(r => r.onclick = () => { const g = r.dataset.katkd; KAT.acikKD.has(g) ? KAT.acikKD.delete(g) : KAT.acikKD.add(g); katListeCiz(); });
   tab.querySelectorAll('tr[data-katac]').forEach(r => r.onclick = () => { if (KAT.acik === r.dataset.katac) katDetayKapat(); else katDetayAc(r.dataset.katac); });
+  tab.querySelectorAll('[data-kath]').forEach(b => b.onclick = e => { e.stopPropagation(); katHizliKarar(b.dataset.t, b.dataset.kath); });
   document.getElementById('katHepsiniAc').onclick = () => { sirala.forEach(id => KAT.acikGruplar.add(id)); katListeCiz(); };
   document.getElementById('katHepsiniKapat').onclick = () => { KAT.acikGruplar.clear(); KAT.acikKD.clear(); katDetayKapat(); };
   // açık tablonun ayrıntısı kendi satırının hemen altında
   if (KAT.acik){
     const r = [...tab.querySelectorAll('tr[data-katac]')].find(x => x.dataset.katac === KAT.acik);
-    if (r){ const tr = document.createElement('tr'); tr.className = 'kat-detay-satir'; const td = document.createElement('td'); td.colSpan = 7; tr.appendChild(td); r.after(tr); td.appendChild(detay); detay.style.display = 'block'; }
+    if (r){ const tr = document.createElement('tr'); tr.className = 'kat-detay-satir'; const td = document.createElement('td'); td.colSpan = 8; tr.appendChild(td); r.after(tr); td.appendChild(detay); detay.style.display = 'block';
+      // ayrıntı kartı tabloyu genişletmesin: liste alanının genişliğine sığar, alan tablosu kendi içinde kayar
+      detay.style.maxWidth = Math.max(600, tab.parentElement.clientWidth - 60) + 'px'; }
     else detay.style.display = 'none';
   }
+}
+// Listeden tek tıkla karar: Onayla / Kapsam Dışı / Kataloğa Al
+async function katHizliKarar(ad, islem){
+  const t = KAT.tablolar.find(x => x.tablo === ad); if (!t) return;
+  const alanlar = KAT.alanlar.filter(a => a.tablo === ad);
+  try {
+    if (islem === 'onay'){
+      if (!alanlar.length) return ykDurum('katTaramaDurum', `"${ad}": alanı yok, onaylanamaz. Önce Tara.`, 'err');
+      t.durum = 'Onaylı';
+      KAT.alanlar = KAT.alanlar.filter(a => a.tablo !== ad || a.durum !== 'Yok');
+      KAT.alanlar.forEach(a => { if (a.tablo === ad) a.durum = ''; });
+    } else if (islem === 'kd'){
+      t.durum = 'Kapsam Dışı';
+      KAT.alanlar = KAT.alanlar.filter(a => a.tablo !== ad);   // kapsam dışı tablonun alanları saklanmaz
+    } else if (islem === 'al'){
+      t.durum = 'Yeni'; if (/^Otomatik/.test(t.not || '')) t.not = '';
+    }
+    ykDurum('katTaramaDurum', 'Kaydediliyor…');
+    await katKatalogKaydet();
+    if (islem === 'al'){ await katTara(t.sheetId); if (KAT.acik === ad) katDetayAc(ad); }
+    ykDurum('katTaramaDurum', `✓ ${ad}: ${islem === 'onay' ? 'onaylandı' : (islem === 'kd' ? 'kapsam dışı bırakıldı' : 'kataloğa alındı, alanları okundu')}.`, 'ok');
+    if (KAT.acik === ad && islem !== 'al') katDetayAc(ad); else katListeCiz();
+  } catch(err){ ykDurum('katTaramaDurum', '✗ ' + err.message, 'err'); }
 }
 function katDetayKapat(){ KAT.acik = null; KAT.taslak = null; document.getElementById('katDetay').style.display = 'none'; katListeCiz(); }
 
@@ -10584,6 +10618,16 @@ function katDetayCiz(){
     ? (ek ? `Aylık sekmeler: ${ykEsc(ek.sekmeListesi[0])} … ${ykEsc(ek.sekmeListesi[ek.sekmeListesi.length - 1])} (${ek.sekmeListesi.length})` : 'Aylık sekmeler (her ay ayrı sekme; ay sekme adından)') + (ek && ek.bosSekmeler.length ? ` · boş: ${ek.bosSekmeler.map(ykEsc).join(', ')}` : '')
     : `Sekmeler: ${ykEsc(t.sekmeler)}`;
   document.getElementById('katDetayBilgi').innerHTML = `Dosya: <a href="${katSheetUrl(ykEsc(t.sheetId))}" target="_blank" rel="noopener">${ykEsc(t.dosya)}</a> · ${sekmeBilgi} · Yapı: <b>${ykEsc(t.yapi)}</b> · Tanecik: <b>${ykEsc(t.tanecik)}</b>${t.sonTarama ? ' · Son tarama: ' + ykEsc(t.sonTarama) : ''}${ek ? ' · ' + ek.satir + ' veri satırı (ilk satırlara göre)' : ''}`;
+  const kd = t.durum === 'Kapsam Dışı';
+  document.getElementById('katAlanBolum').style.display = kd ? 'none' : '';
+  ['katOnayla', 'katDetayKaydet', 'katKapsamDisi'].forEach(id => document.getElementById(id).style.display = kd ? 'none' : '');
+  document.getElementById('katKatalogaAl').style.display = kd ? '' : 'none';
+  if (kd){
+    document.getElementById('katDetayForm').innerHTML = `<div class="hint" style="margin:0;">Bu tablo rapor kaynağı sayılmıyor${t.not ? ' — ' + ykEsc(t.not.replace(/^Otomatik:\s*/, '')) : ''}. Yapılacak bir şey yok. Yanlışlıkla kapsam dışı kaldıysa <b>↺ Kataloğa Al</b>: dosya yeniden taranır, alanları gelir, sonra onaylarsın.</div>`;
+    document.getElementById('katDetaySaglik').innerHTML = '';
+    ykDurum('katDetayDurum', '');
+    return;
+  }
   const adlar = alanlar.filter(a => a.durum !== 'Yok').map(a => a.alan);
   const sec = (k, v) => {
     const ops = [''].concat(adlar);
@@ -10643,8 +10687,8 @@ function katDetaySaglikCiz(){
       ${s.bosSekmeler.length ? `<li>Boş sekme: ${kisa(s.bosSekmeler, 12)}</li>` : ''}
       ${s.cift ? `<li style="color:var(--danger)">Çift kayıt: ${s.cift} (ör. ${kisa(s.ciftOrnek, 5)})</li>` : '<li>Çift kayıt yok</li>'}
       ${s.sicilsiz ? `<li style="color:var(--danger)">Sicili boş ya da hatalı satır: ${s.sicilsiz} — Sicil ile eşleşemez (ör. ${kisa(s.sicilsizOrnek, 8)})</li>` : ''}
-      ${s.anahtarDegil ? '<li>Bir tarihte birden çok satır var (kayıt/not listesi); tarih tek başına anahtar değil, çift sayılmadı.</li>' : ''}
-      ${s.bilinmeyen ? `<li>Personel Listesi'nde olmayan sicil: ${s.bilinmeyen} (ayrılmış personel olabilir; ör. ${kisa(s.bilinmeyenOrnek, 8)})</li>` : ''}
+      ${s.anahtarDegil ? '<li>Aynı tarih / lokasyonla birden çok satır var (kayıt ya da not listesi); bu sütunlar tek başına anahtar değil, çift sayılmadı.</li>' : ''}
+      ${s.bilinmeyen ? `<li>Personel Listesi'nde olmayan sicil: ${s.bilinmeyen} (ayrılan personel ya da takım lideri gibi listede tutulmayan kişiler; ör. ${kisa(s.bilinmeyenOrnek, 8)})</li>` : ''}
     </ul></div>`;
   }
   const b = document.getElementById('katTekSaglik');
@@ -10660,6 +10704,7 @@ async function katDetayKaydet(durum){
   if (durum) t.durum = durum;
   let yeniAlanlar = alanlar.map(a => Object.assign(a, { tablo: t.tablo }));
   if (durum === 'Onaylı') yeniAlanlar = yeniAlanlar.filter(a => a.durum !== 'Yok').map(a => Object.assign(a, { durum: '' }));
+  if (t.durum === 'Kapsam Dışı') yeniAlanlar = [];
   const i = KAT.tablolar.findIndex(x => x.tablo === eskiAd);
   KAT.tablolar[i] = t;
   KAT.alanlar = KAT.alanlar.filter(a => a.tablo !== eskiAd).concat(yeniAlanlar);
@@ -10675,13 +10720,14 @@ async function katDetayKaydet(durum){
 
 document.getElementById('katDosyaEkle').addEventListener('click', katDosyaEkle);
 document.getElementById('katDosyaKaydet').addEventListener('click', katDosyaKaydet);
-document.getElementById('katTara').addEventListener('click', katTara);
+document.getElementById('katTara').addEventListener('click', () => katTara());
 document.getElementById('katSaglikBtn').addEventListener('click', () => katSaglikTara());
 document.getElementById('katYenile').addEventListener('click', async () => { KAT.meta.clear(); KAT.saglik.clear(); roOnbellekTemizle(); await katYukle(true); katDosyalariCiz(); katListeCiz(); if (KAT.acik) katDetayAc(KAT.acik); ykDurum('katTaramaDurum', '✓ Katalog yeniden okundu.', 'ok'); });
 document.getElementById('katDetayKapat').addEventListener('click', katDetayKapat);
 document.getElementById('katOnayla').addEventListener('click', () => katDetayKaydet('Onaylı'));
 document.getElementById('katDetayKaydet').addEventListener('click', () => katDetayKaydet(null));
 document.getElementById('katKapsamDisi').addEventListener('click', () => katDetayKaydet('Kapsam Dışı'));
+document.getElementById('katKatalogaAl').addEventListener('click', () => { if (KAT.acik) katHizliKarar(KAT.acik, 'al'); });
 </script>
 </body>
 </html>

@@ -11473,7 +11473,8 @@ async function exVeriOku(){
   const aylar = []; for (let x = a; x <= b; x++) aylar.push(x);
   const harita = (await roTakimHaritasi(aylar)).harita;
   const tlBul = (x, s) => { const m = harita.get(x); const v = m && m.get(s); return v ? v.tl : ''; };
-  const adBul = s => { for (const m of harita.values()){ const v = m.get(s); if (v && v.ad) return v.ad; } return ''; };
+  const ayDesc = [...harita.keys()].sort((x, y) => y - x);
+  const adBul = s => { for (const x of ayDesc){ const v = harita.get(x).get(s); if (v && v.ad) return v.ad; } return ''; };   // en son ayın VARDİYA yazımı
   const adlar = [...new Set(EX.sepet.map(s => s.gorunen))];
   const baslik = `${roDonem([a, b])} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …'}`;
   const dosya = (`${roDonem([a, b])} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ')} RAPORU`).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() + '.xlsx';
@@ -11483,7 +11484,8 @@ function exSayfaUret(veri, ay){
   const sepet = EX.sepet.map(s => ({ id: s.id, tablo: exSepetTablosu(s), alan: s.alan, gorunen: s.gorunen, tip: s.tip, toplama: s.toplama })).filter(s => s.tablo);
   let sonuc = exHesapla(sepet, veri.kayitlar, ay.D, veri.tlBul);
   if (sonuc.hata) throw new Error(sonuc.hata);
-  if (ay.D.kisi) sonuc.satirlar.forEach(r => { if (!r.sol[1] && typeof r.sol[0] === 'number') r.sol[1] = veri.adBul(String(r.sol[0])); });
+  // kişi adı VARDİYA'dan (Türkçe yazımı düzgün, her ayda aynı); VARDİYA'da yoksa kaynaktaki son yazım kalır
+  if (ay.D.kisi) sonuc.satirlar.forEach(r => { if (typeof r.sol[0] === 'number'){ const v = veri.adBul(String(r.sol[0])); if (v) r.sol[1] = v; } });
   const tlI = sonuc.boyutKol.findIndex(b => b.k === 'tl');
   const tlTumu = tlI < 0 ? [] : [...new Set(sonuc.satirlar.map(r => r.sol[tlI]))].sort((x, y) => String(x).localeCompare(String(y), 'tr'));
   sonuc = exHesapEkle(sonuc, EX.hesaplar.filter(h => h.a && h.b && (h.a.id !== undefined || h.a.sabit !== undefined) && (h.b.id !== undefined || h.b.sabit !== undefined)));

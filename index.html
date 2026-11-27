@@ -80,6 +80,12 @@
   table.prev{ border-collapse:collapse; width:100%; font-size:12px; margin-top:14px; }
   .ex-sepet{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .ex-cip{ display:inline-flex; align-items:center; gap:6px; padding:5px 6px 5px 10px; border:1px solid var(--accent); border-radius:16px; background:var(--accent-soft); font-size:12.5px; }
+  .ex-sayfa-liste{ display:flex; flex-direction:column; gap:4px; }
+  .ex-sayfa-satir{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; background:var(--panel); font-size:13px; }
+  .ex-sayfa-satir:not(.yeni){ margin-left:28px; border-left:3px solid var(--accent); }
+  .ex-sayfa-satir.yuklu{ box-shadow:0 0 0 2px var(--accent-soft); border-color:var(--accent); }
+  .ex-sayfa-sekme{ font-size:11px; color:var(--dim); min-width:58px; }
+  .ex-sayfa-ok button:disabled{ opacity:.25; cursor:default; }
   .ex-cip-sil{ border:none; background:transparent; cursor:pointer; color:var(--dim); font-size:12px; padding:0 4px; }
   .ex-uyari{ margin:0; padding-left:18px; font-size:12.5px; color:var(--accent); line-height:1.7; }
   .kat-rozet{ display:inline-block; color:#fff; font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
@@ -12110,11 +12116,33 @@ async function exVeriOku(){
 // ---- sayfalar ----
 function exSayfalarCiz(){
   const kap = document.getElementById('exSayfalar');
-  kap.innerHTML = EX.sayfalar.length ? EX.sayfalar.map((s, i) => `<span class="ex-cip"><b>${i + 1}. ${ykEsc(s.ad)}</b> <span class="ro-not">${ykEsc(exAyarAdi(s))}${s.filtre.kosullar.length || s.filtre.tl.length || s.filtre.siciller.length ? ' · filtreli' : ''}</span>
-      <button class="ex-cip-sil" data-exsyukle="${i}" title="Bu sayfanın ayarlarını ekrana getir">↺</button><button class="ex-cip-sil" data-exssil="${i}" title="Sayfayı çıkar">✕</button></span>`).join('')
-    : '<span class="hint" style="margin:0;">Sayfa eklenmedi: Excel, ekrandaki ayarlarla tek sayfa olur.</span>';
-  kap.querySelectorAll('[data-exssil]').forEach(b => b.onclick = () => { EX.sayfalar.splice(Number(b.dataset.exssil), 1); exSayfalarCiz(); });
-  kap.querySelectorAll('[data-exsyukle]').forEach(b => b.onclick = () => exAyarYukle(EX.sayfalar[Number(b.dataset.exsyukle)]));
+  if (!EX.sayfalar.length){ kap.innerHTML = '<span class="hint" style="margin:0;">Sayfa eklenmedi: Excel, ekrandaki ayarlarla tek sayfa olur.</span>'; return; }
+  let sekme = 0;
+  kap.innerHTML = '<div class="ex-sayfa-liste">' + EX.sayfalar.map((s, i) => {
+    const yeni = i === 0 || s.yerlesim !== 'alt'; if (yeni) sekme++;
+    const filtreli = (s.filtre.kosullar || []).some(k => k.mod !== 'renk') || s.filtre.tl.length || s.filtre.siciller.length, renkli = (s.filtre.kosullar || []).some(k => k.mod === 'renk');
+    return `<div class="ex-sayfa-satir${yeni ? ' yeni' : ''}${EX.yukluSayfa === i ? ' yuklu' : ''}">
+      <span class="ex-sayfa-sekme">${yeni ? `Sekme ${sekme}` : '↳ altına'}</span>
+      <span class="ex-sayfa-ok"><button class="ex-cip-sil" data-exsyukari="${i}" title="Yukarı taşı"${i === 0 ? ' disabled' : ''}>▲</button><button class="ex-cip-sil" data-exsasagi="${i}" title="Aşağı taşı"${i === EX.sayfalar.length - 1 ? ' disabled' : ''}>▼</button></span>
+      <b>${i + 1}. ${ykEsc(s.ad)}</b> <span class="ro-not">${ykEsc(exAyarAdi(Object.assign({}, s, { yerlesim: '' })))}${filtreli ? ' · filtreli' : ''}${renkli ? ' · renkli' : ''}</span>
+      <span style="flex:1;"></span>
+      <button class="btn y-btn" data-exsyukle="${i}" title="Bu sayfanın ayarlarını ekrana getir">↺ Ekrana getir</button>
+      <button class="btn y-btn" data-exsguncelle="${i}" title="Ekrandaki kırılım, düzen, bölme ve filtreyi bu sayfaya yaz">⤓ Güncelle</button>
+      <button class="ex-cip-sil" data-exssil="${i}" title="Sayfayı çıkar">✕</button></div>`;
+  }).join('') + '</div><div class="hint" style="margin:6px 0 0;">▲▼ sırayı değiştirir; "altına" bağlantısı yerinde kalır, yani aynı sekmedeki tabloların sırası değişir. ↺ ile ayarları getir, değiştir, ⤓ Güncelle.</div>';
+  // taşıma: içerik yer değiştirir, yerleşim (sekme bağlantısı) konumda kalır
+  const tasi = (i, j) => { const A = EX.sayfalar[i], B = EX.sayfalar[j], ya = A.yerlesim, yb = B.yerlesim; EX.sayfalar[i] = Object.assign({}, B, { yerlesim: ya }); EX.sayfalar[j] = Object.assign({}, A, { yerlesim: yb }); if (EX.yukluSayfa === i) EX.yukluSayfa = j; else if (EX.yukluSayfa === j) EX.yukluSayfa = i; exSayfalarCiz(); };
+  kap.querySelectorAll('[data-exsyukari]').forEach(b => b.onclick = () => { const i = Number(b.dataset.exsyukari); if (i > 0) tasi(i, i - 1); });
+  kap.querySelectorAll('[data-exsasagi]').forEach(b => b.onclick = () => { const i = Number(b.dataset.exsasagi); if (i < EX.sayfalar.length - 1) tasi(i, i + 1); });
+  kap.querySelectorAll('[data-exssil]').forEach(b => b.onclick = () => { const i = Number(b.dataset.exssil); EX.sayfalar.splice(i, 1); if (EX.yukluSayfa === i) EX.yukluSayfa = null; else if (EX.yukluSayfa > i) EX.yukluSayfa--; exSayfalarCiz(); });
+  kap.querySelectorAll('[data-exsyukle]').forEach(b => b.onclick = () => { EX.yukluSayfa = Number(b.dataset.exsyukle); exAyarYukle(EX.sayfalar[EX.yukluSayfa]); exSayfalarCiz(); });
+  kap.querySelectorAll('[data-exsguncelle]').forEach(b => b.onclick = () => {
+    const i = Number(b.dataset.exsguncelle), eski = EX.sayfalar[i], ay = exAyarlarSimdi();
+    const ad = roUp(document.getElementById('exSayfaAd').value) || eski.ad;
+    EX.sayfalar[i] = Object.assign({ ad }, ay, { yerlesim: eski.yerlesim });
+    document.getElementById('exSayfaAd').value = '';
+    exSayfalarCiz(); ykDurum('exDurum', `✓ "${ad}" sayfası ekrandaki ayarlarla güncellendi.`, 'ok');
+  });
 }
 document.getElementById('exHesapEkle').addEventListener('click', () => { if (EX.sepet.length < 1) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn'); EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); EX.fAktif = EX.hesaplar.length - 1; exHesaplarCiz(); exKosulSiraCiz(); const f = document.querySelector(`#exHesaplar [data-exhrow="${EX.fAktif}"] [data-exhad]`); if (f) f.focus(); });
 document.getElementById('exFAlan').addEventListener('change', e => { if (!e.target.value) return; exFormuleEkle(`[${e.target.value}]`); e.target.value = ''; });
@@ -12304,7 +12332,7 @@ function exSayfaEkle(){
   const ay = exAyarlarSimdi();
   if (ay.yerlesim === 'alt' && !EX.sayfalar.length) return ykDurum('exDurum', '"Önceki sayfanın altına" için önce bir sayfa ekle.', 'warn');
   const ad = roUp(document.getElementById('exSayfaAd').value) || exAyarAdi(ay);
-  EX.sayfalar.push(Object.assign({ ad }, ay));
+  EX.sayfalar.push(Object.assign({ ad }, ay)); EX.yukluSayfa = null;
   document.getElementById('exSayfaAd').value = '';
   document.getElementById('exYerlesim').value = 'yeni';
   exSayfalarCiz();

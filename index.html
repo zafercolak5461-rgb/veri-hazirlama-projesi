@@ -9977,7 +9977,9 @@ function katVarsayilanToplama(ad, tip){
 function katAnahtarBul(alanlar, personel){
   const n = a => katNorm(a.ad);
   const bul = f => { const a = alanlar.find(f); return a ? a.ad : ''; };
-  let sicil = bul(a => /(^| )SICIL/.test(n(a)));
+  // başlığında SİCİL geçen ve değerleri çoğunlukla 4–6 haneli sayı olan sütun ("Adli Sicil Kaydı" gibi metin sütunları elenir)
+  const sicilDeger = a => { const v = (a.ornekler || []).filter(x => katHucreTipi(x) !== 'bos'); return !v.length || v.filter(x => /^\d{4,6}$/.test(roSicil(x))).length >= v.length * 0.6; };
+  let sicil = bul(a => /(^| )SICIL( NO| NUMARASI)?$|^PERSONEL SICIL/.test(n(a)) && sicilDeger(a)) || bul(a => /(^| )SICIL/.test(n(a)) && sicilDeger(a) && (a.ornekler || []).some(x => roSicil(x)));
   if (!sicil){
     const aday = alanlar.find(a => {
       const v = (a.ornekler || []).filter(x => katHucreTipi(x) !== 'bos');
@@ -10178,7 +10180,7 @@ function katBirlestir(eski, yeniTablolar, tarama){
 // ---------- Sağlık / kapsam (veri tam mı?) ----------
 // tablo: katalog satırı (anahtar alan adlarıyla); parcalar: [{ sekme, rows }] (sekme sırası önemsiz); personel: Set(sicil)
 function katSaglik(tablo, parcalar, personel){
-  const sonuc = { kapsam: '', eksik: [], bosSekmeler: [], cift: 0, ciftOrnek: [], bilinmeyen: 0, bilinmeyenOrnek: [], satir: 0, birim: '' };
+  const sonuc = { kapsam: '', eksik: [], bosSekmeler: [], cift: 0, ciftOrnek: [], bilinmeyen: 0, bilinmeyenOrnek: [], sicilsiz: 0, sicilsizOrnek: [], anahtarDegil: false, satir: 0, birim: '' };
   const hi = Math.max(1, Number(tablo.baslikSatiri) || 1) - 1;
   const aylik = tablo.sekmeler === KAT_AYLIK;
   const kol = (h, ad, veri) => {
@@ -10210,6 +10212,11 @@ function katSaglik(tablo, parcalar, personel){
       if (aylik) zaman.add(ayX);
       const s = si >= 0 ? roSicil(r[si]) : '';
       if (si >= 0 && s && personel && personel.size && !personel.has(s)) bilinmeyen.add(s);
+      if (si >= 0 && !s){   // sicili boş ya da #YOK: Sicil ile eşleşemez
+        sonuc.sicilsiz++;
+        if (sonuc.sicilsizOrnek.length < 8){ const adi = kol(h, tablo.ad) >= 0 ? String(r[kol(h, tablo.ad)] || '').trim() : ''; sonuc.sicilsizOrnek.push([adi || '(adsız)', String(r[si] == null ? '' : r[si]).trim(), aylik ? p.sekme : ''].filter(Boolean).join(' · ')); }
+        return;
+      }
       if (tablo.yapi === KAT_YAPILAR.yatayolcu) return;
       const k = [aylik ? ayX : '', tablo.grupBoyutu && !aylik ? p.sekme : '', z === null ? '' : z, s, li >= 0 ? roUp(r[li]) : ''].join('|');
       if (si < 0 && ti < 0 && ai < 0 && li < 0) return;
@@ -10218,6 +10225,8 @@ function katSaglik(tablo, parcalar, personel){
     });
   });
   sonuc.birim = birim;
+  // sicil yokken satırların çoğu "çift" çıkıyorsa tarih (lokasyon) tek başına anahtar değildir (ör. giriş kayıtları, notlar): çift sayılmaz
+  if (!(tablo.sicil && !String(tablo.sicil).startsWith('(')) && sonuc.cift > sonuc.satir * 0.2){ sonuc.cift = 0; sonuc.ciftOrnek = []; sonuc.anahtarDegil = true; }
   sonuc.bilinmeyen = bilinmeyen.size; sonuc.bilinmeyenOrnek = [...bilinmeyen].slice(0, 8);
   const z = [...zaman].filter(x => x !== null).sort((a, b) => a - b);
   if (z.length){
@@ -10236,6 +10245,8 @@ function katSaglikOzet(s){
   const p = [s.kapsam || 'veri yok'];
   p.push(s.eksik.length ? `eksik ${s.eksik.length} ${s.birim || ''}`.trim() : 'eksik yok');
   if (s.cift) p.push(`çift kayıt ${s.cift}`);
+  if (s.sicilsiz) p.push(`sicilsiz satır ${s.sicilsiz}`);
+  if (s.anahtarDegil) p.push('bir tarihte birden çok satır');
   if (s.bilinmeyen) p.push(`listede olmayan sicil ${s.bilinmeyen}`);
   return p.join('; ');
 }
@@ -10575,6 +10586,8 @@ function katDetaySaglikCiz(){
       <li>${s.eksik.length ? `<span style="color:var(--accent)">Eksik ${ykEsc(s.birim)}: ${kisa(s.eksik, 25)}</span>` : 'Eksik dönem yok'}</li>
       ${s.bosSekmeler.length ? `<li>Boş sekme: ${kisa(s.bosSekmeler, 12)}</li>` : ''}
       ${s.cift ? `<li style="color:var(--danger)">Çift kayıt: ${s.cift} (ör. ${kisa(s.ciftOrnek, 5)})</li>` : '<li>Çift kayıt yok</li>'}
+      ${s.sicilsiz ? `<li style="color:var(--danger)">Sicili boş ya da hatalı satır: ${s.sicilsiz} — Sicil ile eşleşemez (ör. ${kisa(s.sicilsizOrnek, 8)})</li>` : ''}
+      ${s.anahtarDegil ? '<li>Bir tarihte birden çok satır var (kayıt/not listesi); tarih tek başına anahtar değil, çift sayılmadı.</li>' : ''}
       ${s.bilinmeyen ? `<li>Personel Listesi'nde olmayan sicil: ${s.bilinmeyen} (ayrılmış personel olabilir; ör. ${kisa(s.bilinmeyenOrnek, 8)})</li>` : ''}
     </ul></div>`;
   }

@@ -863,9 +863,20 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         </div>
         <div class="card">
           <h2>Hesaplanan sütunlar</h2>
-          <div class="hint">Sepetteki iki alandan ya da bir alanla bir sabit sayıdan yeni sütun: ör. PAY = ÇAĞRI SAYISI % CEVAPLANAN ÇAĞRI. Excel'e formül olarak yazılır; aylar sütunda düzeninde her ay için ayrı hesaplanır; TOPLAM satırında toplamlar üzerinden hesaplanır. Bütün sayfalarda ortaktır.</div>
+          <div class="hint">Excel'deki gibi formül yaz; alanlar [köşeli parantez] içinde. Ör. <code>[ANKET DEĞERLENDİRMESİ] - 4,70</code> · <code>EĞER([ANKET DEĞERLENDİRMESİ] &gt;= 4,7; "HEDEFTE"; "ALTINDA")</code>. Ayraç <b>;</b> · ondalık <b>,</b>. Alanı, işlevi ya da hazır hesabı aşağıdaki listelerden ekleyebilirsin. Excel'e formül olarak yazılır; aylar sütunda düzeninde her ay ve GENEL için ayrı hesaplanır. Boş hücre (ANKET/KKO'da 0 da) sonucu boş bırakır. Bir hesap üstündeki hesapları kullanabilir. Bütün sayfalarda ortaktır.</div>
           <div id="exHesaplar"></div>
-          <div class="row" style="margin-top:6px;"><button class="btn" id="exHesapEkle">+ Hesaplanan Sütun</button></div>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn" id="exHesapEkle">+ Hesaplanan Sütun</button>
+            <span style="width:10px;"></span>
+            <select id="exFAlan" title="Seçili formüle alan ekle"><option value="">＋ Alan ekle…</option></select>
+            <select id="exFIslev" title="Seçili formüle işlev ekle"><option value="">＋ İşlev ekle…</option></select>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <b style="font-size:13px;">Hazır hesap:</b>
+            <select id="exHazirTur"></select>
+            <select id="exHazirAlan"></select>
+            <button class="btn" id="exHazirEkle">+ Ekle</button>
+          </div>
         </div>
         <div class="card">
           <h2>Filtre ve sıralama</h2>
@@ -11020,7 +11031,7 @@ function exHesapla(sepet, kayitlar, D, tlBul){
   if (D.zaman === 'gun') boyutKol.push({ baslik: 'TARİH', k: 'zg' });
   // aynı görünen ad iki tablodan gelirse tablo adı eklenir
   const sayac = {}; alanlar.forEach(a => { sayac[a.gorunen] = (sayac[a.gorunen] || 0) + 1; });
-  const kolonlar = alanlar.map(a => ({ id: a.id, baslik: (sayac[a.gorunen] > 1 ? a.tablo.tablo.split(' › ').pop() + ' › ' : '') + a.gorunen + a.ek, toplama: a.toplama, tip: a.tip, tam: a.tam, alan: a.alan }));
+  const kolonlar = alanlar.map(a => ({ id: a.id, baslik: (sayac[a.gorunen] > 1 ? a.tablo.tablo.split(' › ').pop() + ' › ' : '') + a.gorunen + a.ek, ad: (sayac[a.gorunen] > 1 ? a.tablo.tablo.split(' › ').pop() + ' › ' : '') + a.gorunen, adTam: a.tablo.tablo.split(' › ').pop() + ' › ' + a.gorunen, toplama: a.toplama, tip: a.tip, tam: a.tam, alan: a.alan }));
   const cikti = liste.map(b => {
     const sol = boyutKol.map(c => c.k === 'sicil' ? (b.sicil ? Number(b.sicil) : (b.sicilsiz ? 'SİCİLSİZ' : ''))
       : c.k === 'zy' ? Math.floor(b.z / 12) : c.k === 'za' ? RO_AYLAR[b.z % 12] : c.k === 'zg' ? katGunMetin(b.z) : b[c.k]);
@@ -11090,20 +11101,243 @@ function exIslem(a, op, b, a0, b0){
   if (op === '+') return a + b;
   return null;
 }
-// hesaplar: [{ baslik, a: {id}|{sabit}, op, b: {id}|{sabit} }]  (id = sepet alanı)
+// ---- Formül dili (hesaplanan sütunlar) ----
+// Alan: [ANKET DEĞERLENDİRMESİ] · sayı: 4,70 ya da 4.70 · metin: "HEDEFTE" · ayraç: ; (virgül, boşluksuz iki rakam arasında ondalıktır)
+// İşleçler: + - * / ^ & = <> != < > <= >= · İşlevler: EĞER VE YADA DEĞİL YUVARLA MİN MAKS MUTLAK ORTALAMA TOPLA
+// Özel: ÖNCEKİ([X]) önceki dönem (aylar sütunda) · SIRA([X]; 1=artan) · TL_ORTALAMA([X]) · PAY([X]) sütun toplamındaki pay
+const EX_FN = {
+  'EĞER': 'IF', 'IF': 'IF', 'VE': 'AND', 'AND': 'AND', 'YADA': 'OR', 'OR': 'OR', 'DEĞİL': 'NOT', 'NOT': 'NOT',
+  'YUVARLA': 'ROUND', 'ROUND': 'ROUND', 'MİN': 'MIN', 'MIN': 'MIN', 'MAKS': 'MAX', 'MAX': 'MAX', 'MUTLAK': 'ABS', 'ABS': 'ABS',
+  'ORTALAMA': 'AVERAGE', 'AVERAGE': 'AVERAGE', 'TOPLA': 'SUM', 'SUM': 'SUM',
+  'ÖNCEKİ': 'ONCEKI', 'ONCEKI': 'ONCEKI', 'SIRA': 'SIRA', 'TL_ORTALAMA': 'TLORT', 'TLORTALAMA': 'TLORT', 'PAY': 'PAY',
+};
+const EX_FN_OZEL = ['ONCEKI', 'SIRA', 'TLORT', 'PAY'];
+const EX_FN_ARG = { IF: [2, 3], AND: [1, 9], OR: [1, 9], NOT: [1, 1], ROUND: [1, 2], MIN: [1, 9], MAX: [1, 9], ABS: [1, 1], AVERAGE: [1, 9], SUM: [1, 9], ONCEKI: [1, 1], SIRA: [1, 2], TLORT: [1, 1], PAY: [1, 1] };
+const EX_FN_AD = { IF: 'EĞER', AND: 'VE', OR: 'YADA', NOT: 'DEĞİL', ROUND: 'YUVARLA', MIN: 'MİN', MAX: 'MAKS', ABS: 'MUTLAK', AVERAGE: 'ORTALAMA', SUM: 'TOPLA', ONCEKI: 'ÖNCEKİ', SIRA: 'SIRA', TLORT: 'TL_ORTALAMA', PAY: 'PAY' };
+function exFormulHata(msg, i){ const e = new Error(msg + (i !== undefined ? ` (${i + 1}. karakter)` : '')); e.konum = i; return e; }
+function exFormulParcala(m){
+  const t = [], s = String(m || '');
+  let i = 0;
+  while (i < s.length){
+    const c = s[i];
+    if (/\s/.test(c)){ i++; continue; }
+    if (c === '['){ const j = s.indexOf(']', i); if (j < 0) throw exFormulHata('"[" kapanmamış', i); t.push({ t: 'ad', v: s.slice(i + 1, j).trim(), i }); i = j + 1; continue; }
+    if (c === '"'){ let j = i + 1, v = ''; while (j < s.length){ if (s[j] === '"'){ if (s[j + 1] === '"'){ v += '"'; j += 2; continue; } break; } v += s[j++]; } if (j >= s.length) throw exFormulHata('Tırnak kapanmamış', i); t.push({ t: 'metin', v, i }); i = j + 1; continue; }
+    if (/[0-9]/.test(c)){ const m2 = s.slice(i).match(/^\d+(?:[.,]\d+)?/); t.push({ t: 'sayi', v: Number(m2[0].replace(',', '.')), i }); i += m2[0].length; continue; }
+    const iki = s.slice(i, i + 2);
+    if (['<=', '>=', '<>', '!='].includes(iki)){ t.push({ t: 'op', v: iki === '!=' ? '<>' : iki, i }); i += 2; continue; }
+    if ('+-*/^&=<>'.includes(c)){ t.push({ t: 'op', v: c, i }); i++; continue; }
+    if (c === '(' || c === ')'){ t.push({ t: c, i }); i++; continue; }
+    if (c === ';' || c === ','){ t.push({ t: ';', i }); i++; continue; }
+    const m3 = s.slice(i).match(/^[A-Za-zÇĞİÖŞÜçğıöşü_][A-Za-zÇĞİÖŞÜçğıöşü_0-9]*/);
+    if (m3){ t.push({ t: 'isim', v: m3[0], i }); i += m3[0].length; continue; }
+    throw exFormulHata(`"${c}" anlaşılmadı`, i);
+  }
+  return t;
+}
+// Ayrıştırıcı → ağaç: {n:'sayi'|'metin'|'ad'|'op'|'eksi'|'fn', ...}
+function exFormulCoz(metin){
+  const t = exFormulParcala(metin);
+  if (!t.length) throw exFormulHata('Formül boş');
+  let p = 0;
+  const bak = () => t[p], al = () => t[p++];
+  const bekle = (tip, ne) => { const x = al(); if (!x || x.t !== tip) throw exFormulHata(`${ne} bekleniyordu`, x ? x.i : String(metin).length); return x; };
+  const SEV = [['=', '<>', '<', '>', '<=', '>='], ['&'], ['+', '-'], ['*', '/'], ['^']];
+  const ikili = d => {
+    if (d >= SEV.length) return tekli();
+    let a = ikili(d + 1);
+    while (bak() && bak().t === 'op' && SEV[d].includes(bak().v)){ const o = al().v; a = { n: 'op', op: o, a, b: ikili(d + 1) }; }
+    return a;
+  };
+  const tekli = () => {
+    const x = bak();
+    if (x && x.t === 'op' && (x.v === '-' || x.v === '+')){ al(); const a = tekli(); return x.v === '-' ? { n: 'eksi', a } : a; }
+    return oge();
+  };
+  const oge = () => {
+    const x = al();
+    if (!x) throw exFormulHata('Formül yarım kaldı', String(metin).length);
+    if (x.t === 'sayi') return { n: 'sayi', v: x.v };
+    if (x.t === 'metin') return { n: 'metin', v: x.v };
+    if (x.t === 'ad'){ if (!x.v) throw exFormulHata('Boş alan adı []', x.i); return { n: 'ad', ad: x.v, i: x.i }; }
+    if (x.t === '('){ const a = ikili(0); bekle(')', '")"'); return a; }
+    if (x.t === 'isim'){
+      const up = x.v.toLocaleUpperCase('tr');
+      if (up === 'DOĞRU' || up === 'TRUE') return { n: 'sayi', v: true };
+      if (up === 'YANLIŞ' || up === 'FALSE') return { n: 'sayi', v: false };
+      const fn = EX_FN[up] || EX_FN[x.v.toUpperCase()];
+      if (!fn) throw exFormulHata(`"${x.v}" diye bir işlev yok. Alan adını [köşeli parantez] içine yaz.`, x.i);
+      bekle('(', `${x.v} sonrası "("`);
+      const args = [];
+      if (bak() && bak().t === ')') al();
+      else { args.push(ikili(0)); while (bak() && bak().t === ';'){ al(); args.push(ikili(0)); } bekle(')', '")" ya da ";"'); }
+      const [en, ec] = EX_FN_ARG[fn];
+      if (args.length < en || args.length > ec) throw exFormulHata(`${EX_FN_AD[fn]} ${en === ec ? en : en + '–' + ec} değer alır, ${args.length} verildi`, x.i);
+      if (EX_FN_OZEL.includes(fn) && args[0].n !== 'ad') throw exFormulHata(`${EX_FN_AD[fn]} içine bir alan yaz: ${EX_FN_AD[fn]}([ALAN])`, x.i);
+      return { n: 'fn', fn, args, i: x.i };
+    }
+    throw exFormulHata('Beklenmeyen "' + (x.v || x.t) + '"', x.i);
+  };
+  const kok = ikili(0);
+  if (p < t.length) throw exFormulHata(`Fazladan "${t[p].v || t[p].t}"`, t[p].i);
+  return kok;
+}
+function exFormulGez(n, f){ if (!n) return; f(n); if (n.a) exFormulGez(n.a, f); if (n.b) exFormulGez(n.b, f); (n.args || []).forEach(x => exFormulGez(x, f)); }
+function exFormulAdlari(ast){ const o = []; exFormulGez(ast, n => { if (n.n === 'ad') o.push(n.ad); }); return o; }
+// Ad çözümü: alanlar / hesaplar → {fi}, satır boyutları → {sol: k}
+const exAdNorm = s => roUp(String(s || '').replace(/\s+/g, ' ').trim());
+function exFormulBagla(ast, adlar){   // adlar: Map(norm → {fi, sifir} | {sol: k})
+  const bulunamayan = [];
+  exFormulGez(ast, n => { if (n.n !== 'ad') return; const x = adlar.get(exAdNorm(n.ad)); if (!x) bulunamayan.push(n.ad); else Object.assign(n, x); });
+  if (bulunamayan.length) throw exFormulHata(`[${bulunamayan[0]}] bulunamadı`);
+  return ast;
+}
+// Doğrudan kullanılan alan hücreleri (boşsa sonuç boş): {fi, sifir, onceki}
+function exFormulKoruma(ast){
+  const o = [];
+  const gez = (n, onceki) => { if (!n) return; if (n.n === 'ad' && n.fi !== undefined) o.push({ fi: n.fi, sifir: !!n.sifir, onceki }); if (n.n === 'fn' && n.fn === 'ONCEKI') return gez(n.args[0], true); if (n.a) gez(n.a, onceki); if (n.b) gez(n.b, onceki); (n.args || []).forEach(x => gez(x, onceki)); };
+  gez(ast, false);
+  return o;
+}
+const exFormulOzelVar = ast => { let v = false; exFormulGez(ast, n => { if (n.n === 'fn' && EX_FN_OZEL.includes(n.fn)) v = true; }); return v; };
+// JS hesabı. C: { v(fi), onceki(fi) → değer|undefined, sutun(fi) → [değer], sol(k), solSutun(k), satir (indeks), toplam }
+function exFormulDeger(ast, C){
+  const bos = x => x === null || x === undefined || x === '';
+  for (const k of exFormulKoruma(ast)){
+    const x = k.onceki ? C.onceki(k.fi) : C.v(k.fi);
+    if (bos(x) || (k.sifir && !C.toplam && x === 0)) return null;
+  }
+  const say = x => typeof x === 'boolean' ? (x ? 1 : 0) : (typeof x === 'number' ? x : (roNum(x) ?? NaN));
+  const D = n => {
+    switch (n.n){
+      case 'sayi': case 'metin': return n.v;
+      case 'ad': return n.fi !== undefined ? C.v(n.fi) : C.sol(n.sol);
+      case 'eksi': return -say(D(n.a));
+      case 'op': {
+        const a = D(n.a), b = D(n.b);
+        switch (n.op){
+          case '+': return say(a) + say(b); case '-': return say(a) - say(b); case '*': return say(a) * say(b);
+          case '/': return say(b) === 0 ? NaN : say(a) / say(b); case '^': return Math.pow(say(a), say(b));
+          case '&': return String(a ?? '') + String(b ?? '');
+          default: {
+            const sa = typeof a === 'number' || typeof a === 'boolean', sb = typeof b === 'number' || typeof b === 'boolean';
+            const [x, y] = sa && sb ? [say(a), say(b)] : [roUp(a ?? ''), roUp(b ?? '')];
+            return { '=': x === y, '<>': x !== y, '<': x < y, '>': x > y, '<=': x <= y, '>=': x >= y }[n.op];
+          }
+        }
+      }
+      case 'fn': {
+        const A = () => n.args.map(D).map(say);
+        switch (n.fn){
+          case 'IF': { const c = D(n.args[0]); return (typeof c === 'boolean' ? c : say(c) !== 0) ? D(n.args[1]) : (n.args[2] ? D(n.args[2]) : false); }
+          case 'AND': return n.args.every(x => !!D(x)); case 'OR': return n.args.some(x => !!D(x)); case 'NOT': return !D(n.args[0]);
+          case 'ROUND': { const k = n.args[1] ? say(D(n.args[1])) : 0, f = Math.pow(10, k); return Math.round(say(D(n.args[0])) * f) / f; }
+          case 'MIN': return Math.min(...A()); case 'MAX': return Math.max(...A()); case 'ABS': return Math.abs(say(D(n.args[0])));
+          case 'AVERAGE': { const x = A(); return x.reduce((p, q) => p + q, 0) / x.length; } case 'SUM': return A().reduce((p, q) => p + q, 0);
+          case 'ONCEKI': { const x = C.onceki(n.args[0].fi); return x === undefined ? NaN : x; }
+          case 'SIRA': case 'PAY': case 'TLORT': {
+            if (C.toplam) return NaN;
+            const fi = n.args[0].fi, sifir = n.args[0].sifir, me = C.v(fi);
+            const gec = x => typeof x === 'number' && !(sifir && x === 0);
+            if (n.fn === 'SIRA'){ const art = n.args[1] && say(D(n.args[1])) === 1; return 1 + C.sutun(fi).filter(gec).filter(x => art ? x < me : x > me).length; }
+            if (n.fn === 'PAY'){ const t = C.sutun(fi).filter(gec).reduce((p, q) => p + q, 0); return t ? me / t : NaN; }
+            const tl = C.sol('tl'), tlS = C.solSutun('tl'), x = C.sutun(fi).filter((v, i) => gec(v) && (tl === undefined || tlS[i] === tl));
+            return x.length ? x.reduce((p, q) => p + q, 0) / x.length : NaN;
+          }
+        }
+      }
+    }
+    return NaN;
+  };
+  const r = D(ast);
+  return typeof r === 'number' && !isFinite(r) ? null : (r === undefined ? null : r);
+}
+// Excel formülü. E: { hucre(fi), onceki(fi) → 'C4'|null, aralik(fi), solHucre(k)|null, solAralik(k)|null, toplam }
+function exFormulExcel(ast, E){
+  const kos = [];
+  for (const k of exFormulKoruma(ast)){
+    const h = k.onceki ? E.onceki(k.fi) : E.hucre(k.fi);
+    if (!h) return '""';
+    if (!kos.includes(`${h}=""`)) kos.push(`${h}=""`); if (k.sifir && !E.toplam && !kos.includes(`${h}=0`)) kos.push(`${h}=0`);
+  }
+  const sayi = v => typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : String(v);
+  const F = n => {
+    switch (n.n){
+      case 'sayi': return sayi(n.v);
+      case 'metin': return '"' + String(n.v).replace(/"/g, '""') + '"';
+      case 'ad': return n.fi !== undefined ? E.hucre(n.fi) : (E.solHucre(n.sol) || '""');
+      case 'eksi': return `-(${F(n.a)})`;
+      case 'op': return `(${F(n.a)}${n.op}${F(n.b)})`;
+      case 'fn': {
+        const fi = n.args[0] && n.args[0].fi;
+        switch (n.fn){
+          case 'ONCEKI': return E.onceki(fi) || '""';
+          case 'SIRA': return E.toplam ? '""' : `RANK(${E.hucre(fi)},${E.aralik(fi)},${n.args[1] ? F(n.args[1]) : 0})`;
+          case 'PAY': return E.toplam ? '""' : `${E.hucre(fi)}/SUM(${E.aralik(fi)})`;
+          case 'TLORT': {
+            if (E.toplam) return '""';
+            const tl = E.solHucre('tl'), tlA = E.solAralik('tl');
+            if (n.args[0].sifir) return tl ? `AVERAGEIFS(${E.aralik(fi)},${tlA},${tl},${E.aralik(fi)},"<>0")` : `AVERAGEIF(${E.aralik(fi)},"<>0")`;
+            return tl ? `AVERAGEIF(${tlA},${tl},${E.aralik(fi)})` : `AVERAGE(${E.aralik(fi)})`;
+          }
+          default: return `${n.fn}(${n.args.map(F).join(',')})`;
+        }
+      }
+    }
+    return '""';
+  };
+  const f = `IFERROR(${F(ast)},"")`;
+  return kos.length ? `IF(OR(${kos.join(',')}),"",${f})` : f;
+}
+// Eski hesap kaydı { a:{id}|{sabit}, op, b } → formül
+function exHesapFormuleCevir(h, adBul){
+  if (h.formul !== undefined) return h;
+  const isl = o => !o ? '' : (o.sabit !== undefined ? String(o.sabit).replace('.', ',') : (o.id !== undefined ? `[${adBul(o.id) || '?'}]` : ''));
+  const a = isl(h.a), b = isl(h.b);
+  return { baslik: h.baslik, formul: a && b ? `${a} ${h.op === '%' ? '/' : h.op === '*' ? '*' : h.op} ${b}` : '', bicim: h.op === '%' ? '0.00%' : '' };
+}
+
+// Formüldeki adlar: sepet alanları (görünen ad, tablo › ad, sütun başlığı), önceki hesaplar, satır boyutları (SİCİL, AD SOYAD, TAKIM LİDERİ, LOKASYON)
+function exAdHaritasi(kolonlar, boyutKol){
+  const adlar = new Map(), say = {};
+  kolonlar.forEach(k => { if (k.ad && !k.hesap){ const n = exAdNorm(k.ad); say[n] = (say[n] || 0) + 1; } });
+  kolonlar.forEach((k, fi) => { const x = { fi, sifir: k.toplama === 'Ortalama (0 hariç)' }; [k.ad, k.adTam, k.baslik].filter(Boolean).forEach(a => { const n = exAdNorm(a); if (!adlar.has(n) && !(say[n] > 1)) adlar.set(n, x); }); });
+  (boyutKol || []).forEach(b => { if (['sicil', 'ad', 'tl', 'lok'].includes(b.k)) adlar.set(exAdNorm(b.baslik), { sol: b.k }); });
+  [['TAKIM LİDERİ', 'tl'], ['TL', 'tl'], ['SİCİL', 'sicil'], ['AD SOYAD', 'ad'], ['LOKASYON', 'lok']].forEach(([a, k]) => { if (!adlar.has(a)) adlar.set(a, { sol: k }); });
+  return adlar;
+}
+// hesaplar: [{ baslik, formul, bicim }] — sırayla; bir hesap üstündekileri kullanabilir
 function exHesapEkle(sonuc, hesaplar){
   if (!hesaplar || !hesaplar.length) return sonuc;
-  const idx = id => sonuc.kolonlar.findIndex(k => k.id === id);
   const kolonlar = sonuc.kolonlar.slice(), satirlar = sonuc.satirlar.map(s => Object.assign({}, s, { deg: s.deg.slice() }));
+  const adlar = exAdHaritasi(kolonlar, sonuc.boyutKol);
+  const solJ = k => sonuc.boyutKol.findIndex(b => b.k === k);
   hesaplar.forEach((h, j) => {
-    const ia = h.a && h.a.id !== undefined ? idx(h.a.id) : -1, ib = h.b && h.b.id !== undefined ? idx(h.b.id) : -1;
-    if ((h.a.id !== undefined && ia < 0) || (h.b.id !== undefined && ib < 0)) return;
-    const sifirYok = i => i >= 0 && kolonlar[i].toplama === 'Ortalama (0 hariç)';
-    const a0 = sifirYok(ia), b0 = sifirYok(ib);
-    kolonlar.push({ id: 'h' + j, baslik: roUp(h.baslik || 'HESAP ' + (j + 1)), hesap: { a: ia, b: ib, sa: h.a.sabit, sb: h.b.sabit, op: h.op, a0, b0 }, toplama: 'Hesap', tip: h.op === '%' ? 'Yüzde' : 'Sayı', tam: true, alan: '' });
-    satirlar.forEach(s => s.deg.push(exIslem(ia >= 0 ? s.deg[ia] : Number(h.a.sabit), h.op, ib >= 0 ? s.deg[ib] : Number(h.b.sabit), a0, b0)));
+    const ad = roUp(h.baslik || 'HESAP ' + (j + 1));
+    let ast;
+    try { ast = exFormulBagla(exFormulCoz(h.formul), adlar); } catch(e){ throw new Error(`"${ad}" formülü: ${e.message}`); }
+    const fi = kolonlar.length;
+    kolonlar.push({ id: 'h' + j, baslik: ad, ad, hesap: { ast, bicim: h.bicim || '' }, toplama: 'Hesap', tip: 'Sayı', tam: true, alan: '' });
+    adlar.set(exAdNorm(ad), { fi, sifir: false });
+    satirlar.forEach(s => s.deg.push(null));
+    const onb = {}, sut = f => onb[f] || (onb[f] = satirlar.map(s => s.deg[f]));
+    const vals = satirlar.map(s => exFormulDeger(ast, { v: f => s.deg[f], onceki: () => undefined, sutun: sut, sol: k => solJ(k) >= 0 ? s.sol[solJ(k)] : undefined, solSutun: k => satirlar.map(x => x.sol[solJ(k)]), toplam: false }));
+    satirlar.forEach((s, i) => { s.deg[fi] = vals[i]; });
   });
   return Object.assign({}, sonuc, { kolonlar, satirlar });
+}
+// Modelde hesaplanan sütunların değerleri (satırlar ve sütun bağlamı belli olduktan sonra; sırayla, zincir için)
+function exModelHesapla(m){
+  const solJ = k => m.solK ? m.solK.indexOf(k) : -1;
+  m.kol.forEach((c, i) => {
+    if (c.tur !== 'hesap') return;
+    const onb = {}, sut = f => onb[f] || (onb[f] = m.satir.map(s => c.ri[f] >= 0 ? s.v[c.ri[f]] : null));
+    const vals = m.satir.map(s => exFormulDeger(c.ast, {
+      v: f => c.ri[f] >= 0 ? s.v[c.ri[f]] : null,
+      onceki: f => !c.oi ? undefined : (c.oi[f] >= 0 ? s.v[c.oi[f]] : null),
+      sutun: sut, sol: k => solJ(k) >= 0 ? s.sol[solJ(k)] : undefined, solSutun: k => m.satir.map(x => x.sol[solJ(k)]), toplam: false }));
+    m.satir.forEach((s, r) => { s.v[i] = vals[r]; });
+  });
 }
 const EX_KOSULLAR = [['=', '='], ['!=', '≠'], ['<', '<'], ['<=', '≤'], ['>', '>'], ['>=', '≥'], ['bos', 'boş'], ['dolu', 'boş değil']];
 function exKosulUyar(v, op, d){
@@ -11138,7 +11372,7 @@ function exFiltrele(sonuc, f){
   return Object.assign({}, sonuc, { satirlar });
 }
 function exBicim(k){
-  if (k.hesap) return k.hesap.op === '%' ? '0.00%' : '0.00';
+  if (k.hesap) return k.hesap.bicim === 'Metin' ? null : (k.hesap.bicim || '0.00');
   return k.tip === 'Yüzde' ? '0.00%' : (/^Ortalama/.test(k.toplama) ? (/ANKET/.test(katNorm(k.alan)) ? '0.000' : '0.00') : (k.toplama === 'Say' || k.toplama === 'Toplam' ? '#,##0' : null));
 }
 function exToplamTuru(k){ return k.toplama === 'Toplam' || k.toplama === 'Say' ? 'SUM' : k.toplama === 'Ortalama' ? 'AVG' : k.toplama === 'Ortalama (0 hariç)' ? 'AVG0' : ''; }
@@ -11148,8 +11382,10 @@ function exModel(sonuc, duzen, sira){
   const pivot = duzen === 'aylar' && sonuc.boyutKol.some(b => zamanK.includes(b.k));
   const tumu = (k, degerler) => { const t = exToplamTuru(k); if (k.hesap) return 'HESAP'; if (!k.tam){ const v = degerler.filter(x => typeof x === 'number'); return v.length && v.every(x => x === v[0]) ? 'MAX' : ''; } return t; };
   if (!pivot){
-    const kol = sonuc.kolonlar.map((k, i) => ({ baslik: k.baslik, alanAd: k.baslik, bicim: exBicim(k), tur: k.hesap ? 'hesap' : 'v', a: k.hesap ? k.hesap.a : null, b: k.hesap ? k.hesap.b : null, sa: k.hesap ? k.hesap.sa : null, sb: k.hesap ? k.hesap.sb : null, op: k.hesap ? k.hesap.op : null, a0: k.hesap ? k.hesap.a0 : false, b0: k.hesap ? k.hesap.b0 : false, toplam: tumu(k, sonuc.satirlar.map(s => s.deg[i])) }));
-    const m = { sol: sonuc.boyutKol.map(b => b.baslik), grup: null, kol, satir: sonuc.satirlar.map(s => ({ sol: s.sol, v: s.deg.slice(), sicilsiz: s.sicilsiz })) };
+    const kimlik = {}; sonuc.kolonlar.forEach((k, i) => { kimlik[i] = i; });
+    const kol = sonuc.kolonlar.map((k, i) => ({ baslik: k.baslik, alanAd: k.baslik, bicim: exBicim(k), tur: k.hesap ? 'hesap' : 'v', ast: k.hesap ? k.hesap.ast : null, ri: k.hesap ? kimlik : null, oi: null, toplam: tumu(k, sonuc.satirlar.map(s => s.deg[i])) }));
+    const m = { sol: sonuc.boyutKol.map(b => b.baslik), solK: sonuc.boyutKol.map(b => b.k), grup: null, kol, satir: sonuc.satirlar.map(s => ({ sol: s.sol, v: s.deg.slice(), sicilsiz: s.sicilsiz })) };
+    exModelHesapla(m);
     m.etiket = kol.every(k => k.toplam === 'AVG' || k.toplam === 'AVG0' || !k.toplam) && kol.some(k => k.toplam) ? 'ORTALAMA' : 'TOPLAM';
     return m;
   }
@@ -11190,20 +11426,23 @@ function exModel(sonuc, duzen, sira){
   kol.forEach(c => {
     const k = sonuc.kolonlar[c.fi];
     if (!k.hesap) return;
-    c.tur = 'hesap'; c.op = k.hesap.op; c.sa = k.hesap.sa; c.sb = k.hesap.sb;
-    c.a0 = !c.genelKol && k.hesap.a0; c.b0 = !c.genelKol && k.hesap.b0;   // genel sütun zaten 0'ları dışarıda bırakır
-    const al = fi => fi < 0 ? null : (c.genelKol ? yer[fi].genel : yer[fi].d[c.d]);
-    c.a = al(k.hesap.a); c.b = al(k.hesap.b);
-    if ((k.hesap.a >= 0 && (c.a === null || c.a < 0)) || (k.hesap.b >= 0 && (c.b === null || c.b < 0))) c.tur = 'bos';
+    c.tur = 'hesap'; c.ast = k.hesap.ast; c.ri = {}; c.oi = {};
+    const pi = c.genelKol ? -1 : donemler.indexOf(c.d);
+    sonuc.kolonlar.forEach((x, f) => {
+      const ci = c.genelKol ? yer[f].genel : yer[f].d[c.d];
+      c.ri[f] = ci === undefined ? -1 : ci;
+      c.oi[f] = pi > 0 && yer[f].d[donemler[pi - 1]] !== undefined ? yer[f].d[donemler[pi - 1]] : -1;
+    });
+    if (c.genelKol) c.genelKol = true;
   });
   // değerler (önizleme ve formül sonuçları)
   const satir = satirlar.map(s => {
     const v = new Array(kol.length).fill(null);
     kol.forEach((c, i) => { if (c.tur === 'v'){ const d = s.hucre.get(c.d); v[i] = d ? d[c.fi] : null; } });
     kol.forEach((c, i) => { if (c.tur === 'genel'){ const x = c.kaynak.map(j => v[j]).filter(y => typeof y === 'number' && (c.fn !== 'AVG0' || y !== 0)); v[i] = !x.length ? null : (c.fn === 'SUM' ? x.reduce((a, b) => a + b, 0) : x.reduce((a, b) => a + b, 0) / x.length); } });
-    kol.forEach((c, i) => { if (c.tur === 'hesap') v[i] = exIslem(c.a === null ? Number(c.sa) : v[c.a], c.op, c.b === null ? Number(c.sb) : v[c.b], c.a0, c.b0); });
     return { sol: s.sol, v, sicilsiz: s.sicilsiz };
   }).filter(s => s.v.some((x, i) => x !== null && kol[i].tur === 'v' && sonuc.kolonlar[kol[i].fi].tam !== false));   // kendi verisi olmayan satır çıkmaz
+  exModelHesapla({ kol, satir, solK: di.map(i => bk(i)) });
   // sıralama (aylar sütunda): boyut sütununa ya da alanın genel (yoksa son dönem) sütununa göre
   if (sira && sira.kolon){
     const kk = String(sira.kolon), yon = sira.yon === 'azalan' ? -1 : 1;
@@ -11214,7 +11453,7 @@ function exModel(sonuc, duzen, sira){
   }
   kol.forEach((c, i) => { c.toplam = c.tur === 'hesap' ? 'HESAP' : c.tur === 'bos' ? '' : (c.tur === 'genel' ? (c.fn === 'SUM' ? 'SUM' : c.fn) : tumu(c.k, satir.map(s => s.v[i]))); if (c.tur === 'genel' && !c.k.tam) c.toplam = tumu(c.k, satir.map(s => s.v[i])); });
   const tekAlan = sonuc.kolonlar.length === 1;
-  const m = { sol: di.map(i => sonuc.boyutKol[i].baslik), grup: tekAlan ? null : grup, kol: kol.map(c => ({ baslik: c.baslik, alanAd: c.k ? c.k.baslik : '', bicim: c.bicim, tur: c.tur === 'bos' ? 'v' : c.tur, a: c.a, b: c.b, sa: c.sa, sb: c.sb, op: c.op, a0: !!c.a0, b0: !!c.b0, kaynak: c.kaynak, fn: c.fn, toplam: c.toplam })), satir };
+  const m = { sol: di.map(i => sonuc.boyutKol[i].baslik), grup: tekAlan ? null : grup, kol: kol.map(c => ({ baslik: c.baslik, alanAd: c.k ? c.k.baslik : '', bicim: c.bicim, tur: c.tur === 'bos' ? 'v' : c.tur, ast: c.ast || null, ri: c.ri || null, oi: c.oi || null, kaynak: c.kaynak, fn: c.fn, toplam: c.toplam })), satir, solK: di.map(i => bk(i)) };
   m.etiket = m.kol.every(k => ['AVG', 'AVG0', 'HESAP', ''].includes(k.toplam)) ? 'ORTALAMA' : 'TOPLAM';
   return m;
 }
@@ -11229,7 +11468,7 @@ function exModelToplam(m){
     else if (c.toplam === 'AVG0'){ const z = x.filter(y => y !== 0); out[i] = z.length ? z.reduce((a, b) => a + b, 0) / z.length : null; }
     else if (c.toplam === 'MAX') out[i] = Math.max(...x);
   });
-  m.kol.forEach((c, i) => { if (c.toplam === 'HESAP') out[i] = exIslem(c.a === null ? Number(c.sa) : out[c.a], c.op, c.b === null ? Number(c.sb) : out[c.b]); });
+  m.kol.forEach((c, i) => { if (c.toplam === 'HESAP' && c.ast) out[i] = exFormulDeger(c.ast, { v: f => c.ri[f] >= 0 ? out[c.ri[f]] : null, onceki: f => !c.oi ? undefined : (c.oi[f] >= 0 ? out[c.oi[f]] : null), sutun: () => [], sol: () => undefined, solSutun: () => [], toplam: true }); });
   return out;
 }
 // ----- 4. kademe: sekmelere bölme, biçim şablonları (renk, kenarlık, şerit, başlık metni, sayı biçimi ve koşullu renk kuralları), çok bloklu sekme -----
@@ -11323,12 +11562,18 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
   const kullanilan = new Set();
   const sayfaAdi = t => { const temiz = String(t || 'Rapor').replace(/[\[\]:*?\/\\]/g, ' ').trim(); let n = temiz.slice(0, 31).trim(); let i = 2; while (kullanilan.has(roUp(n))) n = `${temiz.slice(0, 27)} ${i++}`; kullanilan.add(roUp(n)); return n; };
   const islemF = (a, op, b, kosul) => { const f = `IFERROR(${a}${op === '%' ? '/' : op}${b},"")`; return kosul && kosul.length ? `IF(OR(${kosul.join(',')}),"",${f})` : f; };
-  // işlenen hücre boşsa (ya da "0 hariç" alanda 0 ise) sonuç boş: Excel boş hücreyi 0 sayar, 0 − 4,70 = −4,70 yazmasın
-  const hesapF = (k, ref, r, toplamSatiri) => {
-    const kosul = [], isl = (j, sabit, sifir) => { if (j === null) return String(Number(sabit)); const x = ref(j, r); kosul.push(`${x}=""`); if (sifir && !toplamSatiri) kosul.push(`${x}=0`); return x; };
-    const a = isl(k.a, k.sa, k.a0), b = isl(k.b, k.sb, k.b0);
-    return islemF(a, k.op, b, kosul);
+  // hesaplanan sütun formülü (exFormulExcel): işlenen boşsa (0 hariç alanda 0 ise) boş
+  const hesapF = (k, ref, r, toplamSatiri, m, ilk, son) => {
+    const kol = j => roKol(L0 + j), solJ = kk => m.solK ? m.solK.indexOf(kk) : -1;
+    return exFormulExcel(k.ast, {
+      hucre: f => k.ri[f] >= 0 ? ref(k.ri[f], r) : null,
+      onceki: f => k.oi && k.oi[f] >= 0 ? ref(k.oi[f], r) : null,
+      aralik: f => `$${kol(k.ri[f])}$${ilk}:$${kol(k.ri[f])}$${son}`,
+      solHucre: kk => solJ(kk) >= 0 ? `${roKol(solJ(kk))}${r}` : null,
+      solAralik: kk => solJ(kk) >= 0 ? `$${roKol(solJ(kk))}$${ilk}:$${roKol(solJ(kk))}$${son}` : null,
+      toplam: !!toplamSatiri });
   };
+  let L0 = 0;
   sekmeler.forEach(sk => {
     const bloklar = sk.bloklar || [sk.model];
     const W = Math.max(...bloklar.map(m => m.sol.length + m.kol.length));
@@ -11341,7 +11586,7 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
     let R = 2;
     bloklar.forEach((m, bi) => {
       if (bi > 0) R += 1;   // bloklar arasında bir boş satır
-      const L = m.sol.length, ust = R;
+      const L = m.sol.length, ust = R; L0 = L;
       if (m.grup){
         m.sol.forEach((b, i) => { ws.mergeCells(R, i + 1, R + 1, i + 1); basStil(ws.getCell(R, i + 1), B.sutun); ws.getCell(R, i + 1).value = b; basStil(ws.getCell(R + 1, i + 1), B.sutun); });
         let c = L + 1;
@@ -11364,7 +11609,7 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
         m.kol.forEach((k, i) => {
           const c = ws.getCell(r, L + i + 1), v = s.v[i];
           if (k.tur === 'genel'){ const rg = `${ref(k.kaynak[0], r)}:${ref(k.kaynak[k.kaynak.length - 1], r)}`; c.value = { formula: k.fn === 'SUM' ? `IF(COUNT(${rg}),SUM(${rg}),"")` : k.fn === 'AVG0' ? `IFERROR(AVERAGEIF(${rg},"<>0"),"")` : `IFERROR(AVERAGE(${rg}),"")`, result: v === null ? '' : v }; }
-          else if (k.tur === 'hesap') c.value = { formula: hesapF(k, ref, r), result: v === null ? '' : v };
+          else if (k.tur === 'hesap') c.value = { formula: hesapF(k, ref, r, false, m, ilk, ilk + m.satir.length - 1), result: v === null ? '' : (typeof v === 'boolean' ? v : v) };
           else c.value = v === null ? null : v;
           const st = Object.assign({}, B.veri); if (k.tur !== 'v') st.kalin = true; if (serit && beyazMi(st.dolgu)) st.dolgu = B.serit.renk;
           boya(c, st, { hiza: 'center' });
@@ -11394,7 +11639,7 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
           else if (k.toplam === 'AVG') f = `IFERROR(AVERAGE(${rng}),"")`;
           else if (k.toplam === 'AVG0') f = `IFERROR(AVERAGEIF(${rng},"<>0"),"")`;
           else if (k.toplam === 'MAX') f = `MAX(${rng})`;
-          else if (k.toplam === 'HESAP') f = hesapF(k, ref, r, true);
+          else if (k.toplam === 'HESAP') f = hesapF(k, ref, r, true, m, ilk, son);
           if (!f) return;
           c.value = { formula: f, result: tv[i] === null ? '' : tv[i] };
           const bf = bicimOf(k, i); if (bf) c.numFmt = bf;
@@ -11566,8 +11811,9 @@ function exSepetCiz(){
     const t = exSepetTablosu(s); const sev = t ? exSeviye(t) : null;
     return `<span class="ex-cip" title="İner: ${ykEsc(sev ? exSeviyeMetni(sev) : '')}"><b>${ykEsc(s.gorunen)}</b> <span class="ro-not">${ykEsc(t ? t.tablo : s.tabloAd)} · ${ykEsc(s.toplama)}</span> <button class="ex-cip-sil" data-exsil="${s.id}" title="Sepetten çıkar">✕</button></span>`;
   }).join('');
-  kap.querySelectorAll('[data-exsil]').forEach(b => b.onclick = () => { const id = Number(b.dataset.exsil); EX.sepet = EX.sepet.filter(s => s.id !== id); EX.hesaplar.forEach(h => ['a', 'b'].forEach(k => { if (h[k] && h[k].id === id) h[k] = {}; })); EX.filtre.kosullar = EX.filtre.kosullar.filter(k => String(k.kolon) !== String(id)); exSepetCiz(); });
+  kap.querySelectorAll('[data-exsil]').forEach(b => b.onclick = () => { const id = Number(b.dataset.exsil); EX.sepet = EX.sepet.filter(s => s.id !== id); EX.filtre.kosullar = EX.filtre.kosullar.filter(k => String(k.kolon) !== String(id)); exSepetCiz(); });
   exKirilimGuncelle();
+  if (typeof exFormulListeleri === 'function'){ exFormulListeleri(); exHesapDurumlari(); }
 }
 function exKirilimGuncelle(){
   const sevler = EX.sepet.map(s => exSepetTablosu(s)).filter(Boolean).map(exSeviye);
@@ -11603,30 +11849,84 @@ function exAlanSecenekleri(secili, hesapDahil){
   if (hesapDahil) EX.hesaplar.forEach((h, j) => ops.push(['h' + j, roUp(h.baslik || 'HESAP ' + (j + 1))]));
   return ops.map(([v, t]) => `<option value="${ykEsc(v)}"${String(secili) === v ? ' selected' : ''}>${ykEsc(t)}</option>`).join('');
 }
+// ---- Hesaplanan sütunlar: formül ----
+const EX_HESAP_BICIM = [['', 'Otomatik (0,00)'], ['0', 'Tam sayı'], ['0.0', '0,0'], ['0.00', '0,00'], ['0.000', '0,000'], ['#,##0', 'Binlik (1.234)'], ['0.00%', 'Yüzde'], ['Metin', 'Metin']];
+const EX_ISLEV_EKLE = [['EĞER( ; ; )', 'EĞER(koşul; doğruysa; yanlışsa)'], ['VE( ; )', 'VE(koşul; koşul)'], ['YADA( ; )', 'YADA(koşul; koşul)'], ['YUVARLA( ; 2)', 'YUVARLA(sayı; basamak)'],
+  ['MİN( ; )', 'MİN(…)'], ['MAKS( ; )', 'MAKS(…)'], ['MUTLAK( )', 'MUTLAK(sayı)'], ['ORTALAMA( ; )', 'ORTALAMA(…)'], ['TOPLA( ; )', 'TOPLA(…)'],
+  ['ÖNCEKİ([ ])', 'ÖNCEKİ([alan]) — önceki ay (aylar sütunda)'], ['SIRA([ ])', 'SIRA([alan]) — en yüksek 1.'], ['SIRA([ ]; 1)', 'SIRA([alan]; 1) — en düşük 1.'], ['TL_ORTALAMA([ ])', 'TL_ORTALAMA([alan]) — takım liderinin ortalaması'], ['PAY([ ])', 'PAY([alan]) — sütun toplamındaki payı']];
+const EX_HAZIR_HESAP = [
+  ['degisim', 'Önceki aya göre fark', a => [`${a} DEĞİŞİM`, `[${a}] - ÖNCEKİ([${a}])`, '']],
+  ['degisimYuzde', 'Önceki aya göre % değişim', a => [`${a} DEĞİŞİM %`, `([${a}] - ÖNCEKİ([${a}])) / ÖNCEKİ([${a}])`, '0.00%']],
+  ['sira', 'Sıra (en yüksek 1.)', a => [`${a} SIRASI`, `SIRA([${a}])`, '0']],
+  ['siraArtan', 'Sıra (en düşük 1.)', a => [`${a} SIRASI`, `SIRA([${a}]; 1)`, '0']],
+  ['ekip', 'Ekip (TL) ortalamasından fark', a => [`${a} EKİP FARKI`, `[${a}] - TL_ORTALAMA([${a}])`, '']],
+  ['pay', 'Toplamdaki pay', a => [`${a} PAYI`, `PAY([${a}])`, '0.00%']],
+  ['hedef', 'Hedef farkı (sayıyı düzelt)', a => [`${a} HEDEF FARKI`, `[${a}] - 0`, '']],
+  ['hedefDurum', 'Hedefte mi? (sayıyı düzelt)', a => [`${a} DURUM`, `EĞER([${a}] >= 0; "HEDEFTE"; "ALTINDA")`, 'Metin']],
+];
+// Formülde kullanılabilecek adlar (motorla aynı kural: aynı görünen ad iki tablodaysa "TABLO › AD")
+function exFormulAdListesi(j){
+  const say = {}; EX.sepet.forEach(s => { say[s.gorunen] = (say[s.gorunen] || 0) + 1; });
+  const alan = EX.sepet.map(s => { const t = exSepetTablosu(s); return say[s.gorunen] > 1 && t ? `${t.tablo.split(' › ').pop()} › ${s.gorunen}` : s.gorunen; });
+  const hesap = EX.hesaplar.slice(0, j === undefined ? EX.hesaplar.length : j).map((h, i) => roUp(h.baslik || 'HESAP ' + (i + 1)));
+  return { alan, hesap, sol: ['SİCİL', 'AD SOYAD', 'TAKIM LİDERİ', 'LOKASYON'] };
+}
+function exFormulDenetle(h, j){
+  if (!String(h.formul || '').trim()) return { durum: 'bos', mesaj: 'Formül yaz ya da aşağıdan ekle.' };
+  try {
+    const ast = exFormulCoz(h.formul), l = exFormulAdListesi(j), tum = new Set(l.alan.concat(l.hesap, l.sol, ['TL']).map(exAdNorm));
+    const yok = exFormulAdlari(ast).filter(a => !tum.has(exAdNorm(a)));
+    if (yok.length){ const sonra = EX.hesaplar.slice(j + 1).some(x => exAdNorm(x.baslik) === exAdNorm(yok[0])); return { durum: 'hata', mesaj: `[${yok[0]}] ${sonra ? 'altta tanımlı; bir hesap yalnız üstündeki hesapları kullanabilir' : 'sepette yok'}.` }; }
+    const once = /ÖNCEK[İI]\s*\(/i.test(h.formul) && exDuzen() !== 'aylar' && !EX.sayfalar.some(s => s.duzen === 'aylar');
+    return { durum: 'ok', mesaj: once ? '✓ (ÖNCEKİ yalnız "Aylar sütunda" düzeninde dolar)' : '✓' };
+  } catch(e){ return { durum: 'hata', mesaj: e.message }; }
+}
+function exHesapNormal(h, adBul){ return exHesapFormuleCevir(h, adBul || (id => { const s = EX.sepet.find(x => x.id === id); return s ? s.gorunen : ''; })); }
 function exHesaplarCiz(){
+  EX.hesaplar = EX.hesaplar.map(h => exHesapNormal(h));
   const kap = document.getElementById('exHesaplar');
-  const islenen = (h, k) => {
-    const o = h[k] || {}; const sabit = o.sabit !== undefined;
-    return `<select data-exh="${k}" style="min-width:150px;"><option value="">— seç —</option>${exAlanSecenekleri(sabit ? '' : o.id)}<option value="sabit"${sabit ? ' selected' : ''}>Sabit sayı…</option></select>` +
-      `<input type="text" data-exhs="${k}" value="${sabit ? ykEsc(o.sabit) : ''}" placeholder="sayı" style="width:70px;${sabit ? '' : 'display:none;'}">`;
-  };
-  kap.innerHTML = EX.hesaplar.map((h, j) => `<div class="row" data-exhrow="${j}" style="margin-bottom:6px;">
-      <input type="text" data-exhad value="${ykEsc(h.baslik)}" placeholder="Sütun adı (ör. PAY)" style="width:150px;"> =
-      ${islenen(h, 'a')}
-      <select data-exhop>${EX_ISLEMLER.map(([v, t]) => `<option value="${v}"${h.op === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
-      ${islenen(h, 'b')}
-      <button class="btn y-btn" data-exhsil title="Kaldır">✕</button></div>`).join('') || '<span class="hint" style="margin:0;">Hesaplanan sütun yok.</span>';
+  kap.innerHTML = EX.hesaplar.map((h, j) => `<div data-exhrow="${j}" style="margin-bottom:10px;">
+      <div class="row" style="flex-wrap:nowrap;">
+        <input type="text" data-exhad value="${ykEsc(h.baslik)}" placeholder="Sütun adı" style="width:170px;"> =
+        <input type="text" data-exhf value="${ykEsc(h.formul)}" placeholder="ör. [ANKET DEĞERLENDİRMESİ] - 4,70" spellcheck="false" style="flex:1;min-width:300px;font-family:Consolas,monospace;">
+        <select data-exhb title="Sonucun biçimi">${EX_HESAP_BICIM.map(([v, t]) => `<option value="${v}"${(h.bicim || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+        <button class="btn y-btn" data-exhsil title="Kaldır">✕</button>
+      </div>
+      <div data-exhdurum class="hint" style="margin:3px 0 0 180px;"></div></div>`).join('') || '<span class="hint" style="margin:0;">Hesaplanan sütun yok.</span>';
+  const durumYaz = (row, j) => { const d = exFormulDenetle(EX.hesaplar[j], j), el = row.querySelector('[data-exhdurum]'); el.textContent = d.durum === 'hata' ? '⚠ ' + d.mesaj : d.mesaj; el.style.color = d.durum === 'hata' ? 'var(--danger)' : d.durum === 'ok' ? 'var(--ok, #15803d)' : ''; };
   kap.querySelectorAll('[data-exhrow]').forEach(row => {
-    const h = EX.hesaplar[Number(row.dataset.exhrow)];
-    row.querySelector('[data-exhad]').addEventListener('change', e => { h.baslik = roUp(e.target.value); e.target.value = h.baslik; exKosulSiraCiz(); });
-    row.querySelector('[data-exhop]').addEventListener('change', e => { h.op = e.target.value; });
-    ['a', 'b'].forEach(k => {
-      const sel = row.querySelector(`[data-exh="${k}"]`), inp = row.querySelector(`[data-exhs="${k}"]`);
-      sel.addEventListener('change', () => { if (sel.value === 'sabit'){ h[k] = { sabit: inp.value || '0' }; inp.style.display = ''; inp.focus(); } else { h[k] = sel.value ? { id: Number(sel.value) } : {}; inp.style.display = 'none'; } });
-      inp.addEventListener('change', () => { h[k] = { sabit: String(roNum(inp.value) ?? 0) }; });
-    });
-    row.querySelector('[data-exhsil]').addEventListener('click', () => { EX.hesaplar.splice(Number(row.dataset.exhrow), 1); exHesaplarCiz(); exKosulSiraCiz(); });
+    const j = Number(row.dataset.exhrow), h = EX.hesaplar[j];
+    const f = row.querySelector('[data-exhf]');
+    row.querySelector('[data-exhad]').addEventListener('change', e => { h.baslik = roUp(e.target.value); e.target.value = h.baslik; exKosulSiraCiz(); exHesapDurumlari(); });
+    f.addEventListener('input', () => { h.formul = f.value; durumYaz(row, j); });
+    f.addEventListener('focus', () => { EX.fAktif = j; kap.querySelectorAll('[data-exhf]').forEach(x => x.style.outline = ''); f.style.outline = '2px solid var(--accent-soft)'; });
+    row.querySelector('[data-exhb]').addEventListener('change', e => { h.bicim = e.target.value; });
+    row.querySelector('[data-exhsil]').addEventListener('click', () => { EX.hesaplar.splice(j, 1); EX.fAktif = null; exHesaplarCiz(); exKosulSiraCiz(); });
+    durumYaz(row, j);
   });
+  exFormulListeleri();
+}
+function exHesapDurumlari(){ document.querySelectorAll('#exHesaplar [data-exhrow]').forEach(row => { const j = Number(row.dataset.exhrow), d = exFormulDenetle(EX.hesaplar[j], j), el = row.querySelector('[data-exhdurum]'); el.textContent = d.durum === 'hata' ? '⚠ ' + d.mesaj : d.mesaj; el.style.color = d.durum === 'hata' ? 'var(--danger)' : d.durum === 'ok' ? 'var(--ok, #15803d)' : ''; }); }
+function exFormulListeleri(){
+  const l = exFormulAdListesi();
+  const og = (ad, x) => x.length ? `<optgroup label="${ad}">${x.map(a => `<option value="${ykEsc(a)}">${ykEsc(a)}</option>`).join('')}</optgroup>` : '';
+  document.getElementById('exFAlan').innerHTML = '<option value="">＋ Alan ekle…</option>' + og('Sepetteki alanlar', l.alan) + og('Hesaplanan sütunlar', l.hesap) + og('Satır bilgileri', l.sol);
+  document.getElementById('exFIslev').innerHTML = '<option value="">＋ İşlev ekle…</option>' + EX_ISLEV_EKLE.map(([v, t]) => `<option value="${ykEsc(v)}">${ykEsc(t)}</option>`).join('');
+  const ht = document.getElementById('exHazirTur'), ha = document.getElementById('exHazirAlan'), onc = ht.value, onA = ha.value;
+  ht.innerHTML = EX_HAZIR_HESAP.map(([v, t]) => `<option value="${v}">${t}</option>`).join(''); if (onc) ht.value = onc;
+  ha.innerHTML = l.alan.concat(l.hesap).map(a => `<option value="${ykEsc(a)}">${ykEsc(a)}</option>`).join('') || '<option value="">(sepet boş)</option>'; if (onA && l.alan.concat(l.hesap).includes(onA)) ha.value = onA;
+}
+// Seçili formül kutusuna imlecin olduğu yere ekle (seçili yoksa son hesaba; hiç hesap yoksa yeni)
+function exFormuleEkle(metin){
+  if (!EX.hesaplar.length){ EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); EX.fAktif = 0; exHesaplarCiz(); }
+  const j = EX.fAktif !== null && EX.fAktif !== undefined && EX.hesaplar[EX.fAktif] ? EX.fAktif : EX.hesaplar.length - 1;
+  const f = document.querySelector(`#exHesaplar [data-exhrow="${j}"] [data-exhf]`); if (!f) return;
+  const a = f.selectionStart ?? f.value.length, b = f.selectionEnd ?? f.value.length;
+  const bosluk = a > 0 && !/[\s(;]$/.test(f.value.slice(0, a)) ? ' ' : '';
+  f.value = f.value.slice(0, a) + bosluk + metin + f.value.slice(b);
+  const yer = metin.indexOf('[ ]') >= 0 ? a + bosluk.length + metin.indexOf('[ ]') + 1 : (metin.indexOf('( ') >= 0 ? a + bosluk.length + metin.indexOf('( ') + 1 : a + bosluk.length + metin.length);
+  f.focus(); f.setSelectionRange(yer, metin.indexOf('[ ]') >= 0 ? yer + 1 : yer);
+  f.dispatchEvent(new Event('input'));
 }
 function exKosulSiraCiz(){
   const f = EX.filtre;
@@ -11729,7 +12029,16 @@ function exSayfalarCiz(){
   kap.querySelectorAll('[data-exssil]').forEach(b => b.onclick = () => { EX.sayfalar.splice(Number(b.dataset.exssil), 1); exSayfalarCiz(); });
   kap.querySelectorAll('[data-exsyukle]').forEach(b => b.onclick = () => exAyarYukle(EX.sayfalar[Number(b.dataset.exsyukle)]));
 }
-document.getElementById('exHesapEkle').addEventListener('click', () => { if (EX.sepet.length < 1) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn'); EX.hesaplar.push({ baslik: '', a: {}, op: '%', b: {} }); exHesaplarCiz(); exKosulSiraCiz(); });
+document.getElementById('exHesapEkle').addEventListener('click', () => { if (EX.sepet.length < 1) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn'); EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); EX.fAktif = EX.hesaplar.length - 1; exHesaplarCiz(); exKosulSiraCiz(); const f = document.querySelector(`#exHesaplar [data-exhrow="${EX.fAktif}"] [data-exhad]`); if (f) f.focus(); });
+document.getElementById('exFAlan').addEventListener('change', e => { if (!e.target.value) return; exFormuleEkle(`[${e.target.value}]`); e.target.value = ''; });
+document.getElementById('exFIslev').addEventListener('change', e => { if (!e.target.value) return; exFormuleEkle(e.target.value); e.target.value = ''; });
+document.getElementById('exHazirEkle').addEventListener('click', () => {
+  const t = EX_HAZIR_HESAP.find(x => x[0] === document.getElementById('exHazirTur').value), a = document.getElementById('exHazirAlan').value;
+  if (!t || !a) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn');
+  const [ad, formul, bicim] = t[2](a);
+  EX.hesaplar.push({ baslik: roUp(ad), formul, bicim }); EX.fAktif = EX.hesaplar.length - 1; exHesaplarCiz(); exKosulSiraCiz();
+  if (/- 0\b|>= 0;/.test(formul)){ const f = document.querySelector(`#exHesaplar [data-exhrow="${EX.fAktif}"] [data-exhf]`); const i = f.value.search(/\b0\b(?=;|$)/); f.focus(); if (i >= 0) f.setSelectionRange(i, i + 1); }
+});
 document.getElementById('exKosulEkle').addEventListener('click', () => { if (!EX.sepet.length) return; EX.filtre.kosullar.push({ kolon: String(EX.sepet[0].id), op: '!=', deger: '0' }); exKosulSiraCiz(); });
 document.getElementById('exTlTemizle').addEventListener('click', () => { EX.filtre.tl = []; exTlListeCiz(); });
 document.getElementById('exSayfaEkle').addEventListener('click', exSayfaEkle);
@@ -11814,10 +12123,14 @@ function exSayfaUret(veri, ay){
   if (D.kisi) sonuc.satirlar.forEach(r => { if (typeof r.sol[0] === 'number'){ const v = veri.adBul(String(r.sol[0])); if (v) r.sol[1] = v; } });
   const tlI = sonuc.boyutKol.findIndex(b => b.k === 'tl');
   const tlTumu = tlI < 0 ? [] : [...new Set(sonuc.satirlar.map(r => r.sol[tlI]))].sort((x, y) => String(x).localeCompare(String(y), 'tr'));
-  sonuc = exHesapEkle(sonuc, EX.hesaplar.filter(h => h.a && h.b && (h.a.id !== undefined || h.a.sabit !== undefined) && (h.b.id !== undefined || h.b.sabit !== undefined)));
+  const hesapAtla = [];
+  const gecerli = [];
+  EX.hesaplar.map(h => exHesapNormal(h)).forEach((h, j) => { if (!String(h.formul || '').trim()) return; const d = exFormulDenetle(h, j); if (d.durum === 'ok' && !hesapAtla.some(x => (EX.hesaplar[j].formul || '').includes(`[${x}]`))) gecerli.push(h); else hesapAtla.push(roUp(h.baslik || 'HESAP ' + (j + 1))); });
+  sonuc = exHesapEkle(sonuc, gecerli);
   const once = sonuc.satirlar.length;
   sonuc = exFiltrele(sonuc, ay.filtre);
   const uyarilar = veri.bosTablo.map(t => `${t}: seçilen dönemde veri yok.`).concat(sonuc.uyarilar);
+  if (hesapAtla.length) uyarilar.push(`Formülü hatalı ya da sepette olmayan alan kullanan hesaplanan sütun atlandı: ${hesapAtla.join(', ')}.`);
   if (once !== sonuc.satirlar.length) uyarilar.push(`Filtre: ${once} satırdan ${sonuc.satirlar.length} tanesi kaldı.`);
   const duzen = exEtkinDuzen(ay.duzen, ay.bol, D.zaman);
   const parcalar = exBol(sonuc, ay.bol, duzen).map(p => ({ deger: p.deger, model: exModel(p.sonuc, duzen, ay.filtre && ay.filtre.sira) })).filter(p => p.model.satir.length || !ay.bol);
@@ -12093,7 +12406,7 @@ function exKayitliAc(){
   const filtreCevir = f => { f = JSON.parse(JSON.stringify(f || { tl: [], siciller: [], kosullar: [], sira: { kolon: '', yon: 'artan' } }));
     f.kosullar = (f.kosullar || []).map(x => /^h\d+$/.test(String(x.kolon)) ? x : (yeniId(x.kolon) ? Object.assign(x, { kolon: String(yeniId(x.kolon)) }) : null)).filter(Boolean);
     if (f.sira && /^kol:\d+$/.test(f.sira.kolon)){ const n = yeniId(f.sira.kolon.slice(4)); f.sira.kolon = n ? 'kol:' + n : ''; } return f; };
-  EX.hesaplar = (j.hesaplar || []).map(h => { const c = o => o && o.id !== undefined ? (yeniId(o.id) ? { id: yeniId(o.id) } : {}) : o; return Object.assign({}, h, { a: c(h.a), b: c(h.b) }); });
+  EX.hesaplar = (j.hesaplar || []).map(h => exHesapNormal(h, id => { const x = (j.sepet || []).find(s => String(s.id) === String(id)); return x ? x.gorunen : ''; }));
   EX.sayfalar = (j.sayfalar || []).map(s => Object.assign({}, s, { filtre: filtreCevir(s.filtre) }));
   if (j.donem && j.donem.tur) exDonemKur(j.donem);
   exSepetCiz(); exSayfalarCiz();

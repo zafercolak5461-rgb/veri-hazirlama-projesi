@@ -10967,7 +10967,13 @@ function exHesapla(sepet, kayitlar, D, tlBul){
     grup.set(a.id, sonuc);
   });
   if (!alanlar.some(a => a.tam)) return { hata: 'Seçilen satır kırılımına inen alan yok: en az bir alan bütün kırılımlara inebilmeli.', kolonlar: [], satirlar: [], uyarilar };
-  // kişi adı: VARDİYA / kaynak adından; sıralama
+  // kişi adı: aynı sicilin her satırında en son dönemdeki yazım (İNEKCİ / İNEKÇİ gibi farklar tek ada iner)
+  const sonAd = new Map();
+  alanlar.filter(a => a.kisi).forEach(a => (kayitlar.get(a.tablo.tablo) || []).forEach(r => {
+    if (!r.ad) return; const k = kisiAnahtar(r), z = r.gun ?? r.ay ?? -1, o = sonAd.get(k);
+    if (!o || z >= o.z) sonAd.set(k, { ad: r.ad, z });
+  }));
+  satirlar.forEach(b => { if (b.kisi && sonAd.has(b.kisi)) b.ad = sonAd.get(b.kisi).ad; });
   const liste = [...satirlar.values()].sort((x, y) => (x.z === '' ? 0 : x.z) - (y.z === '' ? 0 : y.z) || String(x.tl).localeCompare(String(y.tl), 'tr') || String(x.lok).localeCompare(String(y.lok), 'tr') || String(x.ad).localeCompare(String(y.ad), 'tr'));
   const boyutKol = [];
   if (D.kisi){ boyutKol.push({ baslik: 'SİCİL', k: 'sicil' }, { baslik: 'AD SOYAD', k: 'ad' }); }
@@ -11110,15 +11116,26 @@ function exModel(sonuc, duzen, sira){
   const zi = sonuc.boyutKol.map((b, i) => zamanK.includes(b.k) ? i : -1).filter(i => i >= 0);
   const di = sonuc.boyutKol.map((b, i) => zamanK.includes(b.k) ? -1 : i).filter(i => i >= 0);
   const donem = s => { const p = zi.map(i => s.sol[i]); return p.length === 2 ? `${p[1]} ${p[0]}` : String(p[0]); };   // "OCAK 2025"; yıl ya da tarih tek
-  const donemler = [];
-  sonuc.satirlar.forEach(s => { const d = donem(s); if (!donemler.includes(d)) donemler.push(d); });   // satırlar zaten zamana göre sıralı
+  const bk = i => sonuc.boyutKol[i].k;
+  const zamanSira = s => { const v = {}; zi.forEach(i => v[bk(i)] = s.sol[i]); return v.zg !== undefined ? katGun(v.zg) : v.za !== undefined ? Number(v.zy) * 12 + RO_AYLAR.indexOf(v.za) : Number(v.z); };
+  const dSira = new Map();
+  sonuc.satirlar.forEach(s => { const d = donem(s); if (!dSira.has(d)) dSira.set(d, zamanSira(s)); });
+  const donemler = [...dSira.keys()].sort((a, b) => dSira.get(a) - dSira.get(b));   // takvim sırası
+  // kişi satırlarında takım lideri satırı bölmez: kişi başına tek satır, TL sütununda en son dönemin takım lideri
+  const kisiVar = di.some(i => bk(i) === 'sicil'), tlJ = di.findIndex(i => bk(i) === 'tl');
+  const anahtarJ = di.map((i, j) => j).filter(j => !(kisiVar && j === tlJ) && !(kisiVar && bk(di[j]) === 'ad'));
   const satirMap = new Map();
   sonuc.satirlar.forEach(s => {
-    const k = di.map(i => s.sol[i]).join('¦');
-    if (!satirMap.has(k)) satirMap.set(k, { sol: di.map(i => s.sol[i]), hucre: new Map(), sicilsiz: s.sicilsiz });
-    satirMap.get(k).hucre.set(donem(s), s.deg);
+    const sol = di.map(i => s.sol[i]);
+    const k = anahtarJ.map(j => sol[j]).join('¦') + (kisiVar && sol[0] === 'SİCİLSİZ' ? '¦' + sol[1] : '');
+    const z = zamanSira(s);
+    if (!satirMap.has(k)) satirMap.set(k, { sol, z, hucre: new Map(), sicilsiz: s.sicilsiz });
+    const o = satirMap.get(k);
+    if (z >= o.z){ o.sol = sol; o.z = z; }
+    o.hucre.set(donem(s), s.deg);
   });
-  const satirlar = [...satirMap.values()].sort((x, y) => { for (let j = 0; j < x.sol.length; j++){ const a = x.sol[j], b = y.sol[j]; const c = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'tr'); if (c) return c; } return 0; });
+  const oncelik = ['tl', 'lok', 'ad', 'sicil'].map(k => di.findIndex(i => bk(i) === k)).filter(j => j >= 0);
+  const satirlar = [...satirMap.values()].sort((x, y) => { for (const j of oncelik){ const a = x.sol[j], b = y.sol[j]; const c = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'tr'); if (c) return c; } return 0; });
   const kol = [], grup = [];
   const yer = {};   // alan index → { donem → kol index, genel }
   sonuc.kolonlar.forEach((k, fi) => {

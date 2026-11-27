@@ -698,67 +698,84 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         </div>
       </div>
 
-      <!-- ===== RAPOR OLUŞTURUCU (27.11.2026) — fabrika: panel kaynaklarından istenen düzende Excel. Yalnız Süper Yetkili + "Rapor Oluşturucu" yetkisi ===== -->
+      <!-- ===== RAPOR OLUŞTURUCU — RAPOR AL (27.11.2026): şablon seç → şablonun sorduğu seçimler → Excel. Yalnız Süper Yetkili + "Rapor Oluşturucu" yetkisi ===== -->
       <div id="yk-ro" class="yk-alt" style="display:none;">
-        <div class="page-title">Rapor Oluştur</div>
-        <div class="page-sub">Kaynağı, sütunları, ay aralığını ve düzeni seç; Excel hazırlanır. Takım lideri o ayın <b>VARDİYA</b> "Takım" sütunundan, eşleştirme Sicil ile. Hücreler <b>Kaynak Veri</b> sayfasından formülle hesaplanır. Hazırladığın düzeni şablon olarak kaydedersen sonra yalnız ayı değiştirirsin.</div>
+        <div class="page-title">Rapor Al</div>
+        <div class="page-sub">Şablonu seç; yalnız o şablonun ihtiyaç duyduğu seçimler açılır. Şablon kurmak ya da değiştirmek için <a href="#" id="raSablonlaraGit">Şablonlar</a> sayfası.</div>
         <div class="card">
           <h2>Şablon</h2>
           <div class="row">
-            <select id="roSablon" style="min-width:260px;"><option value="">— Yeni rapor —</option></select>
-            <input type="text" id="roSablonAd" placeholder="Şablon adı (ör. Anket Ortalamaları)" style="min-width:260px;">
-            <button class="btn ok" id="roSablonKaydet" title="Şu anki kaynak, sütun, düzen ve kapsam seçimini bu adla kaydeder (aynı ad varsa günceller). Aylar kaydedilmez.">💾 Şablonu Kaydet</button>
-            <button class="btn danger" id="roSablonSil" disabled>🗑 Sil</button>
-            <button class="btn" id="roYenile" title="RAPOR AYARLARI ve kaynak tablolar yeniden okunur">↻ Yeniden Oku</button>
+            <select id="raSablon" style="min-width:340px;"><option value="">— Şablon seçin —</option></select>
+            <button class="btn" id="raDuzenle" disabled>✎ Şablonu Düzenle</button>
+            <button class="btn" id="raYenile" title="RAPOR AYARLARI ve kaynak tablolar yeniden okunur">↻ Yeniden Oku</button>
           </div>
-          <div id="roSablonDurum" class="status"></div>
+          <div id="raOzet" class="hint" style="margin-top:10px;"></div>
+          <div id="raSablonDurum" class="status"></div>
         </div>
+        <div class="card" id="raSecimler" style="display:none;">
+          <h2>Seçimler</h2>
+          <div class="row" id="raAyAralik" style="display:none;">
+            <label>Başlangıç: <select id="raAyA"></select></label>
+            <label>Bitiş: <select id="raAyB"></select></label>
+          </div>
+          <div class="row" id="raAyTek" style="display:none;">
+            <label>Takım lideri ayı: <select id="raAyT"></select></label>
+            <span class="hint" style="margin:0;">Takım lideri bu ayın VARDİYA'sından alınır; başka veriyi etkilemez.</span>
+          </div>
+          <div class="row" style="margin:14px 0 6px;"><b style="font-size:13px;">Takım lideri</b> <span class="hint" style="margin:0;">hiçbiri işaretli değilse herkes</span> <button class="btn y-btn" id="raTlTemizle">Temizle</button></div>
+          <div id="raTlListe" class="ro-liste"></div>
+          <div class="row" style="margin-top:12px;"><label>Yalnız bu siciller: <input type="text" id="raSiciller" placeholder="ör. 10849, 10850 (boş = herkes)" style="min-width:320px;"></label></div>
+        </div>
+        <div class="row" style="margin:4px 0 6px;"><button class="btn primary" id="raOlustur" disabled>📥 Excel Oluştur</button></div>
+        <div id="raDurum" class="status"></div>
+        <div id="raUyari" style="margin-bottom:24px;"></div>
+      </div>
+
+      <!-- ===== RAPOR OLUŞTURUCU — ŞABLONLAR (27.11.2026): şablon kurma / düzenleme; sütun kuralları şablona özel ===== -->
+      <div id="yk-rosab" class="yk-alt" style="display:none;">
+        <div class="page-title">Şablonlar</div>
+        <div class="page-sub">Şablonu bir kez kur; Rapor Al'da yalnız seçip ay ve kapsamı belirlersin. Ortalama/toplam, biçim ve "0 = değerlendirme yok" ayarları <b>yalnız bu şablon için</b> geçerlidir; yeni eklenen sütunun ayarı Rapor Kaynakları'ndaki varsayılandan gelir.</div>
         <div class="card">
-          <h2>Kaynak ve dönem</h2>
+          <h2>Şablon</h2>
           <div class="row">
-            <label class="ro-toplu">Kaynak: <select id="roKaynak" style="min-width:220px;"></select></label>
-            <label>Başlangıç: <select id="roAyA"></select></label>
-            <label>Bitiş: <select id="roAyB"></select></label>
+            <select id="rsSablon" style="min-width:300px;"><option value="">— Yeni şablon —</option></select>
+            <input type="text" id="rsAd" placeholder="Şablon adı" style="min-width:260px;">
+            <button class="btn ok" id="rsKaydet">💾 Kaydet</button>
+            <button class="btn danger" id="rsSil" disabled>🗑 Sil</button>
+            <button class="btn" id="rsKullan" disabled title="Kaydedilmiş hâlini Rapor Al'da açar">▶ Rapor Al'da Kullan</button>
           </div>
-          <div class="row ro-toplu" style="margin:14px 0 6px;"><b style="font-size:13px;">Sütunlar</b>
-            <button class="btn y-btn" id="roTumu">Tümü</button><button class="btn y-btn" id="roHicbiri">Hiçbiri</button>
-            <span class="hint" style="margin:0;">ort. = ortalama, top. = toplam (RAPOR AYARLARI › SÜTUNLAR)</span></div>
-          <div id="roSutunlar" class="ro-liste ro-toplu"></div>
-        </div>
-        <div class="card">
-          <h2>Kapsam</h2>
-          <div class="row" style="margin-bottom:6px;"><b style="font-size:13px;">Takım lideri</b> <span class="hint" style="margin:0;">hiçbiri işaretli değilse herkes</span> <button class="btn y-btn" id="roTlTemizle">Temizle</button></div>
-          <div id="roTlListe" class="ro-liste"></div>
-          <div class="row" style="margin-top:12px;"><label>Yalnız bu siciller: <input type="text" id="roSiciller" placeholder="ör. 10849, 10850 (boş = herkes)" style="min-width:320px;"></label></div>
+          <div class="hint" style="margin-top:8px;">Kaydet: aynı ad varsa o şablonu günceller, yeni adla kaydedersen kopyası oluşur.</div>
+          <div id="rsDurum" class="status"></div>
         </div>
         <div class="card">
           <h2>Düzen</h2>
-          <div id="roDuzenler"></div>
-          <div id="roDuzenIpucu" class="hint" style="margin:6px 0 10px;"></div>
-          <div class="row ro-toplu">
-            <label><input type="checkbox" id="roOptTl" checked> Takım lideri ortalamaları</label>
-            <label><input type="checkbox" id="roOptKisi" checked> Personel</label>
-            <label><input type="checkbox" id="roOptOrt"> Personelin altında ORTALAMA satırı</label>
+          <div id="rsDuzenler"></div>
+          <div id="rsDuzenIpucu" class="hint" style="margin:6px 0 0;"></div>
+        </div>
+        <div class="card" id="rsToplu">
+          <h2>Kaynak ve sütunlar</h2>
+          <div class="row"><label>Kaynak: <select id="rsKaynak" style="min-width:240px;"></select></label></div>
+          <div class="row" style="margin:14px 0 6px;"><button class="btn y-btn" id="rsTumu">Tümünü seç</button><button class="btn y-btn" id="rsHicbiri">Hiçbiri</button></div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="rsSutunTablo" style="width:auto;margin-top:0;"></table></div>
+          <div class="row" style="margin-top:14px;">
+            <label><input type="checkbox" id="rsOptTl" checked> Takım lideri ortalamaları</label>
+            <label><input type="checkbox" id="rsOptKisi" checked> Personel</label>
+            <label><input type="checkbox" id="rsOptOrt"> Personelin altında ORTALAMA satırı</label>
           </div>
         </div>
-        <div class="card" id="roListeKart" style="display:none;">
+        <div class="card" id="rsListe" style="display:none;">
           <h2>Liste sütunları</h2>
-          <div class="hint">Kişi başına bir satır. Aylık bir tablodan sütun seçersen yukarıdaki ay aralığındaki her ay ayrı sayfa olur; yalnız Personel Listesi ve hazır alanlar seçiliyse tek sayfa (takım lideri bitiş ayının VARDİYA'sından). İzin: Personel Listesi tabanı + AYARLAR'daki başlangıç ayından itibaren VARDİYA'daki "Yıllık İzin" günleri.</div>
+          <div class="hint">Kişi başına bir satır. Aylık bir tablodan sütun seçersen Rapor Al'da ay aralığı sorulur ve her ay ayrı sayfa olur; yalnız Personel Listesi ve hazır alanlar seçiliyse tek sayfa olur ve yalnız takım lideri ayı sorulur.</div>
           <div class="row" style="margin-bottom:10px;"><label>Görünüm: <select id="roGorunum" style="min-width:320px;"></select></label><span id="roListeDurum" class="status" style="margin:0;"></span></div>
           <div id="roListeEsles" style="display:none;"></div>
           <div id="roListeElle">
             <div id="roListeKolonlar"></div>
             <div class="row" style="margin:6px 0 12px;"><button class="btn" id="roListeEkle">+ Sütun Ekle</button></div>
-            <b style="font-size:13px;">Hesaplanan sütunlar</b> <span class="hint" style="margin:0;">Excel'e formül olarak yazılır (ör. =C3/D3)</span>
+            <b style="font-size:13px;">Hesaplanan sütunlar</b> <span class="hint" style="margin:0;">Excel'e formül olarak yazılır (ör. =D3/E3)</span>
             <div id="roListeHesaplar" style="margin-top:6px;"></div>
             <div class="row" style="margin-top:6px;"><button class="btn" id="roHesapEkle">+ Hesaplanan Sütun</button></div>
           </div>
         </div>
-        <div class="row" style="margin:4px 0 6px;">
-          <button class="btn primary" id="roOlusturBtn">📥 Excel Oluştur</button>
-        </div>
-        <div id="roDurum" class="status"></div>
-        <div id="roUyari" style="margin-bottom:24px;"></div>
       </div>
 
       <!-- ===== RAPOR KAYNAKLARI (27.11.2026) — RAPOR AYARLARI dosyasının sekmeleri ===== -->
@@ -4063,6 +4080,7 @@ function ykSayfaAc(id){
   if (id === 'kopuk') kpSayfasi();
   if (id === 'kopukper') kpPerSayfasi();
   if (id === 'ro') roSayfasi();
+  if (id === 'rosab') roSablonSayfasi();
   if (id === 'roayar') roAyarSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
@@ -5211,7 +5229,7 @@ document.addEventListener('focusout', e => {
 // Kişiler Yoklama'nın Personel Listesi'nden (Tegsoft Adı → Sicil, Görev, Takım Lideri) gelir.
 // ============================================================================
 const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
-const RO_SAYFALAR = [ { id:'ro', ad:'Rapor Oluştur', ikon:'🏭', svg:'dosya' }, { id:'roayar', ad:'Rapor Kaynakları', ikon:'⚙', svg:'ayar' } ];   // Rapor Oluşturucu (en alttaki script) — yalnız userPerms.raporOlusturucu
+const RO_SAYFALAR = [ { id:'ro', ad:'Rapor Al', ikon:'🏭', svg:'dosya' }, { id:'rosab', ad:'Şablonlar', ikon:'▦', svg:'tablo' }, { id:'roayar', ad:'Rapor Kaynakları', ikon:'⚙', svg:'ayar' } ];   // Rapor Oluşturucu (en alttaki script) — yalnız userPerms.raporOlusturucu
 const KP_SAYFALAR = [ { id:'kopuk', ad:'Köpük Çağrı', ikon:'☎', svg:'telefon' }, { id:'kopukper', ad:'Köpük Personel Listesi', ikon:'👥', svg:'kisiler' } ];   // Köpük Çağrı bölümü (en alttaki script)
 const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊', svg:'grafik' },
@@ -8876,6 +8894,7 @@ function roListeYaz(ExcelJS, plan, kolonlar, ayar, gorunum){
 }
 // ==RO-MOTOR-SON==
 
+
 // ============================================================================
 // ===== RAPOR OLUŞTURUCU (fabrika, 27.11.2026) =====
 // Panelin bütün kaynaklarından istenen düzende Excel hazırlar. Yalnız Süper Yetkili ve YETKİLENDİRME'de
@@ -8946,7 +8965,6 @@ async function roAyarYukle(zorla){
     yazar: g('Yazar', 'Zafer Çolak'), baslikRengi: g('Başlık Rengi', '0B2265'), yaziTipi: g('Yazı Tipi', 'Arial'), ortBicim: g('Ortalama Biçimi', '0.0'),
   };
 }
-function roKaynak(){ return RO.kaynaklar.find(k => k.adi === document.getElementById('roKaynak').value); }
 const roAylik = k => !k.ay;   // ay sütunu yoksa her ay ayrı sekme
 
 // Kaynağın ayları (anahtar listesi, eskiden yeniye) ve ay → sekme adı
@@ -9002,251 +9020,11 @@ async function roTakimHaritasi(aylar){
 }
 
 // ---------- Sayfa: Rapor Oluştur ----------
-function roSecilenSutunlar(){ return [...document.querySelectorAll('#roSutunlar input:checked')].map(c => c.value); }
-function roSecilenTl(){ return new Set([...document.querySelectorAll('#roTlListe input:checked')].map(c => c.value)); }
-function roSiciller(){ return new Set(document.getElementById('roSiciller').value.split(/[\s,;]+/).map(roSicil).filter(Boolean)); }
-function roDuzen(){ const r = document.querySelector('input[name="roDuzen"]:checked'); return r ? r.value : 'aylar-sutunda'; }
-
-async function roSayfasi(){
-  if (!userPerms.raporOlusturucu) return;
-  try {
-    ykDurum('roDurum', 'Ayarlar okunuyor…');
-    await roAyarYukle();
-    const sel = document.getElementById('roKaynak');
-    const onceki = sel.value;
-    sel.innerHTML = RO.kaynaklar.filter(k => roTip(k) !== 'sabit').map(k => `<option value="${ykEsc(k.adi)}">${ykEsc(k.adi)}</option>`).join('');
-    if (onceki && RO.kaynaklar.some(k => k.adi === onceki)) sel.value = onceki;
-    if (!document.querySelector('input[name="roDuzen"]')){
-      document.getElementById('roDuzenler').innerHTML = RO_DUZENLER.map((d, i) =>
-        `<label style="display:block; margin:4px 0;" title="${ykEsc(d.ipucu)}"><input type="radio" name="roDuzen" value="${d.id}" ${i === 0 ? 'checked' : ''}> ${ykEsc(d.ad)}</label>`).join('');
-      document.querySelectorAll('input[name="roDuzen"]').forEach(r => r.addEventListener('change', roDuzenDegisti));
-      roDuzenDegisti();
-    }
-    roSablonListesi();
-    ykDurum('roDurum', '');
-    await roKaynakDegisti();
-  } catch(err){ ykDurum('roDurum', '✗ ' + err.message, 'err'); }
-}
-function roDuzenDegisti(){
-  const d = roDuzen();
-  const ip = RO_DUZENLER.find(x => x.id === d);
-  document.getElementById('roDuzenIpucu').textContent = ip ? ip.ipucu : '';
-  // ORTALAMA satırı yıl sayfasında varsayılan açık, diğerlerinde kapalı (kullanıcı değiştirebilir)
-  document.getElementById('roOptOrt').checked = d === 'yil-sayfa';
-  const oncekiListe = RO.sonDuzenListe; RO.sonDuzenListe = d === 'liste';
-  if (document.getElementById('roListeKart')){
-    roListeGoster();
-    if (oncekiListe && d !== 'liste' && roKaynak()) roKaynakDegisti();   // aylar yeniden kaynaktan
-  }
-}
-async function roKaynakDegisti(secili){
-  const k = roKaynak(); if (!k) return;
-  const kutu = document.getElementById('roSutunlar');
-  kutu.innerHTML = '<span class="hint">Okunuyor…</span>';
-  try {
-    const [{ aylar }, basliklar] = await Promise.all([roKaynakAylari(k), roKaynakBasliklari(k)]);
-    const secim = secili || roSecilenSutunlar();
-    kutu.innerHTML = basliklar.map(h => {
-      const t = roTanim(RO.tanimlar, k.adi, h);
-      const not = t.tanimli ? (t.ort ? 'ort.' : 'top.') : 'tanımsız';
-      return `<label class="ro-sec" title="${t.tanimli ? (t.ort ? 'Ortalama' : 'Toplam') + (t.sifirYok ? ', 0 = değerlendirme yok' : '') : 'SÜTUNLAR sekmesinde tanımı yok: Toplam sayılır'}"><input type="checkbox" value="${ykEsc(h)}" ${secim.some(s => roUp(s) === roUp(h)) ? 'checked' : ''}> ${ykEsc(roUp(h))} <span class="ro-not${t.tanimli ? '' : ' uyari'}">${not}</span></label>`;
-    }).join('') || '<span class="hint">Bu kaynakta sayısal sütun bulunamadı.</span>';
-    const a = document.getElementById('roAyA'), b = document.getElementById('roAyB');
-    const eskiA = Number(a.value), eskiB = Number(b.value);
-    const opt = aylar.slice().reverse().map(x => `<option value="${x}">${roAyEtiket(x)}</option>`).join('');
-    a.innerHTML = opt; b.innerHTML = opt;
-    const son = aylar[aylar.length - 1];
-    b.value = aylar.includes(eskiB) ? eskiB : son;
-    a.value = aylar.includes(eskiA) ? eskiA : (aylar.filter(x => x >= son - 7)[0] ?? son);
-    await roTlListesi();
-  } catch(err){ kutu.innerHTML = `<span class="status err">✗ ${ykEsc(err.message)}</span>`; }
-}
-async function roTlListesi(secili){
-  const kutu = document.getElementById('roTlListe');
-  const A = Number(document.getElementById('roAyA').value), B = Number(document.getElementById('roAyB').value);
-  if (!A || !B) { kutu.innerHTML = ''; return; }
-  const onceki = secili || roSecilenTl();
-  try {
-    const aylar = []; for (let x = Math.min(A, B); x <= Math.max(A, B); x++) aylar.push(x);
-    const { harita } = await roTakimHaritasi(aylar);
-    const tl = new Set(); harita.forEach(m => m.forEach(v => { if (v.tl) tl.add(v.tl); }));
-    RO.tlListe = [...tl].sort((a, b) => a.localeCompare(b, 'tr'));
-    kutu.innerHTML = RO.tlListe.map(t => `<label class="ro-sec"><input type="checkbox" value="${ykEsc(t)}" ${onceki.has(t) ? 'checked' : ''}> ${ykEsc(t)}</label>`).join('') || '<span class="hint">Seçilen aylarda takım bilgisi yok.</span>';
-  } catch(err){ kutu.innerHTML = `<span class="status err">✗ Takım listesi okunamadı: ${ykEsc(err.message)}</span>`; }
-}
-
-async function roOlustur(){
-  const btn = document.getElementById('roOlusturBtn');
-  const uyari = document.getElementById('roUyari'); uyari.innerHTML = '';
-  if (roListeModu()){
-    try {
-      btn.disabled = true;
-      const { wb, plan, uyarilar, kisi } = await roListeOlustur();
-      const buf = await wb.xlsx.writeBuffer();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-      a.download = plan.dosya; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      uyari.innerHTML = uyarilar.map(n => `<div class="status warn" style="margin-top:6px;">⚠ ${ykEsc(n)}</div>`).join('');
-      ykDurum('roDurum', `✓ ${plan.dosya} indirildi — ${plan.sayfalar.length} sayfa, ${kisi} satır.`, 'ok');
-    } catch(err){ ykDurum('roDurum', '✗ ' + err.message, 'err'); console.error(err); }
-    finally { btn.disabled = false; }
-    return;
-  }
-  try {
-    const k = roKaynak(); if (!k) throw new Error('Kaynak seçin.');
-    const sutunlar = roSecilenSutunlar(); if (!sutunlar.length) throw new Error('En az bir sütun seçin.');
-    let A = Number(document.getElementById('roAyA').value), B = Number(document.getElementById('roAyB').value);
-    if (A > B) [A, B] = [B, A];
-    const tl = document.getElementById('roOptTl').checked, personel = document.getElementById('roOptKisi').checked;
-    if (!tl && !personel) throw new Error('Takım lideri ya da personel bölümlerinden en az biri seçili olmalı.');
-    btn.disabled = true; ykDurum('roDurum', 'Veriler okunuyor…');
-    const { aylar: tumAylar, sekme } = await roKaynakAylari(k);
-    const aylar = tumAylar.filter(x => x >= A && x <= B);
-    if (!aylar.length) throw new Error('Seçilen aralıkta veri yok.');
-    let hamlar = [];
-    if (roAylik(k)){
-      const veri = await roBatchGet(k.sheetId, aylar.map(x => `'${sekme.get(x)}'!A1:ZZ3000`));
-      aylar.forEach((x, i) => { hamlar = hamlar.concat(roSatirlariOku(veri[i], k, sutunlar, RO.tanimlar, x)); });
-    } else {
-      const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ20000`]);
-      hamlar = roSatirlariOku(rows, k, sutunlar, RO.tanimlar, null, [A, B]);
-    }
-    ykDurum('roDurum', 'Takım bilgisi okunuyor…');
-    const { harita, eksikAy } = await roTakimHaritasi(aylar);
-    let kayitlar = roKayitlariKur(hamlar, harita).filter(r => Object.keys(r.deg).length);
-    kayitlar = roKapsam(kayitlar, roSecilenTl(), roSiciller());
-    if (!kayitlar.length) throw new Error('Seçilen sütun, ay ve kapsamda sayısal değer bulunamadı.');
-    const sablon = RO.sablonlar.find(s => s.ad === document.getElementById('roSablon').value);
-    const ayar = Object.assign({}, RO.ayar, {
-      kaynak: k.adi, sutunlar, aylar, tanimlar: RO.tanimlar, duzen: roDuzen(), tl, personel,
-      ortalama: document.getElementById('roOptOrt').checked, etiket: k.etiket, sablonAdi: sablon ? sablon.ad : '',
-    });
-    ykDurum('roDurum', 'Excel hazırlanıyor…');
-    const plan = roPlan(kayitlar, ayar);
-    if (!plan.sayfalar.length) throw new Error('Yazılacak sayfa çıkmadı.');
-    const wb = roExcelYaz(ExcelJS, kayitlar, plan, ayar);
-    const buf = await wb.xlsx.writeBuffer();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    a.download = plan.dosya;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    // Uyarılar
-    const notlar = [];
-    const takimsiz = kayitlar.filter(r => !r.tl);
-    if (tl && takimsiz.length) notlar.push(`${takimsiz.length} kayıt o ayın VARDİYA'sında bulunmadığı için takım lideri ortalamasına girmedi (personel bölümünde var): ` +
-      [...new Set(takimsiz.map(r => `${r.ad} (${roAyEtiket(r.x)})`))].slice(0, 12).join(', ') + (takimsiz.length > 12 ? '…' : ''));
-    if (eksikAy.length && tl) notlar.push('VARDİYA sekmesi olmayan ay: ' + eksikAy.map(roAyEtiket).join(', '));
-    const tanimsiz = sutunlar.filter(s => !roTanim(RO.tanimlar, k.adi, s).tanimli);
-    if (tanimsiz.length) notlar.push('SÜTUNLAR sekmesinde tanımı olmayan (Toplam sayıldı): ' + tanimsiz.map(roUp).join(', '));
-    uyari.innerHTML = notlar.map(n => `<div class="status warn" style="margin-top:6px;">⚠ ${ykEsc(n)}</div>`).join('');
-    ykDurum('roDurum', `✓ ${plan.dosya} indirildi — ${plan.sayfalar.length} sayfa + Kaynak Veri, ${kayitlar.length} kayıt.`, 'ok');
-  } catch(err){
-    ykDurum('roDurum', '✗ ' + err.message, 'err');
-    console.error(err);
-  } finally { btn.disabled = false; }
-}
-
 // ---------- Şablonlar (RAPOR AYARLARI > ŞABLONLAR) ----------
-function roSablonListesi(secili){
-  const sel = document.getElementById('roSablon');
-  const deger = secili !== undefined ? secili : sel.value;
-  sel.innerHTML = '<option value="">— Yeni rapor —</option>' + RO.sablonlar.map(s => `<option value="${ykEsc(s.ad)}">${ykEsc(s.ad)}</option>`).join('');
-  if (RO.sablonlar.some(s => s.ad === deger)) sel.value = deger;
-  document.getElementById('roSablonSil').disabled = !sel.value;
-}
-async function roSablonUygula(){
-  const s = RO.sablonlar.find(x => x.ad === document.getElementById('roSablon').value);
-  document.getElementById('roSablonSil').disabled = !s;
-  if (!s) return;
-  document.getElementById('roSablonAd').value = s.ad;
-  if (s.duzen === 'liste'){
-    const o = s.secenek || {};
-    const r = document.querySelector('input[name="roDuzen"][value="liste"]'); if (r) r.checked = true;
-    RO_L.kolonlar = Array.isArray(o.kolonlar) && o.kolonlar.length ? o.kolonlar.map(k => ({ baslik: k.baslik || '', alan: k.alan || '' })) : RO_L.kolonlar;
-    RO_L.hesaplar = Array.isArray(o.hesaplar) ? o.hesaplar.map(h => ({ ...h })) : [];
-    document.getElementById('roSiciller').value = (o.siciller || []).join(', ');
-    RO.sonDuzenListe = true;
-    document.getElementById('roDuzenIpucu').textContent = (RO_DUZENLER.find(x => x.id === 'liste') || {}).ipucu || '';
-    document.querySelectorAll('.ro-toplu').forEach(el => el.style.display = 'none');
-    document.getElementById('roListeKart').style.display = '';
-    await roListeHazirla();
-    const gs = document.getElementById('roGorunum');
-    gs.value = o.gorunum && [...gs.options].some(x => x.value === o.gorunum) ? o.gorunum : '';
-    roListeCiz();
-    await roTlListesi(new Set(o.tl_liste || []));
-    const yok = o.gorunum && gs.value !== o.gorunum;
-    ykDurum('roSablonDurum', yok ? `⚠ Şablonun görünümü (${o.gorunum}) bulunamadı; standart görünüm seçildi.` : `✓ "${s.ad}" uygulandı.`, yok ? 'warn' : 'ok');
-    return;
-  }
-  if (!RO.kaynaklar.some(k => k.adi === s.kaynak)){ ykDurum('roSablonDurum', `✗ Şablonun kaynağı (${s.kaynak}) KAYNAKLAR'da yok ya da pasif.`, 'err'); return; }
-  document.getElementById('roKaynak').value = s.kaynak;
-  const r = document.querySelector(`input[name="roDuzen"][value="${s.duzen}"]`); if (r) r.checked = true;
-  roDuzenDegisti();
-  const o = s.secenek || {};
-  document.getElementById('roOptTl').checked = o.tl !== false;
-  document.getElementById('roOptKisi').checked = o.personel !== false;
-  if (o.ortalama !== undefined) document.getElementById('roOptOrt').checked = !!o.ortalama;
-  document.getElementById('roSiciller').value = (o.siciller || []).join(', ');
-  await roKaynakDegisti(s.sutunlar);
-  await roTlListesi(new Set(o.tl_liste || []));
-  const yok = s.sutunlar.filter(x => !roSecilenSutunlar().some(y => roUp(y) === roUp(x)));
-  ykDurum('roSablonDurum', yok.length ? `⚠ Şablondaki şu sütunlar kaynakta artık yok: ${yok.join(', ')}` : `✓ "${s.ad}" uygulandı. Ayları seçip Excel Oluştur'a bas.`, yok.length ? 'warn' : 'ok');
-}
-async function roSablonKaydet(){
-  const ad = document.getElementById('roSablonAd').value.trim();
-  try {
-    if (!ad) throw new Error('Şablon adı yazın.');
-    const liste = roListeModu();
-    const k = liste ? { adi: 'LİSTE' } : roKaynak(); if (!k) throw new Error('Kaynak seçin.');
-    const g = liste ? roListeAktifGorunum() : null;
-    const sutunlar = liste ? (g ? ['(görünüm şablonunun başlıkları)'] : RO_L.kolonlar.filter(x => x.alan).map(x => x.baslik || x.alan).concat(RO_L.hesaplar.filter(h => h.baslik).map(h => h.baslik))) : roSecilenSutunlar();
-    if (!sutunlar.length) throw new Error('En az bir sütun seçin.');
-    ykDurum('roSablonDurum', 'Kaydediliyor…');
-    const secenek = liste ? { gorunum: g ? g.ad : '', kolonlar: g ? [] : RO_L.kolonlar.filter(x => x.alan), hesaplar: g ? [] : RO_L.hesaplar.filter(h => h.baslik && h.a != null && h.b != null) }
-      : { tl: document.getElementById('roOptTl').checked, personel: document.getElementById('roOptKisi').checked, ortalama: document.getElementById('roOptOrt').checked };
-    const tlS = [...roSecilenTl()], sc = [...roSiciller()];
-    if (tlS.length) secenek.tl_liste = tlS;
-    if (sc.length) secenek.siciller = sc;
-    const satir = [ad, k.adi, sutunlar.join(' | '), roDuzen(), JSON.stringify(secenek), ykKaydeden(), new Date().toLocaleString('tr-TR')];
-    // Yazmadan önce sekme yeniden okunur: arada satır eklenip silindiyse yanlış satıra yazılmaz
-    RO.cache.delete(RO_AYAR_ID + '|' + `'ŞABLONLAR'!A1:Z1000`);
-    const [rows] = await roBatchGet(RO_AYAR_ID, [`'ŞABLONLAR'!A1:Z1000`]);
-    const i = rows.findIndex((r, j) => j > 0 && roUp(r[0]) === roUp(ad));
-    const no = i > 0 ? i + 1 : (() => { let n = rows.length; while (n > 1 && !(rows[n - 1] || []).some(v => String(v == null ? '' : v).trim())) n--; return n + 1; })();
-    const aralik = `'ŞABLONLAR'!A${no}:G${no}`;
-    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}/values/${encodeURIComponent(aralik)}?valueInputOption=RAW`,
-      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ range: aralik, values: [satir] }) });
-    await roAyarYukle(true);
-    roSablonListesi(ad);
-    ykDurum('roSablonDurum', `✓ "${ad}" ${i > 0 ? 'güncellendi' : 'kaydedildi'}.`, 'ok');
-  } catch(err){ ykDurum('roSablonDurum', '✗ ' + err.message, 'err'); }
-}
-async function roSablonSil(){
-  const ad = document.getElementById('roSablon').value; if (!ad) return;
-  const btn = document.getElementById('roSablonSil');
-  if (btn.dataset.onay !== ad){ btn.dataset.onay = ad; btn.textContent = 'Emin misin? Sil'; setTimeout(() => { btn.dataset.onay = ''; btn.textContent = '🗑 Sil'; }, 4000); return; }
-  btn.dataset.onay = ''; btn.textContent = '🗑 Sil';
-  try {
-    ykDurum('roSablonDurum', 'Siliniyor…');
-    RO.cache.delete(RO_AYAR_ID + '|' + `'ŞABLONLAR'!A1:Z1000`);
-    const [rows] = await roBatchGet(RO_AYAR_ID, [`'ŞABLONLAR'!A1:Z1000`]);
-    const i = rows.findIndex((r, j) => j > 0 && roUp(r[0]) === roUp(ad));
-    if (i < 1) throw new Error('Şablon tabloda bulunamadı.');
-    const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}?fields=sheets.properties(sheetId,title)`);
-    const sh = (meta.sheets || []).find(s => roUp(s.properties.title) === roUp('ŞABLONLAR'));
-    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sh.properties.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } }] }) });
-    await roAyarYukle(true);
-    roSablonListesi('');
-    document.getElementById('roSablonAd').value = '';
-    ykDurum('roSablonDurum', `✓ "${ad}" silindi.`, 'ok');
-  } catch(err){ ykDurum('roSablonDurum', '✗ ' + err.message, 'err'); }
-}
-
 // ---------- Sayfa: Rapor Kaynakları (RAPOR AYARLARI'nın sekmeleri yerinde düzenlenir) ----------
 const RO_GRIDLER = [
   { id:'roGridKaynak', sekme:'KAYNAKLAR', baslik:'Kaynaklar', ipucu:'Her satır bir tablo. Düzen: "Aylık Sekme" (her ay ayrı sekme, ör. EKİM-2026) ya da "Ay Sütunlu" (tek sekme, ay bir sütunda; Sekme ve Ay Sütunu yazılır). Sütun adları tablodaki başlıkla aynı yazılır. Alınmayan Sütunlar: başlığında bu kelime geçen sütunlar listelenmez (virgülle). Kişi Etiketi: personel sayfasının adı ve başlığı.' },
-  { id:'roGridSutun',  sekme:'SÜTUNLAR',  baslik:'Sütunlar', ipucu:'Hesap: Ortalama ya da Toplam. Biçim: Excel sayı biçimi (0.000, 0.0, 0; boş = genel). 0 = Değerlendirme Yok "Evet" ise 0 değerler boş sayılır. Takım lideri satırları her zaman ekibindeki personelin ortalamasıdır.' },
+  { id:'roGridSutun',  sekme:'SÜTUNLAR',  baslik:'Varsayılan Sütun Kuralları', ipucu:'Şablona yeni bir sütun eklendiğinde ayarı buradan gelir; şablon kaydedilince kural şablonun içine yazılır ve buradaki değişiklik o şablonu etkilemez. '+'Hesap: Ortalama ya da Toplam. Biçim: Excel sayı biçimi (0.000, 0.0, 0; boş = genel). 0 = Değerlendirme Yok "Evet" ise 0 değerler boş sayılır. Takım lideri satırları her zaman ekibindeki personelin ortalamasıdır.' },
   { id:'roGridAyar',   sekme:'AYARLAR',   baslik:'Genel Ayarlar', ipucu:'Takım kaynağı (VARDİYA), Excel yazarı, başlık rengi, yazı tipi, izin hesabı sütunları ve başlangıç ayı. "Sabit: X" ile başlayan her satır Liste düzeninde X adlı bir alan olur (ör. Sabit: LOKASYON = OSMANİYE).' },
   { id:'roGridEsles',  sekme:'ALAN EŞLEŞTİRME', baslik:'Alan Eşleştirme', ipucu:'Görünüm şablonundaki başlık hangi alanla doldurulsun? Alan: hazır alan adı (SİCİL, AD SOYAD, TAKIM LİDERİ, HAK EDİLEN İZİN, KULLANILAN İZİN, KALAN İZİN, KIDEM YILI, sabitler) ya da "KAYNAK › SÜTUN". Listede olmayan başlık önce hazır alanlarda, sonra kaynakların sütunlarında aynı adla aranır.' },
 ];
@@ -9302,18 +9080,6 @@ async function roGridKaydet(id){
 }
 
 // ---------- Olaylar ----------
-document.getElementById('roKaynak').addEventListener('change', () => { document.getElementById('roSablon').value = ''; document.getElementById('roSablonSil').disabled = true; roKaynakDegisti([]); });
-document.getElementById('roAyA').addEventListener('change', () => roTlListesi());
-document.getElementById('roAyB').addEventListener('change', () => roTlListesi());
-document.getElementById('roOlusturBtn').addEventListener('click', roOlustur);
-document.getElementById('roSablon').addEventListener('change', roSablonUygula);
-document.getElementById('roSablonKaydet').addEventListener('click', roSablonKaydet);
-document.getElementById('roSablonSil').addEventListener('click', roSablonSil);
-document.getElementById('roTumu').addEventListener('click', () => document.querySelectorAll('#roSutunlar input').forEach(c => c.checked = true));
-document.getElementById('roHicbiri').addEventListener('click', () => document.querySelectorAll('#roSutunlar input').forEach(c => c.checked = false));
-document.getElementById('roTlTemizle').addEventListener('click', () => document.querySelectorAll('#roTlListe input').forEach(c => c.checked = false));
-document.getElementById('roYenile').addEventListener('click', async () => { roOnbellekTemizle(); RO.ayar = null; RO_L.esles = null; RO_L.gorunumler = null; RO_L.kaynakBasliklari = null; await roSayfasi(); ykDurum('roDurum', '✓ Ayarlar ve kaynaklar yeniden okundu.', 'ok'); });
-
 // ============================================================================
 // ===== RAPOR OLUŞTURUCU — Aşama 2 (27.11.2026): Liste düzeni =====
 // Karne'nin "Excel Veri Oluşturma" ve "Personel Yıllık İzin" modlarının fabrikadaki karşılığı.
@@ -9390,36 +9156,6 @@ async function roGorunumler(zorla){
 }
 
 // ---------- Ekran ----------
-function roListeModu(){ return roDuzen() === 'liste'; }
-function roListeGoster(){
-  const liste = roListeModu();
-  document.querySelectorAll('.ro-toplu').forEach(el => el.style.display = liste ? 'none' : '');
-  document.getElementById('roListeKart').style.display = liste ? '' : 'none';
-  if (liste) roListeHazirla();
-}
-async function roListeHazirla(){
-  const durum = document.getElementById('roListeDurum');
-  try {
-    ykDurum('roListeDurum', 'Alanlar okunuyor…');
-    const [gorunumler, basliklar] = await Promise.all([roGorunumler(), roTumKaynakBasliklari(), roEslesmeYukle()]);
-    RO_L.kaynakBasliklari = basliklar;
-    const sel = document.getElementById('roGorunum'), onceki = sel.value;
-    sel.innerHTML = '<option value="">Standart görünüm (sütunları aşağıdan seç)</option>' + gorunumler.map(g => `<option value="${ykEsc(g.ad)}">${ykEsc(g.ad)}</option>`).join('');
-    if (gorunumler.some(g => g.ad === onceki)) sel.value = onceki;
-    // Liste düzeninde aylar VARDİYA sekmelerinden
-    const sekmeler = RO.ayar.takimId ? await roSekmeler(RO.ayar.takimId) : [];
-    const aylar = [...new Set(sekmeler.map(roAyKey).filter(x => x != null))].sort((a, b) => a - b);
-    const a = document.getElementById('roAyA'), b = document.getElementById('roAyB');
-    const eA = Number(a.value), eB = Number(b.value);
-    const opt = aylar.slice().reverse().map(x => `<option value="${x}">${roAyEtiket(x)}</option>`).join('');
-    a.innerHTML = opt; b.innerHTML = opt;
-    const son = aylar[aylar.length - 1];
-    b.value = aylar.includes(eB) ? eB : son; a.value = aylar.includes(eA) ? eA : son;
-    roListeCiz();
-    durum.textContent = '';
-    await roTlListesi();
-  } catch(err){ ykDurum('roListeDurum', '✗ ' + err.message, 'err'); }
-}
 function roListeAlanSecenekleri(secili){
   const opt = (v, t) => `<option value="${ykEsc(v)}" ${roSade(v) === roSade(secili || '') ? 'selected' : ''}>${ykEsc(t || v)}</option>`;
   let h = '<option value="">— Alan —</option><optgroup label="Hazır alanlar">' + RO_HAZIR_ALANLAR.map(a => opt(a)).join('') + roSabitler().map(s => opt(s.ad, `${s.ad} (sabit: ${s.deger})`)).join('') + '</optgroup>';
@@ -9427,164 +9163,7 @@ function roListeAlanSecenekleri(secili){
   return h;
 }
 function roListeAktifGorunum(){ const ad = document.getElementById('roGorunum').value; return (RO_L.gorunumler || []).find(g => g.ad === ad) || null; }
-function roListeCiz(){
-  const g = roListeAktifGorunum();
-  const kutu = document.getElementById('roListeKolonlar'), hk = document.getElementById('roListeHesaplar');
-  document.getElementById('roListeElle').style.display = g ? 'none' : '';
-  const esles = document.getElementById('roListeEsles');
-  if (g){
-    const sab = roSabitler().map(s => s.ad);
-    esles.innerHTML = `<div class="hint" style="margin:0 0 6px;">Sütunlar görünüm şablonunun başlıklarından gelir${roGStilVar(g.veri) ? ', görünüm şablondan uygulanır' : ' (şablonda biçim yok: standart görünüm)'}. Eşleşmeyen başlık için RAPOR AYARLARI › ALAN EŞLEŞTİRME'ye satır ekle.</div>` +
-      '<table class="prev" style="width:auto;margin-top:0;"><thead><tr><th>Şablon başlığı</th><th>Doldurulacak alan</th></tr></thead><tbody>' +
-      (g.veri.header || []).filter(Boolean).map(h => { const c = roAlanCoz(h, RO_L.esles, sab, RO_L.kaynakBasliklari || []); const t = !c ? '<span style="color:var(--accent)">eşleşmedi — boş kalır</span>' : c.tur === 'kaynak' ? `${ykEsc(c.kaynak)} › ${ykEsc(roUp(c.sutun))}` : ykEsc(c.alan) + (c.tur === 'sabit' ? ' (sabit)' : ''); return `<tr><td>${ykEsc(h)}</td><td>${t}</td></tr>`; }).join('') + '</tbody></table>';
-    esles.style.display = '';
-    return;
-  }
-  esles.style.display = 'none';
-  kutu.innerHTML = RO_L.kolonlar.map((k, i) => `<div class="row" style="margin-bottom:6px;"><select data-lk="${i}" class="ro-lk-alan" style="min-width:300px;">${roListeAlanSecenekleri(k.alan)}</select>
-    <input type="text" data-lb="${i}" value="${ykEsc(k.baslik)}" placeholder="Excel'deki başlık" style="min-width:200px;">
-    <button class="btn y-btn" data-lyuk="${i}" title="Yukarı">▲</button><button class="btn y-btn" data-lsil="${i}">✕</button></div>`).join('');
-  kutu.querySelectorAll('[data-lk]').forEach(s => s.onchange = () => { const k = RO_L.kolonlar[s.dataset.lk]; k.alan = s.value; k.baslik = roUp(s.value.split('›').pop().trim()); roListeCiz(); });
-  kutu.querySelectorAll('[data-lb]').forEach(s => s.oninput = () => { RO_L.kolonlar[s.dataset.lb].baslik = s.value; });
-  kutu.querySelectorAll('[data-lsil]').forEach(b => b.onclick = () => { const i = Number(b.dataset.lsil); RO_L.kolonlar.splice(i, 1); RO_L.hesaplar = RO_L.hesaplar.filter(h => h.a !== i && h.b !== i).map(h => ({ ...h, a: h.a > i ? h.a - 1 : h.a, b: h.b > i ? h.b - 1 : h.b })); roListeCiz(); });
-  kutu.querySelectorAll('[data-lyuk]').forEach(b => b.onclick = () => { const i = Number(b.dataset.lyuk); if (!i) return; const L = RO_L.kolonlar; [L[i - 1], L[i]] = [L[i], L[i - 1]]; RO_L.hesaplar.forEach(h => { ['a', 'b'].forEach(z => { if (h[z] === i) h[z] = i - 1; else if (h[z] === i - 1) h[z] = i; }); }); roListeCiz(); });
-  const kolOpt = sec => '<option value="">— Sütun —</option>' + RO_L.kolonlar.map((k, i) => `<option value="${i}" ${sec === i ? 'selected' : ''}>${ykEsc(k.baslik || k.alan)}</option>`).join('');
-  hk.innerHTML = RO_L.hesaplar.map((h, i) => `<div class="row" style="margin-bottom:6px;"><input type="text" data-hb="${i}" value="${ykEsc(h.baslik)}" placeholder="Yeni sütun adı" style="min-width:180px;">
-    <select data-ha="${i}">${kolOpt(h.a)}</select>
-    <select data-hop="${i}">${[['+', 'Toplama (+)'], ['-', 'Çıkarma (−)'], ['*', 'Çarpma (×)'], ['/', 'Bölme (÷)']].map(([v, t]) => `<option value="${v}" ${h.op === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-    <select data-hbb="${i}">${kolOpt(h.b)}</select><button class="btn y-btn" data-hsil="${i}">✕</button></div>`).join('');
-  hk.querySelectorAll('[data-hb]').forEach(s => s.oninput = () => { RO_L.hesaplar[s.dataset.hb].baslik = s.value; });
-  hk.querySelectorAll('[data-ha]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.ha].a = s.value === '' ? null : Number(s.value); });
-  hk.querySelectorAll('[data-hbb]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.hbb].b = s.value === '' ? null : Number(s.value); });
-  hk.querySelectorAll('[data-hop]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.hop].op = s.value; });
-  hk.querySelectorAll('[data-hsil]').forEach(b => b.onclick = () => { RO_L.hesaplar.splice(Number(b.dataset.hsil), 1); roListeCiz(); });
-}
-
 // ---------- Liste oluşturma ----------
-async function roListeOlustur(){
-  const g = roListeAktifGorunum();
-  const sab = roSabitler();
-  const kb = RO_L.kaynakBasliklari || await roTumKaynakBasliklari();
-  await roEslesmeYukle();
-  // 1) Sütunlar
-  let kolonlar, uyarilar = [];
-  if (g){
-    kolonlar = (g.veri.header || []).map(h => {
-      const c = roAlanCoz(h, RO_L.esles, sab.map(s => s.ad), kb);
-      if (!c && String(h).trim()) uyarilar.push(`"${h}" başlığı hiçbir alanla eşleşmedi, boş kaldı.`);
-      return Object.assign({ baslik: h }, c || { tur: 'bos' });
-    });
-  } else {
-    kolonlar = RO_L.kolonlar.filter(k => k.alan).map(k => Object.assign({ baslik: k.baslik || k.alan }, roAlanCoz(k.alan, null, sab.map(s => s.ad), kb) || { tur: 'bos' }));
-    const n = kolonlar.length;
-    RO_L.hesaplar.forEach(h => {
-      if (!h.baslik || h.a == null || h.b == null || !h.op || !RO_L.kolonlar[h.a] || !RO_L.kolonlar[h.b] || !RO_L.kolonlar[h.a].alan || !RO_L.kolonlar[h.b].alan) return;
-      const ia = RO_L.kolonlar.slice(0, h.a + 1).filter(k => k.alan).length - 1, ib = RO_L.kolonlar.slice(0, h.b + 1).filter(k => k.alan).length - 1;
-      if (ia < 0 || ib < 0 || ia >= n || ib >= n) return;
-      kolonlar.push({ baslik: h.baslik, tur: 'hesap', a: ia, b: ib, op: h.op });
-    });
-  }
-  if (!kolonlar.length) throw new Error('En az bir sütun seçin.');
-  // 2) Hangi kaynaklar, hangi aylar
-  const plAdi = roUp(roAyarDeger('Personel Listesi Kaynağı', 'PERSONEL LİSTESİ'));
-  const izinVar = kolonlar.some(k => k.tur === 'alan' && RO_IZIN_ALANLARI.includes(k.alan));
-  const gerekli = new Set(kolonlar.filter(k => k.tur === 'kaynak').map(k => roUp(k.kaynak)));
-  if (izinVar) gerekli.add(plAdi);
-  const kaynaklar = [...gerekli].map(a => RO.kaynaklar.find(k => k.adi === a)).filter(Boolean);
-  const aylikVar = kaynaklar.some(k => roTip(k) !== 'sabit');
-  let A = Number(document.getElementById('roAyA').value), B = Number(document.getElementById('roAyB').value);
-  if (A > B) [A, B] = [B, A];
-  const sayfaAylari = []; if (aylikVar) for (let x = A; x <= B; x++) sayfaAylari.push(x); else sayfaAylari.push(null);
-  // 3) Okuma: veri Map("x|sicil" → { sade başlık → değer }) kaynak başına
-  ykDurum('roDurum', 'Veriler okunuyor…');
-  const veri = new Map();
-  const satirlariAl = (rows, x, k, aralik) => {
-    const h = rows[0] || [], si = roSutunBul(h, k.sicil), ai = k.ad ? roSutunBul(h, k.ad) : -1, yi = k.ay ? roSutunBul(h, k.ay) : -1;
-    const m = veri.get(k.adi) || new Map(); veri.set(k.adi, m);
-    if (si < 0) throw new Error(`${k.adi}: "${k.sicil}" sütunu bulunamadı.`);
-    rows.slice(1).forEach(r => {
-      const s = roSicil(r[si]); if (!s) return;
-      const xx = x !== undefined ? x : roAyKey(r[yi]);
-      if (x === undefined && (xx == null || xx < aralik[0] || xx > aralik[1])) return;
-      const key = (xx == null ? 'null' : xx) + '|' + s;
-      if (m.has(key)) return;   // ilk satır esas
-      const o = new Map(); h.forEach((hh, i) => o.set(roSade(hh), r[i])); o.set('__AD__', ai >= 0 ? r[ai] : '');
-      m.set(key, o);
-    });
-  };
-  for (const k of kaynaklar){
-    const tip = roTip(k);
-    if (tip === 'sabit'){ const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ5000`]); satirlariAl(rows, null, k); }
-    else if (tip === 'aysutun'){ const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ20000`]); satirlariAl(rows, undefined, k, [A, B]); }
-    else {
-      const { sekme } = await roKaynakAylari(k);
-      const xs = sayfaAylari.filter(x => x != null && sekme.has(x));
-      const v = await roBatchGet(k.sheetId, xs.map(x => `'${sekme.get(x)}'!A1:ZZ3000`));
-      xs.forEach((x, i) => satirlariAl(v[i], x, k));
-    }
-  }
-  // 4) Takım (VARDİYA): ay başına; aysız listede bitiş ayı
-  const tlAylari = aylikVar ? sayfaAylari : [B];
-  const { harita } = await roTakimHaritasi(tlAylari);
-  const adlar = new Map(); [...harita.values()].forEach(m => m.forEach((v, s) => { if (v.ad) adlar.set(s, v.ad); }));
-  // 5) İzin: başlangıç ayından itibaren VARDİYA'daki izin günleri (Karne loadVardiyaIzinCounts ile aynı)
-  const bonus = new Map();
-  if (izinVar && RO.ayar.takimId){
-    ykDurum('roDurum', 'İzin günleri sayılıyor…');
-    const bas = roAyKey(roAyarDeger('İzin Otomatik Başlangıç', 'AĞUSTOS-2026'));
-    const kod = roUp(roAyarDeger('İzin Kodu', 'Yıllık İzin'));
-    const sekmeler = (await roSekmeler(RO.ayar.takimId)).filter(t => { const x = roAyKey(t); return x != null && bas != null && x >= bas; });
-    const v = await roBatchGet(RO.ayar.takimId, sekmeler.map(t => `'${t}'!A1:AZ2000`));
-    v.forEach(rows => {
-      const h = rows[0] || [], si = roSutunBul(h, RO.ayar.takimSicil);
-      const gunler = h.map((x, i) => roTarih(x) ? i : -1).filter(i => i >= 0);
-      rows.slice(1).forEach(r => { const s = roSicil(r[si]); if (!s) return; let n = 0; gunler.forEach(i => { if (roUp(r[i]) === kod) n++; }); bonus.set(s, (bonus.get(s) || 0) + n); });
-    });
-  }
-  // 6) Kişiler ve değerler
-  const pl = veri.get(plAdi);
-  const plKullan = !!pl && (izinVar || kolonlar.some(k => k.tur === 'kaynak' && roUp(k.kaynak) === plAdi));
-  const plSatir = s => pl ? pl.get('null|' + s) : null;
-  const ad = s => adlar.get(s) || roUp((plSatir(s) && plSatir(s).get('__AD__')) || '') || (() => { for (const m of veri.values()) for (const [key, o] of m) if (key.endsWith('|' + s) && o.get('__AD__')) return roUp(o.get('__AD__')); return s; })();
-  const tlOf = (s, x) => { const m = harita.get(x != null ? x : B); const t = m && m.get(s); if (t && t.tl) return t.tl; const p = plSatir(s); const pt = p && p.get(roSade('TAKIM LİDERİ')); return pt ? roUp(pt) : ''; };
-  const tlSec = roSecilenTl(), sicSec = roSiciller();
-  const kisiler = x => {
-    let set;
-    if (plKullan) set = [...pl.keys()].map(k => k.split('|')[1]);
-    else { set = []; veri.forEach(m => m.forEach((o, key) => { const [kx, s] = key.split('|'); if (kx === 'null' || Number(kx) === x) set.push(s); })); }
-    return [...new Set(set)].filter(s => (!tlSec.size || tlSec.has(tlOf(s, x))) && (!sicSec.size || sicSec.has(s))).sort((a, b) => ad(a).localeCompare(ad(b), 'tr'));
-  };
-  const num = v => roNum(v);
-  const izinCol = ad_ => roSade(roAyarDeger(ad_, ''));
-  const deger = (k, s, x) => {
-    if (k.tur === 'alan'){
-      if (k.alan === 'SİCİL') return Number(s);
-      if (k.alan === 'AD SOYAD') return ad(s);
-      if (k.alan === 'TAKIM LİDERİ') return tlOf(s, x);
-      const p = plSatir(s);
-      if (k.alan === 'KIDEM YILI') return p ? roKidemYil(roTarih(p.get(izinCol('İşe Giriş Sütunu')))) : null;
-      if (!p) return null;
-      const iz = roIzinHesap(num(p.get(izinCol('İzin Hak Sütunu'))), num(p.get(izinCol('İzin Kullanılan Sütunu'))), num(p.get(izinCol('İzin Kalan Sütunu'))), bonus.get(s));
-      return k.alan === 'HAK EDİLEN İZİN' ? iz.hak : k.alan === 'KULLANILAN İZİN' ? iz.kul : iz.kalan;
-    }
-    if (k.tur === 'sabit'){ const sb = sab.find(z => z.ad === k.alan); return sb ? sb.deger : null; }
-    if (k.tur === 'kaynak'){
-      const kay = RO.kaynaklar.find(z => z.adi === roUp(k.kaynak)); const m = veri.get(roUp(k.kaynak)); if (!kay || !m) return null;
-      const o = m.get((roTip(kay) === 'sabit' ? 'null' : x) + '|' + s);
-      return o ? o.get(roSade(k.sutun)) : null;
-    }
-    return null;
-  };
-  const sablon = RO.sablonlar.find(s => s.ad === document.getElementById('roSablon').value);
-  const plan = roListePlan({ kolonlar, sayfaAylari, kisiler, deger, sablonAdi: sablon ? sablon.ad : '' });
-  if (!plan.sayfalar.some(sp => sp.satirlar.length)) throw new Error('Seçilen ay ve kapsamda kişi bulunamadı.');
-  // Sütun biçimi: kaynak sütununun SÜTUNLAR tanımı
-  kolonlar.forEach(k => { if (k.tur === 'kaynak'){ const t = roTanim(RO.tanimlar, roUp(k.kaynak), k.sutun); if (t.tanimli && t.bicim) k.bicim = t.bicim; } });
-  ykDurum('roDurum', 'Excel hazırlanıyor…');
-  const wb = roListeYaz(ExcelJS, plan, kolonlar, RO.ayar, g ? g.veri : null);
-  return { wb, plan, uyarilar, kisi: plan.sayfalar.reduce((t, sp) => t + sp.satirlar.length, 0) };
-}
-
 // ---------- Görünüm şablonu yükleme (Karne extractIzinTemplateFromFile ile aynı çıkarım) ----------
 const RO_G_IDX = ['000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','000000','FFFFFF','FF0000','00FF00','0000FF','FFFF00','FF00FF','00FFFF','800000','008000','000080','808000','800080','008080','C0C0C0','808080','9999FF','993366','FFFFCC','CCFFFF','660066','FF8080','0066CC','CCCCFF','000080','FF00FF','FFFF00','00FFFF','800080','800000','008080','0000FF','00CCFF','CCFFFF','CCFFCC','FFFF99','99CCFF','FF99CC','CC99FF','FFCC99','3366FF','33CCCC','99CC00','FFCC00','FF9900','FF6600','666699','969696','003366','339966','003300','333300','993300','993366','333399','333333'];
 const RO_G_TEMA = ['lt1','dk1','lt2','dk2','accent1','accent2','accent3','accent4','accent5','accent6','hlink','folHlink'];
@@ -9719,8 +9298,541 @@ async function roGorunumSil(satir, ad, btn){
     ykDurum('roGorunumDurum', `✓ "${ad}" silindi.`, 'ok');
   } catch(err){ ykDurum('roGorunumDurum', '✗ ' + err.message, 'err'); }
 }
+
+// ============================================================================
+// ===== RAPOR OLUŞTURUCU — ekranlar (27.11.2026 yeniden düzen) =====
+// Rapor Al: yalnız şablon seçici; seçilen şablonun ihtiyaç duyduğu seçimler (ay aralığı ya da takım lideri ayı,
+// takım lideri, sicil) açılır. Şablonlar: şablon kurma/düzenleme. Sütun kuralları (ortalama/toplam, biçim,
+// 0 = değerlendirme yok) şablonun içinde saklanır; RAPOR AYARLARI > SÜTUNLAR yalnız yeni sütunun varsayılanıdır.
+// Şablon (ŞABLONLAR satırı): Şablon Adı | Kaynak | Sütunlar | Düzen | Seçenekler (JSON) | Kaydeden | Kayıt Zamanı
+//   Seçenekler: toplu düzenlerde { tl, personel, ortalama, kurallar:{ SÜTUN:{ort,bicim,sifirYok} } }
+//               listede { gorunum, kolonlar:[{baslik, alan, bicim}], hesaplar:[{baslik,a,op,b}] }
+// ============================================================================
+const RO_BICIMLER = [['', 'Genel'], ['0', '0'], ['0.0', '0,0'], ['0.00', '0,00'], ['0.000', '0,000'], ['0%', '%0'], ['0.0%', '%0,0'], ['dd.mm.yyyy', 'Tarih']];
+function roBicimSecim(deger, attr){
+  const v = deger || '';
+  const ops = RO_BICIMLER.some(([k]) => k === v) ? RO_BICIMLER : RO_BICIMLER.concat([[v, v]]);
+  return `<select ${attr}>` + ops.map(([k, t]) => `<option value="${ykEsc(k)}" ${k === v ? 'selected' : ''}>${ykEsc(t)}</option>`).join('') + '</select>';
+}
+// Şablonun kuralları → roTanim'in aradığı biçim; şablon kuralı varsayılandan önce gelir
+function roSablonTanimlari(S){
+  const k = (S && S.secenek && S.secenek.kurallar) || {};
+  return Object.keys(k).map(s => ({ kaynak: S.kaynak, sutun: s, ort: !!k[s].ort, bicim: k[s].bicim || '', sifirYok: !!k[s].sifirYok })).concat(RO.tanimlar);
+}
+const roListeSablonu = S => S && S.duzen === 'liste';
+function roSablonBul(ad){ return RO.sablonlar.find(s => s.ad === ad) || null; }
+function roSablonOzeti(S){
+  if (!S) return '';
+  const d = (RO_DUZENLER.find(x => x.id === S.duzen) || {}).ad || S.duzen;
+  if (roListeSablonu(S)){
+    const o = S.secenek || {};
+    const kol = o.gorunum ? `görünüm: ${o.gorunum}` : (o.kolonlar || []).map(k => k.baslik || k.alan).concat((o.hesaplar || []).map(h => h.baslik)).join(', ');
+    return `<b>Düzen:</b> ${ykEsc(d)}<br><b>Sütunlar:</b> ${ykEsc(kol || '—')}`;
+  }
+  return `<b>Düzen:</b> ${ykEsc(d)}<br><b>Kaynak:</b> ${ykEsc(S.kaynak)} · <b>Sütunlar:</b> ${ykEsc(S.sutunlar.map(roUp).join(', '))}`;
+}
+
+// ---------- Liste: sütunları çöz (görünüm başlıkları ya da elle seçilen alanlar) ----------
+async function roListeKolonlari(S){
+  const o = S.secenek || {};
+  const sab = roSabitler();
+  const kb = RO_L.kaynakBasliklari || (RO_L.kaynakBasliklari = await roTumKaynakBasliklari());
+  await roEslesmeYukle();
+  const gorunumler = await roGorunumler();
+  const g = o.gorunum ? gorunumler.find(x => x.ad === o.gorunum) : null;
+  if (o.gorunum && !g) throw new Error(`Şablonun görünümü (${o.gorunum}) bulunamadı.`);
+  let kolonlar, uyarilar = [];
+  if (g){
+    kolonlar = (g.veri.header || []).map(h => {
+      const c = roAlanCoz(h, RO_L.esles, sab.map(s => s.ad), kb);
+      if (!c && String(h).trim()) uyarilar.push(`"${h}" başlığı hiçbir alanla eşleşmedi, boş kaldı.`);
+      return Object.assign({ baslik: h }, c || { tur: 'bos' });
+    });
+  } else {
+    const secili = (o.kolonlar || []).filter(k => k.alan);
+    kolonlar = secili.map(k => Object.assign({ baslik: k.baslik || k.alan, bicim: k.bicim || '' }, roAlanCoz(k.alan, null, sab.map(s => s.ad), kb) || { tur: 'bos' }));
+    (o.hesaplar || []).forEach(h => {
+      if (!h.baslik || h.a == null || h.b == null || !h.op || h.a >= secili.length || h.b >= secili.length) return;
+      kolonlar.push({ baslik: h.baslik, tur: 'hesap', a: h.a, b: h.b, op: h.op });
+    });
+  }
+  const plAdi = roUp(roAyarDeger('Personel Listesi Kaynağı', 'PERSONEL LİSTESİ'));
+  const izinVar = kolonlar.some(k => k.tur === 'alan' && RO_IZIN_ALANLARI.includes(k.alan));
+  const gerekli = new Set(kolonlar.filter(k => k.tur === 'kaynak').map(k => roUp(k.kaynak)));
+  if (izinVar) gerekli.add(plAdi);
+  const kaynaklar = [...gerekli].map(a => RO.kaynaklar.find(k => k.adi === a)).filter(Boolean);
+  return { kolonlar, uyarilar, gorunum: g, plAdi, izinVar, kaynaklar, aylikVar: kaynaklar.some(k => roTip(k) !== 'sabit') };
+}
+async function roVardiyaAylari(){
+  const sekmeler = RO.ayar.takimId ? await roSekmeler(RO.ayar.takimId) : [];
+  return [...new Set(sekmeler.map(roAyKey).filter(x => x != null))].sort((a, b) => a - b);
+}
+
+// ---------- Çalıştırma: şablon + seçimler → Excel ----------
+async function roCalistir(S, p, durum){
+  if (roListeSablonu(S)) return roListeCalistir(S, p, durum);
+  const k = RO.kaynaklar.find(x => x.adi === S.kaynak);
+  if (!k) throw new Error(`Şablonun kaynağı (${S.kaynak}) KAYNAKLAR'da yok ya da pasif.`);
+  const sutunlar = S.sutunlar;
+  if (!sutunlar.length) throw new Error('Şablonda sütun yok.');
+  const o = S.secenek || {};
+  const tanimlar = roSablonTanimlari(S);
+  durum('Veriler okunuyor…');
+  const { aylar: tumAylar, sekme } = await roKaynakAylari(k);
+  const aylar = tumAylar.filter(x => x >= p.A && x <= p.B);
+  if (!aylar.length) throw new Error('Seçilen aralıkta veri yok.');
+  let hamlar = [];
+  if (roAylik(k)){
+    const veri = await roBatchGet(k.sheetId, aylar.map(x => `'${sekme.get(x)}'!A1:ZZ3000`));
+    aylar.forEach((x, i) => { hamlar = hamlar.concat(roSatirlariOku(veri[i], k, sutunlar, tanimlar, x)); });
+  } else {
+    const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ20000`]);
+    hamlar = roSatirlariOku(rows, k, sutunlar, tanimlar, null, [p.A, p.B]);
+  }
+  durum('Takım bilgisi okunuyor…');
+  const { harita, eksikAy } = await roTakimHaritasi(aylar);
+  let kayitlar = roKayitlariKur(hamlar, harita).filter(r => Object.keys(r.deg).length);
+  kayitlar = roKapsam(kayitlar, p.tl, p.siciller);
+  if (!kayitlar.length) throw new Error('Seçilen ay ve kapsamda sayısal değer bulunamadı.');
+  const ayar = Object.assign({}, RO.ayar, { kaynak: k.adi, sutunlar, aylar, tanimlar, duzen: S.duzen, tl: o.tl !== false, personel: o.personel !== false, ortalama: o.ortalama !== undefined ? !!o.ortalama : S.duzen === 'yil-sayfa', etiket: k.etiket, sablonAdi: S.ad });
+  if (!ayar.tl && !ayar.personel) throw new Error('Şablonda takım lideri ve personel bölümleri kapalı.');
+  durum('Excel hazırlanıyor…');
+  const plan = roPlan(kayitlar, ayar);
+  if (!plan.sayfalar.length) throw new Error('Yazılacak sayfa çıkmadı.');
+  const wb = roExcelYaz(ExcelJS, kayitlar, plan, ayar);
+  const notlar = [];
+  const takimsiz = kayitlar.filter(r => !r.tl);
+  if (ayar.tl && takimsiz.length) notlar.push(`${takimsiz.length} kayıt o ayın VARDİYA'sında bulunmadığı için takım lideri ortalamasına girmedi (personel bölümünde var): ` + [...new Set(takimsiz.map(r => `${r.ad} (${roAyEtiket(r.x)})`))].slice(0, 12).join(', ') + (takimsiz.length > 12 ? '…' : ''));
+  if (eksikAy.length && ayar.tl) notlar.push('VARDİYA sekmesi olmayan ay: ' + eksikAy.map(roAyEtiket).join(', '));
+  return { wb, dosya: plan.dosya, notlar, ozet: `${plan.sayfalar.length} sayfa + Kaynak Veri, ${kayitlar.length} kayıt` };
+}
+async function roListeCalistir(S, p, durum){
+  durum('Sütunlar hazırlanıyor…');
+  const { kolonlar, uyarilar, gorunum, plAdi, izinVar, kaynaklar, aylikVar } = await roListeKolonlari(S);
+  if (!kolonlar.length) throw new Error('Şablonda sütun yok.');
+  const sab = roSabitler();
+  const A = p.A, B = p.B;
+  const sayfaAylari = []; if (aylikVar) for (let x = A; x <= B; x++) sayfaAylari.push(x); else sayfaAylari.push(null);
+  durum('Veriler okunuyor…');
+  const veri = new Map();
+  const satirlariAl = (rows, x, k, aralik) => {
+    const h = rows[0] || [], si = roSutunBul(h, k.sicil), ai = k.ad ? roSutunBul(h, k.ad) : -1, yi = k.ay ? roSutunBul(h, k.ay) : -1;
+    const m = veri.get(k.adi) || new Map(); veri.set(k.adi, m);
+    if (si < 0) throw new Error(`${k.adi}: "${k.sicil}" sütunu bulunamadı.`);
+    rows.slice(1).forEach(r => {
+      const s = roSicil(r[si]); if (!s) return;
+      const xx = x !== undefined ? x : roAyKey(r[yi]);
+      if (x === undefined && (xx == null || xx < aralik[0] || xx > aralik[1])) return;
+      const key = (xx == null ? 'null' : xx) + '|' + s;
+      if (m.has(key)) return;   // ilk satır esas
+      const o = new Map(); h.forEach((hh, i) => o.set(roSade(hh), r[i])); o.set('__AD__', ai >= 0 ? r[ai] : '');
+      m.set(key, o);
+    });
+  };
+  for (const k of kaynaklar){
+    const tip = roTip(k);
+    if (tip === 'sabit'){ const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ5000`]); satirlariAl(rows, null, k); }
+    else if (tip === 'aysutun'){ const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ20000`]); satirlariAl(rows, undefined, k, [A, B]); }
+    else {
+      const { sekme } = await roKaynakAylari(k);
+      const xs = sayfaAylari.filter(x => x != null && sekme.has(x));
+      const v = await roBatchGet(k.sheetId, xs.map(x => `'${sekme.get(x)}'!A1:ZZ3000`));
+      xs.forEach((x, i) => satirlariAl(v[i], x, k));
+    }
+  }
+  const tlAylari = aylikVar ? sayfaAylari : [B];
+  const { harita } = await roTakimHaritasi(tlAylari);
+  const adlar = new Map(); [...harita.values()].forEach(m => m.forEach((v, s) => { if (v.ad) adlar.set(s, v.ad); }));
+  const bonus = new Map();
+  if (izinVar && RO.ayar.takimId){
+    durum('İzin günleri sayılıyor…');
+    const bas = roAyKey(roAyarDeger('İzin Otomatik Başlangıç', 'AĞUSTOS-2026'));
+    const kod = roUp(roAyarDeger('İzin Kodu', 'Yıllık İzin'));
+    const sekmeler = (await roSekmeler(RO.ayar.takimId)).filter(t => { const x = roAyKey(t); return x != null && bas != null && x >= bas; });
+    const v = await roBatchGet(RO.ayar.takimId, sekmeler.map(t => `'${t}'!A1:AZ2000`));
+    v.forEach(rows => {
+      const h = rows[0] || [], si = roSutunBul(h, RO.ayar.takimSicil);
+      const gunler = h.map((x, i) => roTarih(x) ? i : -1).filter(i => i >= 0);
+      rows.slice(1).forEach(r => { const s = roSicil(r[si]); if (!s) return; let n = 0; gunler.forEach(i => { if (roUp(r[i]) === kod) n++; }); bonus.set(s, (bonus.get(s) || 0) + n); });
+    });
+  }
+  const pl = veri.get(plAdi);
+  const plKullan = !!pl && (izinVar || kolonlar.some(k => k.tur === 'kaynak' && roUp(k.kaynak) === plAdi));
+  const plSatir = s => pl ? pl.get('null|' + s) : null;
+  const ad = s => adlar.get(s) || roUp((plSatir(s) && plSatir(s).get('__AD__')) || '') || (() => { for (const m of veri.values()) for (const [key, o] of m) if (key.endsWith('|' + s) && o.get('__AD__')) return roUp(o.get('__AD__')); return s; })();
+  const tlOf = (s, x) => { const m = harita.get(x != null ? x : B); const t = m && m.get(s); if (t && t.tl) return t.tl; const pp = plSatir(s); const pt = pp && pp.get(roSade('TAKIM LİDERİ')); return pt ? roUp(pt) : ''; };
+  const kisiler = x => {
+    let set;
+    if (plKullan) set = [...pl.keys()].map(k => k.split('|')[1]);
+    else { set = []; veri.forEach(m => m.forEach((o, key) => { const [kx, s] = key.split('|'); if (kx === 'null' || Number(kx) === x) set.push(s); })); }
+    return [...new Set(set)].filter(s => (!p.tl.size || p.tl.has(tlOf(s, x))) && (!p.siciller.size || p.siciller.has(s))).sort((a, b) => ad(a).localeCompare(ad(b), 'tr'));
+  };
+  const izinCol = a => roSade(roAyarDeger(a, ''));
+  // Kaynak sütunlarında şablondaki biçim; yoksa varsayılan kural. Sayısal kuralı olan sütunda metin (YOK, Rapor…) boş yazılır.
+  kolonlar.forEach(k => { if (k.tur === 'kaynak'){ const t = roTanim(RO.tanimlar, roUp(k.kaynak), k.sutun); k.sayisal = t.tanimli; if (!k.bicim && t.tanimli && t.bicim) k.bicim = t.bicim; } });
+  const deger = (k, s, x) => {
+    if (k.tur === 'alan'){
+      if (k.alan === 'SİCİL') return Number(s);
+      if (k.alan === 'AD SOYAD') return ad(s);
+      if (k.alan === 'TAKIM LİDERİ') return tlOf(s, x);
+      const pp = plSatir(s);
+      if (k.alan === 'KIDEM YILI') return pp ? roKidemYil(roTarih(pp.get(izinCol('İşe Giriş Sütunu')))) : null;
+      if (!pp) return null;
+      const iz = roIzinHesap(roNum(pp.get(izinCol('İzin Hak Sütunu'))), roNum(pp.get(izinCol('İzin Kullanılan Sütunu'))), roNum(pp.get(izinCol('İzin Kalan Sütunu'))), bonus.get(s));
+      return k.alan === 'HAK EDİLEN İZİN' ? iz.hak : k.alan === 'KULLANILAN İZİN' ? iz.kul : iz.kalan;
+    }
+    if (k.tur === 'sabit'){ const sb = sab.find(z => z.ad === k.alan); return sb ? sb.deger : null; }
+    if (k.tur === 'kaynak'){
+      const kay = RO.kaynaklar.find(z => z.adi === roUp(k.kaynak)); const m = veri.get(roUp(k.kaynak)); if (!kay || !m) return null;
+      const o = m.get((roTip(kay) === 'sabit' ? 'null' : x) + '|' + s);
+      const v = o ? o.get(roSade(k.sutun)) : null;
+      return k.sayisal ? roNum(v) : v;
+    }
+    return null;
+  };
+  const plan = roListePlan({ kolonlar, sayfaAylari, kisiler, deger, sablonAdi: S.ad });
+  if (!plan.sayfalar.some(sp => sp.satirlar.length)) throw new Error('Seçilen ay ve kapsamda kişi bulunamadı.');
+  durum('Excel hazırlanıyor…');
+  const wb = roListeYaz(ExcelJS, plan, kolonlar, RO.ayar, gorunum ? gorunum.veri : null);
+  return { wb, dosya: plan.dosya, notlar: uyarilar, ozet: `${plan.sayfalar.length} sayfa, ${plan.sayfalar.reduce((t, sp) => t + sp.satirlar.length, 0)} satır` };
+}
+
+// ---------- Ortak başlangıç ----------
+async function roHazirla(zorla){
+  if (zorla){ roOnbellekTemizle(); RO.ayar = null; RO_L.esles = null; RO_L.gorunumler = null; RO_L.kaynakBasliklari = null; }
+  await roAyarYukle(zorla);
+}
+function roIndir(wb, dosya){
+  return wb.xlsx.writeBuffer().then(buf => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = dosya; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+}
+
+// ============================ RAPOR AL ============================
+const RA = { S: null };
+async function roSayfasi(){
+  if (!userPerms.raporOlusturucu) return;
+  try {
+    ykDurum('raSablonDurum', 'Ayarlar okunuyor…');
+    await roHazirla();
+    raSablonListesi();
+    ykDurum('raSablonDurum', '');
+    if (RA.S) await raSablonSecildi();
+  } catch(err){ ykDurum('raSablonDurum', '✗ ' + err.message, 'err'); }
+}
+function raSablonListesi(secili){
+  const sel = document.getElementById('raSablon');
+  const v = secili !== undefined ? secili : sel.value;
+  sel.innerHTML = '<option value="">— Şablon seçin —</option>' + RO.sablonlar.map(s => `<option value="${ykEsc(s.ad)}">${ykEsc(s.ad)}</option>`).join('');
+  if (RO.sablonlar.some(s => s.ad === v)) sel.value = v;
+}
+async function raSablonSecildi(){
+  const S = roSablonBul(document.getElementById('raSablon').value);
+  RA.S = S;
+  document.getElementById('raDuzenle').disabled = !S;
+  document.getElementById('raOlustur').disabled = !S;
+  document.getElementById('raOzet').innerHTML = roSablonOzeti(S);
+  document.getElementById('raUyari').innerHTML = ''; ykDurum('raDurum', '');
+  const kart = document.getElementById('raSecimler');
+  if (!S){ kart.style.display = 'none'; return; }
+  kart.style.display = '';
+  try {
+    ykDurum('raSablonDurum', 'Şablon hazırlanıyor…');
+    let aylar, tek = false;
+    if (roListeSablonu(S)){
+      const { aylikVar } = await roListeKolonlari(S);
+      aylar = await roVardiyaAylari(); tek = !aylikVar;
+    } else {
+      const k = RO.kaynaklar.find(x => x.adi === S.kaynak);
+      if (!k) throw new Error(`Şablonun kaynağı (${S.kaynak}) KAYNAKLAR'da yok ya da pasif.`);
+      aylar = (await roKaynakAylari(k)).aylar;
+    }
+    const opt = aylar.slice().reverse().map(x => `<option value="${x}">${roAyEtiket(x)}</option>`).join('');
+    const son = aylar[aylar.length - 1];
+    document.getElementById('raAyAralik').style.display = tek ? 'none' : '';
+    document.getElementById('raAyTek').style.display = tek ? '' : 'none';
+    if (tek){ const t = document.getElementById('raAyT'), e = Number(t.value); t.innerHTML = opt; t.value = aylar.includes(e) ? e : son; }
+    else {
+      const a = document.getElementById('raAyA'), b = document.getElementById('raAyB'), eA = Number(a.value), eB = Number(b.value);
+      a.innerHTML = opt; b.innerHTML = opt;
+      b.value = aylar.includes(eB) ? eB : son;
+      a.value = aylar.includes(eA) ? eA : (aylar.filter(x => x >= son - 7)[0] ?? son);
+    }
+    const o = S.secenek || {};
+    document.getElementById('raSiciller').value = (o.siciller || []).join(', ');
+    await raTlListesi(new Set(o.tl_liste || []));
+    ykDurum('raSablonDurum', '');
+  } catch(err){ ykDurum('raSablonDurum', '✗ ' + err.message, 'err'); }
+}
+function raAralik(){
+  if (document.getElementById('raAyTek').style.display !== 'none'){ const t = Number(document.getElementById('raAyT').value); return [t, t]; }
+  let A = Number(document.getElementById('raAyA').value), B = Number(document.getElementById('raAyB').value);
+  return A > B ? [B, A] : [A, B];
+}
+async function raTlListesi(secili){
+  const kutu = document.getElementById('raTlListe');
+  const onceki = secili || new Set([...kutu.querySelectorAll('input:checked')].map(c => c.value));
+  const [A, B] = raAralik();
+  if (!A || !B){ kutu.innerHTML = ''; return; }
+  try {
+    const aylar = []; for (let x = A; x <= B; x++) aylar.push(x);
+    const { harita } = await roTakimHaritasi(aylar);
+    const tl = new Set(); harita.forEach(m => m.forEach(v => { if (v.tl) tl.add(v.tl); }));
+    kutu.innerHTML = [...tl].sort((a, b) => a.localeCompare(b, 'tr')).map(t => `<label class="ro-sec"><input type="checkbox" value="${ykEsc(t)}" ${onceki.has(t) ? 'checked' : ''}> ${ykEsc(t)}</label>`).join('') || '<span class="hint">Seçilen aylarda takım bilgisi yok.</span>';
+  } catch(err){ kutu.innerHTML = `<span class="status err">✗ Takım listesi okunamadı: ${ykEsc(err.message)}</span>`; }
+}
+async function raOlustur(){
+  const btn = document.getElementById('raOlustur'), uyari = document.getElementById('raUyari');
+  uyari.innerHTML = '';
+  const S = RA.S; if (!S) return;
+  try {
+    btn.disabled = true;
+    const [A, B] = raAralik();
+    const p = { A, B, tl: new Set([...document.querySelectorAll('#raTlListe input:checked')].map(c => c.value)),
+      siciller: new Set(document.getElementById('raSiciller').value.split(/[\s,;]+/).map(roSicil).filter(Boolean)) };
+    const r = await roCalistir(S, p, m => ykDurum('raDurum', m));
+    await roIndir(r.wb, r.dosya);
+    uyari.innerHTML = r.notlar.map(n => `<div class="status warn" style="margin-top:6px;">⚠ ${ykEsc(n)}</div>`).join('');
+    ykDurum('raDurum', `✓ ${r.dosya} indirildi — ${r.ozet}.`, 'ok');
+  } catch(err){ ykDurum('raDurum', '✗ ' + err.message, 'err'); console.error(err); }
+  finally { btn.disabled = false; }
+}
+
+// ============================ ŞABLONLAR ============================
+const RS = { duzen: 'aylar-sutunda', kurallar: {}, secili: [] };
+async function roSablonSayfasi(){
+  if (!userPerms.raporOlusturucu) return;
+  try {
+    ykDurum('rsDurum', 'Ayarlar okunuyor…');
+    await roHazirla();
+    if (!document.querySelector('input[name="rsDuzen"]')){
+      document.getElementById('rsDuzenler').innerHTML = RO_DUZENLER.map(d =>
+        `<label style="display:block; margin:4px 0;" title="${ykEsc(d.ipucu)}"><input type="radio" name="rsDuzen" value="${d.id}" ${d.id === RS.duzen ? 'checked' : ''}> ${ykEsc(d.ad)}</label>`).join('');
+      document.querySelectorAll('input[name="rsDuzen"]').forEach(r => r.addEventListener('change', () => { RS.duzen = r.value; rsDuzenGoster(); }));
+    }
+    const ks = document.getElementById('rsKaynak'), kv = ks.value;
+    ks.innerHTML = RO.kaynaklar.filter(k => roTip(k) !== 'sabit').map(k => `<option value="${ykEsc(k.adi)}">${ykEsc(k.adi)}</option>`).join('');
+    if (kv && [...ks.options].some(o => o.value === kv)) ks.value = kv;
+    rsSablonListesi();
+    ykDurum('rsDurum', '');
+    await rsDuzenGoster();
+  } catch(err){ ykDurum('rsDurum', '✗ ' + err.message, 'err'); }
+}
+function rsSablonListesi(secili){
+  const sel = document.getElementById('rsSablon');
+  const v = secili !== undefined ? secili : sel.value;
+  sel.innerHTML = '<option value="">— Yeni şablon —</option>' + RO.sablonlar.map(s => `<option value="${ykEsc(s.ad)}">${ykEsc(s.ad)}</option>`).join('');
+  if (RO.sablonlar.some(s => s.ad === v)) sel.value = v;
+  const var_ = !!sel.value;
+  document.getElementById('rsSil').disabled = !var_;
+  document.getElementById('rsKullan').disabled = !var_;
+}
+async function rsDuzenGoster(){
+  const liste = RS.duzen === 'liste';
+  const ip = RO_DUZENLER.find(x => x.id === RS.duzen);
+  document.getElementById('rsDuzenIpucu').textContent = ip ? ip.ipucu : '';
+  document.getElementById('rsToplu').style.display = liste ? 'none' : '';
+  document.getElementById('rsListe').style.display = liste ? '' : 'none';
+  if (liste) await rsListeHazirla(); else await rsSutunlariCiz();
+}
+// --- Toplu düzenler: sütun seçimi + şablona özel kurallar ---
+async function rsSutunlariCiz(){
+  const k = RO.kaynaklar.find(x => x.adi === document.getElementById('rsKaynak').value);
+  const t = document.getElementById('rsSutunTablo');
+  if (!k){ t.innerHTML = ''; return; }
+  t.innerHTML = '<tbody><tr><td class="hint">Okunuyor…</td></tr></tbody>';
+  try {
+    const basliklar = await roKaynakBasliklari(k);
+    // kaydedilmiş ama artık kaynakta olmayan sütunlar da listede kalsın (uyarıyla)
+    const hepsi = basliklar.slice(); RS.secili.forEach(s => { if (!hepsi.some(h => roUp(h) === roUp(s))) hepsi.push(s); });
+    t.innerHTML = '<thead><tr><th></th><th>Sütun</th><th>Hesap</th><th>Biçim</th><th>0 = değerlendirme yok</th></tr></thead><tbody>' + hepsi.map((h, i) => {
+      const sec = RS.secili.some(s => roUp(s) === roUp(h));
+      const kr = RS.kurallar[roUp(h)] || (() => { const d = roTanim(RO.tanimlar, k.adi, h); return { ort: d.ort, bicim: d.bicim || '', sifirYok: d.sifirYok }; })();
+      const yok = !basliklar.some(b => roUp(b) === roUp(h));
+      return `<tr data-s="${ykEsc(h)}"><td><input type="checkbox" class="rs-sec" ${sec ? 'checked' : ''}></td><td>${ykEsc(roUp(h))}${yok ? ' <span style="color:var(--accent)">(kaynakta yok)</span>' : ''}</td>
+        <td><select class="rs-ort"><option value="1" ${kr.ort ? 'selected' : ''}>Ortalama</option><option value="0" ${kr.ort ? '' : 'selected'}>Toplam</option></select></td>
+        <td>${roBicimSecim(kr.bicim, 'class="rs-bicim"')}</td><td style="text-align:center;"><input type="checkbox" class="rs-sifir" ${kr.sifirYok ? 'checked' : ''}></td></tr>`;
+    }).join('') + '</tbody>';
+    t.querySelectorAll('tbody tr').forEach(tr => {
+      const s = tr.dataset.s;
+      const yaz = () => { RS.kurallar[roUp(s)] = { ort: tr.querySelector('.rs-ort').value === '1', bicim: tr.querySelector('.rs-bicim').value, sifirYok: tr.querySelector('.rs-sifir').checked }; };
+      tr.querySelectorAll('select, .rs-sifir').forEach(x => x.addEventListener('change', yaz));
+      tr.querySelector('.rs-sec').addEventListener('change', e => { RS.secili = RS.secili.filter(x => roUp(x) !== roUp(s)); if (e.target.checked){ RS.secili.push(s); yaz(); } });
+    });
+  } catch(err){ t.innerHTML = `<tbody><tr><td class="status err">✗ ${ykEsc(err.message)}</td></tr></tbody>`; }
+}
+// --- Liste düzeni editörü ---
+async function rsListeHazirla(){
+  try {
+    ykDurum('roListeDurum', 'Alanlar okunuyor…');
+    const [gorunumler, basliklar] = await Promise.all([roGorunumler(), roTumKaynakBasliklari(), roEslesmeYukle()]);
+    RO_L.kaynakBasliklari = basliklar;
+    const sel = document.getElementById('roGorunum'), onceki = RO_L.gorunumSecili !== undefined ? RO_L.gorunumSecili : sel.value;
+    sel.innerHTML = '<option value="">Standart görünüm (sütunları aşağıdan seç)</option>' + gorunumler.map(g => `<option value="${ykEsc(g.ad)}">${ykEsc(g.ad)}</option>`).join('');
+    sel.value = gorunumler.some(g => g.ad === onceki) ? onceki : '';
+    RO_L.gorunumSecili = undefined;
+    roListeCiz();
+    ykDurum('roListeDurum', '');
+  } catch(err){ ykDurum('roListeDurum', '✗ ' + err.message, 'err'); }
+}
+function roListeCiz(){
+  const g = roListeAktifGorunum();
+  const kutu = document.getElementById('roListeKolonlar'), hk = document.getElementById('roListeHesaplar');
+  document.getElementById('roListeElle').style.display = g ? 'none' : '';
+  const esles = document.getElementById('roListeEsles');
+  if (g){
+    const sab = roSabitler().map(s => s.ad);
+    esles.innerHTML = `<div class="hint" style="margin:0 0 6px;">Sütunlar görünüm şablonunun başlıklarından gelir${roGStilVar(g.veri) ? ', görünüm şablondan uygulanır' : ' (şablonda biçim yok: standart görünüm)'}. Eşleşmeyen başlık için Rapor Kaynakları › Alan Eşleştirme'ye satır ekle.</div>` +
+      '<table class="prev" style="width:auto;margin-top:0;"><thead><tr><th>Şablon başlığı</th><th>Doldurulacak alan</th></tr></thead><tbody>' +
+      (g.veri.header || []).filter(Boolean).map(h => { const c = roAlanCoz(h, RO_L.esles, sab, RO_L.kaynakBasliklari || []); const t = !c ? '<span style="color:var(--accent)">eşleşmedi — boş kalır</span>' : c.tur === 'kaynak' ? `${ykEsc(c.kaynak)} › ${ykEsc(roUp(c.sutun))}` : ykEsc(c.alan) + (c.tur === 'sabit' ? ' (sabit)' : ''); return `<tr><td>${ykEsc(h)}</td><td>${t}</td></tr>`; }).join('') + '</tbody></table>';
+    esles.style.display = '';
+    return;
+  }
+  esles.style.display = 'none';
+  kutu.innerHTML = RO_L.kolonlar.map((k, i) => {
+    const kaynakli = /›/.test(k.alan || '');
+    return `<div class="row" style="margin-bottom:6px;"><select data-lk="${i}" style="min-width:320px;">${roListeAlanSecenekleri(k.alan)}</select>
+    <input type="text" data-lb="${i}" value="${ykEsc(k.baslik)}" placeholder="Excel'deki başlık" style="min-width:200px;">
+    ${kaynakli || k.alan === 'KIDEM YILI' || RO_IZIN_ALANLARI.includes(k.alan) ? `<label class="hint" style="margin:0;">Biçim: ${roBicimSecim(k.bicim, `data-lf="${i}"`)}</label>` : ''}
+    <button class="btn y-btn" data-lyuk="${i}" title="Yukarı">▲</button><button class="btn y-btn" data-lsil="${i}">✕</button></div>`;
+  }).join('');
+  kutu.querySelectorAll('[data-lk]').forEach(s => s.onchange = () => {
+    const k = RO_L.kolonlar[s.dataset.lk]; k.alan = s.value; k.baslik = roUp(s.value.split('›').pop().trim());
+    const ok = k.alan.split(/\s*›\s*/);
+    if (ok.length === 2){ const d = roTanim(RO.tanimlar, roUp(ok[0]), ok[1]); k.bicim = d.tanimli ? (d.bicim || '') : ''; } else k.bicim = '';
+    roListeCiz();
+  });
+  kutu.querySelectorAll('[data-lb]').forEach(s => s.oninput = () => { RO_L.kolonlar[s.dataset.lb].baslik = s.value; });
+  kutu.querySelectorAll('[data-lf]').forEach(s => s.onchange = () => { RO_L.kolonlar[s.dataset.lf].bicim = s.value; });
+  kutu.querySelectorAll('[data-lsil]').forEach(b => b.onclick = () => { const i = Number(b.dataset.lsil); RO_L.kolonlar.splice(i, 1); RO_L.hesaplar = RO_L.hesaplar.filter(h => h.a !== i && h.b !== i).map(h => ({ ...h, a: h.a > i ? h.a - 1 : h.a, b: h.b > i ? h.b - 1 : h.b })); roListeCiz(); });
+  kutu.querySelectorAll('[data-lyuk]').forEach(b => b.onclick = () => { const i = Number(b.dataset.lyuk); if (!i) return; const L = RO_L.kolonlar; [L[i - 1], L[i]] = [L[i], L[i - 1]]; RO_L.hesaplar.forEach(h => { ['a', 'b'].forEach(z => { if (h[z] === i) h[z] = i - 1; else if (h[z] === i - 1) h[z] = i; }); }); roListeCiz(); });
+  const kolOpt = sec => '<option value="">— Sütun —</option>' + RO_L.kolonlar.map((k, i) => `<option value="${i}" ${sec === i ? 'selected' : ''}>${ykEsc(k.baslik || k.alan)}</option>`).join('');
+  hk.innerHTML = RO_L.hesaplar.map((h, i) => `<div class="row" style="margin-bottom:6px;"><input type="text" data-hb="${i}" value="${ykEsc(h.baslik)}" placeholder="Yeni sütun adı" style="min-width:180px;">
+    <select data-ha="${i}">${kolOpt(h.a)}</select>
+    <select data-hop="${i}">${[['+', 'Toplama (+)'], ['-', 'Çıkarma (−)'], ['*', 'Çarpma (×)'], ['/', 'Bölme (÷)']].map(([v, t]) => `<option value="${v}" ${h.op === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <select data-hbb="${i}">${kolOpt(h.b)}</select><button class="btn y-btn" data-hsil="${i}">✕</button></div>`).join('');
+  hk.querySelectorAll('[data-hb]').forEach(s => s.oninput = () => { RO_L.hesaplar[s.dataset.hb].baslik = s.value; });
+  hk.querySelectorAll('[data-ha]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.ha].a = s.value === '' ? null : Number(s.value); });
+  hk.querySelectorAll('[data-hbb]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.hbb].b = s.value === '' ? null : Number(s.value); });
+  hk.querySelectorAll('[data-hop]').forEach(s => s.onchange = () => { RO_L.hesaplar[s.dataset.hop].op = s.value; });
+  hk.querySelectorAll('[data-hsil]').forEach(b => b.onclick = () => { RO_L.hesaplar.splice(Number(b.dataset.hsil), 1); roListeCiz(); });
+}
+// --- Şablon aç / kaydet / sil ---
+async function rsSablonAc(){
+  const S = roSablonBul(document.getElementById('rsSablon').value);
+  rsSablonListesi();
+  ykDurum('rsDurum', '');
+  if (!S){   // yeni şablon
+    document.getElementById('rsAd').value = '';
+    RS.secili = []; RS.kurallar = {};
+    RO_L.kolonlar = [{ baslik: 'SİCİL', alan: 'SİCİL' }, { baslik: 'AD SOYAD', alan: 'AD SOYAD' }, { baslik: 'TAKIM LİDERİ', alan: 'TAKIM LİDERİ' }]; RO_L.hesaplar = []; RO_L.gorunumSecili = '';
+    ['rsOptTl', 'rsOptKisi'].forEach(id => document.getElementById(id).checked = true); document.getElementById('rsOptOrt').checked = false;
+    await rsDuzenGoster(); return;
+  }
+  document.getElementById('rsAd').value = S.ad;
+  RS.duzen = S.duzen;
+  const r = document.querySelector(`input[name="rsDuzen"][value="${S.duzen}"]`); if (r) r.checked = true;
+  const o = S.secenek || {};
+  if (roListeSablonu(S)){
+    RO_L.kolonlar = (o.kolonlar || []).map(k => ({ baslik: k.baslik || '', alan: k.alan || '', bicim: k.bicim || '' }));
+    RO_L.hesaplar = (o.hesaplar || []).map(h => ({ ...h }));
+    RO_L.gorunumSecili = o.gorunum || '';
+  } else {
+    if (RO.kaynaklar.some(k => k.adi === S.kaynak)) document.getElementById('rsKaynak').value = S.kaynak;
+    RS.secili = S.sutunlar.slice();
+    // eski şablonlarda kural yok: varsayılanlar kopyalanır (çıktı değişmez)
+    RS.kurallar = {}; const kr = o.kurallar || {};
+    S.sutunlar.forEach(s => { const v = kr[roUp(s)] || kr[s]; if (v) RS.kurallar[roUp(s)] = v; else { const d = roTanim(RO.tanimlar, S.kaynak, s); RS.kurallar[roUp(s)] = { ort: d.ort, bicim: d.bicim || '', sifirYok: d.sifirYok }; } });
+    document.getElementById('rsOptTl').checked = o.tl !== false;
+    document.getElementById('rsOptKisi').checked = o.personel !== false;
+    document.getElementById('rsOptOrt').checked = o.ortalama !== undefined ? !!o.ortalama : S.duzen === 'yil-sayfa';
+  }
+  await rsDuzenGoster();
+}
+async function rsKaydet(){
+  const ad = document.getElementById('rsAd').value.trim();
+  try {
+    if (!ad) throw new Error('Şablon adı yazın.');
+    const liste = RS.duzen === 'liste';
+    let kaynak, sutunlar, secenek;
+    if (liste){
+      const g = roListeAktifGorunum();
+      const kol = RO_L.kolonlar.filter(k => k.alan);
+      if (!g && !kol.length) throw new Error('En az bir sütun seçin.');
+      kaynak = 'LİSTE';
+      sutunlar = g ? ['(görünüm şablonunun başlıkları)'] : kol.map(k => k.baslik || k.alan).concat(RO_L.hesaplar.filter(h => h.baslik).map(h => h.baslik));
+      // hesaplanan sütun referansları boş alanlı satırlar atıldıktan sonraki sıraya çevrilir
+      const yeniSira = []; let n = 0; RO_L.kolonlar.forEach((k, i) => { yeniSira[i] = k.alan ? n++ : null; });
+      secenek = g ? { gorunum: g.ad, kolonlar: [], hesaplar: [] } : { gorunum: '', kolonlar: kol.map(k => ({ baslik: k.baslik || k.alan, alan: k.alan, bicim: k.bicim || '' })),
+        hesaplar: RO_L.hesaplar.filter(h => h.baslik && h.a != null && h.b != null && yeniSira[h.a] != null && yeniSira[h.b] != null).map(h => ({ baslik: h.baslik, a: yeniSira[h.a], op: h.op, b: yeniSira[h.b] })) };
+    } else {
+      kaynak = document.getElementById('rsKaynak').value;
+      if (!kaynak) throw new Error('Kaynak seçin.');
+      sutunlar = RS.secili.slice();
+      if (!sutunlar.length) throw new Error('En az bir sütun seçin.');
+      const kurallar = {}; sutunlar.forEach(s => { kurallar[roUp(s)] = RS.kurallar[roUp(s)] || (() => { const d = roTanim(RO.tanimlar, kaynak, s); return { ort: d.ort, bicim: d.bicim || '', sifirYok: d.sifirYok }; })(); });
+      secenek = { tl: document.getElementById('rsOptTl').checked, personel: document.getElementById('rsOptKisi').checked, ortalama: document.getElementById('rsOptOrt').checked, kurallar };
+      if (!secenek.tl && !secenek.personel) throw new Error('Takım lideri ya da personel bölümlerinden en az biri seçili olmalı.');
+    }
+    ykDurum('rsDurum', 'Kaydediliyor…');
+    const satir = [ad, kaynak, sutunlar.join(' | '), RS.duzen, JSON.stringify(secenek), ykKaydeden(), new Date().toLocaleString('tr-TR')];
+    RO.cache.delete(RO_AYAR_ID + '|' + `'ŞABLONLAR'!A1:Z1000`);
+    const [rows] = await roBatchGet(RO_AYAR_ID, [`'ŞABLONLAR'!A1:Z1000`]);
+    const i = rows.findIndex((r, j) => j > 0 && roUp(r[0]) === roUp(ad));
+    const no = i > 0 ? i + 1 : (() => { let n = rows.length; while (n > 1 && !(rows[n - 1] || []).some(v => String(v == null ? '' : v).trim())) n--; return n + 1; })();
+    const aralik = `'ŞABLONLAR'!A${no}:G${no}`;
+    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}/values/${encodeURIComponent(aralik)}?valueInputOption=RAW`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ range: aralik, values: [satir] }) });
+    await roAyarYukle(true);
+    rsSablonListesi(ad);
+    raSablonListesi();
+    ykDurum('rsDurum', `✓ "${ad}" ${i > 0 ? 'güncellendi' : 'kaydedildi'}.`, 'ok');
+  } catch(err){ ykDurum('rsDurum', '✗ ' + err.message, 'err'); }
+}
+async function rsSil(){
+  const ad = document.getElementById('rsSablon').value; if (!ad) return;
+  const btn = document.getElementById('rsSil');
+  if (btn.dataset.onay !== ad){ btn.dataset.onay = ad; btn.textContent = 'Emin misin? Sil'; setTimeout(() => { btn.dataset.onay = ''; btn.textContent = '🗑 Sil'; }, 4000); return; }
+  btn.dataset.onay = ''; btn.textContent = '🗑 Sil';
+  try {
+    ykDurum('rsDurum', 'Siliniyor…');
+    RO.cache.delete(RO_AYAR_ID + '|' + `'ŞABLONLAR'!A1:Z1000`);
+    const [rows] = await roBatchGet(RO_AYAR_ID, [`'ŞABLONLAR'!A1:Z1000`]);
+    const i = rows.findIndex((r, j) => j > 0 && roUp(r[0]) === roUp(ad));
+    if (i < 1) throw new Error('Şablon tabloda bulunamadı.');
+    const meta = await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}?fields=sheets.properties(sheetId,title)`);
+    const sh = (meta.sheets || []).find(s => roUp(s.properties.title) === roUp('ŞABLONLAR'));
+    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: [{ deleteDimension: { range: { sheetId: sh.properties.sheetId, dimension: 'ROWS', startIndex: i, endIndex: i + 1 } } }] }) });
+    await roAyarYukle(true);
+    document.getElementById('rsSablon').value = '';
+    await rsSablonAc();
+    raSablonListesi(); if (RA.S && RA.S.ad === ad){ document.getElementById('raSablon').value = ''; raSablonSecildi(); }
+    ykDurum('rsDurum', `✓ "${ad}" silindi.`, 'ok');
+  } catch(err){ ykDurum('rsDurum', '✗ ' + err.message, 'err'); }
+}
+
+// ---------- Olaylar ----------
+document.getElementById('raSablon').addEventListener('change', raSablonSecildi);
+document.getElementById('raAyA').addEventListener('change', () => raTlListesi());
+document.getElementById('raAyB').addEventListener('change', () => raTlListesi());
+document.getElementById('raAyT').addEventListener('change', () => raTlListesi());
+document.getElementById('raTlTemizle').addEventListener('click', () => document.querySelectorAll('#raTlListe input').forEach(c => c.checked = false));
+document.getElementById('raOlustur').addEventListener('click', raOlustur);
+document.getElementById('raYenile').addEventListener('click', async () => { await roHazirla(true); await roSayfasi(); ykDurum('raSablonDurum', '✓ Ayarlar ve kaynaklar yeniden okundu.', 'ok'); });
+document.getElementById('raDuzenle').addEventListener('click', async () => { if (!RA.S) return; ykSayfaAc('rosab'); await roSablonSayfasi(); document.getElementById('rsSablon').value = RA.S.ad; await rsSablonAc(); });
+document.getElementById('raSablonlaraGit').addEventListener('click', e => { e.preventDefault(); ykSayfaAc('rosab'); });
+document.getElementById('rsSablon').addEventListener('change', rsSablonAc);
+document.getElementById('rsKaydet').addEventListener('click', rsKaydet);
+document.getElementById('rsSil').addEventListener('click', rsSil);
+document.getElementById('rsKullan').addEventListener('click', async () => { const ad = document.getElementById('rsSablon').value; if (!ad) return; ykSayfaAc('ro'); raSablonListesi(ad); document.getElementById('raSablon').value = ad; await raSablonSecildi(); });
+document.getElementById('rsKaynak').addEventListener('change', () => { RS.secili = []; RS.kurallar = {}; rsSutunlariCiz(); });
+document.getElementById('rsTumu').addEventListener('click', () => document.querySelectorAll('#rsSutunTablo .rs-sec').forEach(c => { if (!c.checked){ c.checked = true; c.dispatchEvent(new Event('change')); } }));
+document.getElementById('rsHicbiri').addEventListener('click', () => document.querySelectorAll('#rsSutunTablo .rs-sec').forEach(c => { if (c.checked){ c.checked = false; c.dispatchEvent(new Event('change')); } }));
 document.getElementById('roGorunum').addEventListener('change', roListeCiz);
-document.getElementById('roListeEkle').addEventListener('click', () => { RO_L.kolonlar.push({ baslik: '', alan: '' }); roListeCiz(); });
+document.getElementById('roListeEkle').addEventListener('click', () => { RO_L.kolonlar.push({ baslik: '', alan: '', bicim: '' }); roListeCiz(); });
 document.getElementById('roHesapEkle').addEventListener('click', () => { if (RO_L.kolonlar.length < 2) return; RO_L.hesaplar.push({ baslik: '', a: null, op: '/', b: null }); roListeCiz(); });
 document.getElementById('roGorunumYukleBtn').addEventListener('click', roGorunumYukle);
 </script>

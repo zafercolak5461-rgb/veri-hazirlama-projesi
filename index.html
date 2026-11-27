@@ -11080,8 +11080,10 @@ function exExcelYaz(ExcelJS, sonuc, ayar){
 }
 // ----- 3. kademe: hesaplanan sütunlar, filtre/sıralama, aylar sütunda düzeni, çok sayfalı Excel -----
 const EX_ISLEMLER = [['/', '÷'], ['%', '% (A ÷ B)'], ['*', '×'], ['-', '−'], ['+', '+']];
-function exIslem(a, op, b){
+// a0 / b0: işlenen "Ortalama (0 hariç)" alanı → 0 = değerlendirme yok, boş sayılır
+function exIslem(a, op, b, a0, b0){
   if (typeof a !== 'number' || typeof b !== 'number') return null;
+  if ((a0 && a === 0) || (b0 && b === 0)) return null;
   if (op === '/' || op === '%') return b === 0 ? null : a / b;
   if (op === '*') return a * b;
   if (op === '-') return a - b;
@@ -11096,8 +11098,10 @@ function exHesapEkle(sonuc, hesaplar){
   hesaplar.forEach((h, j) => {
     const ia = h.a && h.a.id !== undefined ? idx(h.a.id) : -1, ib = h.b && h.b.id !== undefined ? idx(h.b.id) : -1;
     if ((h.a.id !== undefined && ia < 0) || (h.b.id !== undefined && ib < 0)) return;
-    kolonlar.push({ id: 'h' + j, baslik: roUp(h.baslik || 'HESAP ' + (j + 1)), hesap: { a: ia, b: ib, sa: h.a.sabit, sb: h.b.sabit, op: h.op }, toplama: 'Hesap', tip: h.op === '%' ? 'Yüzde' : 'Sayı', tam: true, alan: '' });
-    satirlar.forEach(s => s.deg.push(exIslem(ia >= 0 ? s.deg[ia] : Number(h.a.sabit), h.op, ib >= 0 ? s.deg[ib] : Number(h.b.sabit))));
+    const sifirYok = i => i >= 0 && kolonlar[i].toplama === 'Ortalama (0 hariç)';
+    const a0 = sifirYok(ia), b0 = sifirYok(ib);
+    kolonlar.push({ id: 'h' + j, baslik: roUp(h.baslik || 'HESAP ' + (j + 1)), hesap: { a: ia, b: ib, sa: h.a.sabit, sb: h.b.sabit, op: h.op, a0, b0 }, toplama: 'Hesap', tip: h.op === '%' ? 'Yüzde' : 'Sayı', tam: true, alan: '' });
+    satirlar.forEach(s => s.deg.push(exIslem(ia >= 0 ? s.deg[ia] : Number(h.a.sabit), h.op, ib >= 0 ? s.deg[ib] : Number(h.b.sabit), a0, b0)));
   });
   return Object.assign({}, sonuc, { kolonlar, satirlar });
 }
@@ -11144,7 +11148,7 @@ function exModel(sonuc, duzen, sira){
   const pivot = duzen === 'aylar' && sonuc.boyutKol.some(b => zamanK.includes(b.k));
   const tumu = (k, degerler) => { const t = exToplamTuru(k); if (k.hesap) return 'HESAP'; if (!k.tam){ const v = degerler.filter(x => typeof x === 'number'); return v.length && v.every(x => x === v[0]) ? 'MAX' : ''; } return t; };
   if (!pivot){
-    const kol = sonuc.kolonlar.map((k, i) => ({ baslik: k.baslik, alanAd: k.baslik, bicim: exBicim(k), tur: k.hesap ? 'hesap' : 'v', a: k.hesap ? k.hesap.a : null, b: k.hesap ? k.hesap.b : null, sa: k.hesap ? k.hesap.sa : null, sb: k.hesap ? k.hesap.sb : null, op: k.hesap ? k.hesap.op : null, toplam: tumu(k, sonuc.satirlar.map(s => s.deg[i])) }));
+    const kol = sonuc.kolonlar.map((k, i) => ({ baslik: k.baslik, alanAd: k.baslik, bicim: exBicim(k), tur: k.hesap ? 'hesap' : 'v', a: k.hesap ? k.hesap.a : null, b: k.hesap ? k.hesap.b : null, sa: k.hesap ? k.hesap.sa : null, sb: k.hesap ? k.hesap.sb : null, op: k.hesap ? k.hesap.op : null, a0: k.hesap ? k.hesap.a0 : false, b0: k.hesap ? k.hesap.b0 : false, toplam: tumu(k, sonuc.satirlar.map(s => s.deg[i])) }));
     const m = { sol: sonuc.boyutKol.map(b => b.baslik), grup: null, kol, satir: sonuc.satirlar.map(s => ({ sol: s.sol, v: s.deg.slice(), sicilsiz: s.sicilsiz })) };
     m.etiket = kol.every(k => k.toplam === 'AVG' || k.toplam === 'AVG0' || !k.toplam) && kol.some(k => k.toplam) ? 'ORTALAMA' : 'TOPLAM';
     return m;
@@ -11187,6 +11191,7 @@ function exModel(sonuc, duzen, sira){
     const k = sonuc.kolonlar[c.fi];
     if (!k.hesap) return;
     c.tur = 'hesap'; c.op = k.hesap.op; c.sa = k.hesap.sa; c.sb = k.hesap.sb;
+    c.a0 = !c.genelKol && k.hesap.a0; c.b0 = !c.genelKol && k.hesap.b0;   // genel sütun zaten 0'ları dışarıda bırakır
     const al = fi => fi < 0 ? null : (c.genelKol ? yer[fi].genel : yer[fi].d[c.d]);
     c.a = al(k.hesap.a); c.b = al(k.hesap.b);
     if ((k.hesap.a >= 0 && (c.a === null || c.a < 0)) || (k.hesap.b >= 0 && (c.b === null || c.b < 0))) c.tur = 'bos';
@@ -11196,7 +11201,7 @@ function exModel(sonuc, duzen, sira){
     const v = new Array(kol.length).fill(null);
     kol.forEach((c, i) => { if (c.tur === 'v'){ const d = s.hucre.get(c.d); v[i] = d ? d[c.fi] : null; } });
     kol.forEach((c, i) => { if (c.tur === 'genel'){ const x = c.kaynak.map(j => v[j]).filter(y => typeof y === 'number' && (c.fn !== 'AVG0' || y !== 0)); v[i] = !x.length ? null : (c.fn === 'SUM' ? x.reduce((a, b) => a + b, 0) : x.reduce((a, b) => a + b, 0) / x.length); } });
-    kol.forEach((c, i) => { if (c.tur === 'hesap') v[i] = exIslem(c.a === null ? Number(c.sa) : v[c.a], c.op, c.b === null ? Number(c.sb) : v[c.b]); });
+    kol.forEach((c, i) => { if (c.tur === 'hesap') v[i] = exIslem(c.a === null ? Number(c.sa) : v[c.a], c.op, c.b === null ? Number(c.sb) : v[c.b], c.a0, c.b0); });
     return { sol: s.sol, v, sicilsiz: s.sicilsiz };
   }).filter(s => s.v.some((x, i) => x !== null && kol[i].tur === 'v' && sonuc.kolonlar[kol[i].fi].tam !== false));   // kendi verisi olmayan satır çıkmaz
   // sıralama (aylar sütunda): boyut sütununa ya da alanın genel (yoksa son dönem) sütununa göre
@@ -11209,7 +11214,7 @@ function exModel(sonuc, duzen, sira){
   }
   kol.forEach((c, i) => { c.toplam = c.tur === 'hesap' ? 'HESAP' : c.tur === 'bos' ? '' : (c.tur === 'genel' ? (c.fn === 'SUM' ? 'SUM' : c.fn) : tumu(c.k, satir.map(s => s.v[i]))); if (c.tur === 'genel' && !c.k.tam) c.toplam = tumu(c.k, satir.map(s => s.v[i])); });
   const tekAlan = sonuc.kolonlar.length === 1;
-  const m = { sol: di.map(i => sonuc.boyutKol[i].baslik), grup: tekAlan ? null : grup, kol: kol.map(c => ({ baslik: c.baslik, alanAd: c.k ? c.k.baslik : '', bicim: c.bicim, tur: c.tur === 'bos' ? 'v' : c.tur, a: c.a, b: c.b, sa: c.sa, sb: c.sb, op: c.op, kaynak: c.kaynak, fn: c.fn, toplam: c.toplam })), satir };
+  const m = { sol: di.map(i => sonuc.boyutKol[i].baslik), grup: tekAlan ? null : grup, kol: kol.map(c => ({ baslik: c.baslik, alanAd: c.k ? c.k.baslik : '', bicim: c.bicim, tur: c.tur === 'bos' ? 'v' : c.tur, a: c.a, b: c.b, sa: c.sa, sb: c.sb, op: c.op, a0: !!c.a0, b0: !!c.b0, kaynak: c.kaynak, fn: c.fn, toplam: c.toplam })), satir };
   m.etiket = m.kol.every(k => ['AVG', 'AVG0', 'HESAP', ''].includes(k.toplam)) ? 'ORTALAMA' : 'TOPLAM';
   return m;
 }
@@ -11317,7 +11322,13 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
   wb.creator = ayar.yazar || 'Zafer Çolak'; wb.lastModifiedBy = ayar.yazar || 'Zafer Çolak'; wb.created = new Date(); wb.modified = new Date();
   const kullanilan = new Set();
   const sayfaAdi = t => { const temiz = String(t || 'Rapor').replace(/[\[\]:*?\/\\]/g, ' ').trim(); let n = temiz.slice(0, 31).trim(); let i = 2; while (kullanilan.has(roUp(n))) n = `${temiz.slice(0, 27)} ${i++}`; kullanilan.add(roUp(n)); return n; };
-  const islemF = (a, op, b) => op === '/' || op === '%' ? `IFERROR(${a}/${b},"")` : op === '*' ? `IFERROR(${a}*${b},"")` : op === '-' ? `IFERROR(${a}-${b},"")` : `IFERROR(${a}+${b},"")`;
+  const islemF = (a, op, b, kosul) => { const f = `IFERROR(${a}${op === '%' ? '/' : op}${b},"")`; return kosul && kosul.length ? `IF(OR(${kosul.join(',')}),"",${f})` : f; };
+  // işlenen hücre boşsa (ya da "0 hariç" alanda 0 ise) sonuç boş: Excel boş hücreyi 0 sayar, 0 − 4,70 = −4,70 yazmasın
+  const hesapF = (k, ref, r, toplamSatiri) => {
+    const kosul = [], isl = (j, sabit, sifir) => { if (j === null) return String(Number(sabit)); const x = ref(j, r); kosul.push(`${x}=""`); if (sifir && !toplamSatiri) kosul.push(`${x}=0`); return x; };
+    const a = isl(k.a, k.sa, k.a0), b = isl(k.b, k.sb, k.b0);
+    return islemF(a, k.op, b, kosul);
+  };
   sekmeler.forEach(sk => {
     const bloklar = sk.bloklar || [sk.model];
     const W = Math.max(...bloklar.map(m => m.sol.length + m.kol.length));
@@ -11353,7 +11364,7 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
         m.kol.forEach((k, i) => {
           const c = ws.getCell(r, L + i + 1), v = s.v[i];
           if (k.tur === 'genel'){ const rg = `${ref(k.kaynak[0], r)}:${ref(k.kaynak[k.kaynak.length - 1], r)}`; c.value = { formula: k.fn === 'SUM' ? `IF(COUNT(${rg}),SUM(${rg}),"")` : k.fn === 'AVG0' ? `IFERROR(AVERAGEIF(${rg},"<>0"),"")` : `IFERROR(AVERAGE(${rg}),"")`, result: v === null ? '' : v }; }
-          else if (k.tur === 'hesap') c.value = { formula: islemF(k.a === null ? String(Number(k.sa)) : ref(k.a, r), k.op, k.b === null ? String(Number(k.sb)) : ref(k.b, r)), result: v === null ? '' : v };
+          else if (k.tur === 'hesap') c.value = { formula: hesapF(k, ref, r), result: v === null ? '' : v };
           else c.value = v === null ? null : v;
           const st = Object.assign({}, B.veri); if (k.tur !== 'v') st.kalin = true; if (serit && beyazMi(st.dolgu)) st.dolgu = B.serit.renk;
           boya(c, st, { hiza: 'center' });
@@ -11383,7 +11394,7 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
           else if (k.toplam === 'AVG') f = `IFERROR(AVERAGE(${rng}),"")`;
           else if (k.toplam === 'AVG0') f = `IFERROR(AVERAGEIF(${rng},"<>0"),"")`;
           else if (k.toplam === 'MAX') f = `MAX(${rng})`;
-          else if (k.toplam === 'HESAP') f = islemF(k.a === null ? String(Number(k.sa)) : ref(k.a, r), k.op, k.b === null ? String(Number(k.sb)) : ref(k.b, r));
+          else if (k.toplam === 'HESAP') f = hesapF(k, ref, r, true);
           if (!f) return;
           c.value = { formula: f, result: tv[i] === null ? '' : tv[i] };
           const bf = bicimOf(k, i); if (bf) c.numFmt = bf;

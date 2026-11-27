@@ -5833,6 +5833,9 @@ async function gvArsivdenAc(){
       const kisiler = arsiv.get(t).map(k => {
         const p = pm.get(k.sicil);
         k.takim = p ? p.takim : '';   // takım lideri her zaman güncel listeden
+        // Özel durum (İstifa, Doğum İzni…) arşivde tutulmaz: sebep yeniden bulunurken Personel Listesi'nden (Sicil ile)
+        k.ozel = p ? (p.ozel || '') : ''; k.bitis = p ? (p.bitis || '') : '';
+        if (k.yok && k.sebep) k.arsivSebep = k.sebep;   // hiçbir kaynakta sebep çıkmazsa arşivdeki kayıtlı sebep kalır
         gvSutunlar.forEach(x => {     // tarih ve personel sütunları arşivde ayrıca tutulmaz
           const kay = ykAnahtar(x.kaynak);
           if (kay === 'TARİH') k.degerler[x.baslik] = t;
@@ -6134,7 +6137,9 @@ function gvSebepleriUygula(sonuc, kay){
   const calismiyorKod = new Set((gvSebepSecenek || []).filter(x => ykAnahtar(x.grup) === 'ÇALIŞMIYOR').map(x => ykAnahtar(x.deger)));
   const ckod = v => !!v && calismiyorKod.has(ykAnahtar(String(v).trim()));
   sonuc.kisiler.filter(k => k.yok).forEach(k => {
-    const b = gvSebepBul(k, kay); k.sebep = b.sebep; k.sebepKaynak = b.kaynak;
+    let b = gvSebepBul(k, kay);
+    if (!b.sebep && k.arsivSebep) b = { sebep: k.arsivSebep, kaynak: 'Arşiv' };   // arşivden açılan günde kayıtlı sebep silinmez
+    k.sebep = b.sebep; k.sebepKaynak = b.kaynak;
     k.calismiyor = !!b.calismiyor || ckod(b.sebep) || ckod(kay.plan.get(k.sicil));   // kay.plan = Drive + yedek Haftalık Plan
   });
   // Girişi olup o gün sebebi de olan (ör. Rapor alıp erken çıkan): Açıklama'da sebep yazılır, sistem dışı sorulmaz

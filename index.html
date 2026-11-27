@@ -11002,7 +11002,7 @@ function exExcelYaz(ExcelJS, sonuc, ayar){
   }
   for (let c = 1; c <= W; c++){
     let m = 6; ws.getColumn(c).eachCell({ includeEmpty: false }, (cell, rn) => { if (rn < 2) return; const v = cell.value && cell.value.formula ? '0000000' : cell.value; m = Math.max(m, String(v == null ? '' : v).length); });
-    ws.getColumn(c).width = Math.min(Math.max(m + 3, c > L ? 12 : 8), 40);
+    ws.getColumn(c).width = Math.min(Math.max(Math.ceil(m * 1.2) + 3, c > L ? 12 : 8), 45);   // kalın yazı geniş tutar
   }
   return wb;
 }

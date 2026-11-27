@@ -166,6 +166,8 @@
   .ex-dlg-fn{ text-align:left; border:1px solid var(--line); background:#fff; border-radius:8px; padding:8px 10px; cursor:pointer; display:flex; flex-direction:column; gap:2px; font-size:13px; color:#111; }
   .ex-dlg-fn:hover{ border-color:var(--accent); background:var(--accent-soft); }
   .ex-dlg-fn span{ font-size:11px; color:#64748B; }
+  .ex-renk-panel{ margin:6px 0 0 180px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:#FAFBFC; display:inline-block; }
+  .ex-renk-ornek{ display:inline-block; min-width:110px; padding:3px 10px; border:1px solid #000; font-weight:600; font-size:12px; text-align:center; }
   .ex-islec{ min-width:30px; padding:4px 8px; font-family:Consolas,monospace; }
   .ex-donem.etkin{ border-color:var(--accent) !important; box-shadow:0 0 0 2px var(--accent-soft); }
   .gv-gun-btn{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer; min-width:150px; text-align:left; white-space:nowrap; }
@@ -11560,6 +11562,15 @@ function exBicimTamamla(b, anaRenk){
 function exBaslikMetni(kalip, degerler){ return String(kalip || '{DÖNEM} {ALANLAR}').replace(/\{(DÖNEM|DONEM)\}/gi, degerler.donem || '').replace(/\{ALANLAR\}/gi, degerler.alanlar || '').replace(/\{SAYFA\}/gi, degerler.sayfa || '').replace(/\s+/g, ' ').trim(); }
 const EX_KOS_OP = { '<': 'lessThan', '<=': 'lessThanOrEqual', '>': 'greaterThan', '>=': 'greaterThanOrEqual', '=': 'equal', '!=': 'notEqual' };
 // Sütuna uyan kural: sütun başlığı ya da üstündeki grup başlığı "içerir" metnini içeriyorsa
+// Koşullu renk kuralı bir değere uyuyor mu (sayı ya da metin; içerir)
+function exKosulDegerUyar(r, v){
+  if (v === null || v === undefined || v === '') return false;
+  const n = roNum(r.deger), sayi = typeof v === 'number' && n !== null && r.op !== 'icerir';
+  if (sayi) return { '<': v < n, '<=': v <= n, '>': v > n, '>=': v >= n, '=': v === n, '!=': v !== n }[r.op] || false;
+  const a = roUp(typeof v === 'boolean' ? (v ? 'DOĞRU' : 'YANLIŞ') : v), b = roUp(r.deger);
+  if (!b) return false;
+  return r.op === 'icerir' ? a.includes(b) : r.op === '=' ? a === b : r.op === '!=' ? a !== b : false;
+}
 function exKuralUyar(icerir, baslik, grup){ const n = katNorm(icerir); return !!n && (katNorm(baslik).includes(n) || katNorm(grup || '').includes(n)); }
 // Excel: sekmeler [{ ad, baslik, bloklar: [model] }] (eski biçim { ad, baslik, model } de kabul edilir)
 function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
@@ -11638,13 +11649,20 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
         });
       });
       const son = ilk + m.satir.length - 1;
+      if (!ws._exOncelik) ws._exOncelik = 1;   // her koşullu kural ayrı öncelik (Excel aynı önceliği sevmez)
       // koşullu renk kuralları (veri hücrelerine)
       if (m.satir.length) B.kosullar.forEach(kr => {
-        const op = EX_KOS_OP[kr.op]; if (!op || roNum(kr.deger) === null) return;
+        const sayi = roNum(kr.deger) !== null && kr.op !== 'icerir', metin = String(kr.deger || '').trim();
+        if (!metin) return;
+        if (!sayi && !['=', '!=', 'icerir'].includes(kr.op)) return;   // metinle < > olmaz
+        const op = EX_KOS_OP[kr.op];
+        const stil = { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argb(kr.dolgu || 'FFC7CE') } }, font: { color: { argb: argb(kr.yazi || '9C0006') } } };
         m.kol.forEach((k, i) => {
           if (!exKuralUyar(kr.icerir, k.baslik, k.alanAd || grupAdi[i])) return;
-          ws.addConditionalFormatting({ ref: `${roKol(L + i)}${ilk}:${roKol(L + i)}${son}`, rules: [{ type: 'cellIs', operator: op, formulae: [String(roNum(kr.deger))], priority: 1,
-            style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: argb(kr.dolgu || 'FFC7CE') } }, font: { color: { argb: argb(kr.yazi || '9C0006') } } } }] });
+          const ref = `${roKol(L + i)}${ilk}:${roKol(L + i)}${son}`;
+          const kural = kr.op === 'icerir' ? { type: 'expression', formulae: [`NOT(ISERROR(SEARCH("${metin.replace(/"/g, '""')}",${roKol(L + i)}${ilk})))`], priority: ws._exOncelik++, style: stil }
+            : { type: 'cellIs', operator: op, formulae: [sayi ? String(roNum(kr.deger)) : '"' + metin.replace(/"/g, '""') + '"'], priority: ws._exOncelik++, style: stil };
+          ws.addConditionalFormatting({ ref, rules: [kural] });
         });
       });
       if (m.satir.length > 1 && m.kol.some(k => k.toplam)){
@@ -11692,9 +11710,9 @@ function exBicimDosyadan(g, ad){
   if (g.yaziTipi) b.yaziTipi = g.yaziTipi;
   if (g.boyut) b.boyut = g.boyut;
   b.kurallar = (g.sutunlar || []).filter(s => s.baslik && s.bicim).map(s => ({ icerir: s.baslik, bicim: s.bicim }));
-  const opDon = { '<': '<', '<=': '<=', '>': '>', '>=': '>=', '=': '=', '≠': '!=' };
+  const opDon = { '<': '<', '<=': '<=', '>': '>', '>=': '>=', '=': '=', '≠': '!=', 'İÇERİR': 'icerir' };
   b.kosullar = [];
-  Object.entries(g.kosullar || {}).forEach(([baslik, l]) => l.forEach(k => { if (opDon[k.operator] && k.val1 !== null) b.kosullar.push({ icerir: baslik, op: opDon[k.operator], deger: String(k.val1), dolgu: String(k.colorHex || 'FFFFC7CE').slice(-6), yazi: '000000' }); }));
+  Object.entries(g.kosullar || {}).forEach(([baslik, l]) => l.forEach(k => { if (opDon[k.operator] && (k.val1 !== null || k.val1Text)) b.kosullar.push({ icerir: baslik, op: opDon[k.operator], deger: k.val1 !== null && opDon[k.operator] !== 'icerir' ? String(k.val1) : String(k.val1Text), dolgu: String(k.colorHex || 'FFFFC7CE').slice(-6), yazi: '000000' }); }));
   return b;
 }
 // ==EX-MOTOR-SON==
@@ -11912,9 +11930,10 @@ function exHesaplarCiz(){
         <button class="btn y-btn" data-exhfx title="İşlev penceresi: bu formüldeki işlevi kutu kutu aç ya da yeni işlev ekle" style="font-style:italic;font-weight:700;">ƒx</button>
         <input type="text" data-exhf value="${ykEsc(h.formul)}" placeholder="ör. [ANKET DEĞERLENDİRMESİ] - 4,70 · ya da ƒx ile kutu kutu kur" spellcheck="false" style="flex:1;min-width:300px;font-family:Consolas,monospace;">
         <select data-exhb title="Sonucun biçimi">${EX_HESAP_BICIM.map(([v, t]) => `<option value="${v}"${(h.bicim || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+        <button class="btn y-btn" data-exhrenk title="Bu sütundaki değerlere renk ver (koşullu renk)">🎨</button>
         <button class="btn y-btn" data-exhsil title="Kaldır">✕</button>
       </div>
-      <div data-exhdurum class="hint" style="margin:3px 0 0 180px;"></div></div>`).join('') || '<span class="hint" style="margin:0;">Hesaplanan sütun yok.</span>';
+      <div data-exhdurum class="hint" style="margin:3px 0 0 180px;"></div><div data-exhrenkpanel></div></div>`).join('') || '<span class="hint" style="margin:0;">Hesaplanan sütun yok.</span>';
   const durumYaz = (row, j) => { const d = exFormulDenetle(EX.hesaplar[j], j), el = row.querySelector('[data-exhdurum]'); el.textContent = d.durum === 'hata' ? '⚠ ' + d.mesaj : d.mesaj; el.style.color = d.durum === 'hata' ? 'var(--danger)' : d.durum === 'ok' ? 'var(--ok, #15803d)' : ''; };
   kap.querySelectorAll('[data-exhrow]').forEach(row => {
     const j = Number(row.dataset.exhrow), h = EX.hesaplar[j];
@@ -11923,6 +11942,7 @@ function exHesaplarCiz(){
     f.addEventListener('input', () => { h.formul = f.value; durumYaz(row, j);
       if (!h.bicim){ try { if (exFormulMetinMi(exFormulCoz(f.value))){ h.bicim = 'Metin'; row.querySelector('[data-exhb]').value = 'Metin'; } } catch(e){} } });
     row.querySelector('[data-exhfx]').addEventListener('click', () => exFxAc(j));
+    row.querySelector('[data-exhrenk]').addEventListener('click', () => exRenkPaneli(j, row));
     f.addEventListener('focus', () => { EX.fAktif = j; kap.querySelectorAll('[data-exhf]').forEach(x => x.style.outline = ''); f.style.outline = '2px solid var(--accent-soft)'; });
     row.querySelector('[data-exhb]').addEventListener('change', e => { h.bicim = e.target.value; });
     row.querySelector('[data-exhsil]').addEventListener('click', () => { EX.hesaplar.splice(j, 1); EX.fAktif = null; exHesaplarCiz(); exKosulSiraCiz(); });
@@ -12299,8 +12319,8 @@ function exBicimEditorCiz(){
   kur.querySelectorAll('[data-exbksil]').forEach(el => el.onclick = () => { B.kurallar.splice(Number(el.dataset.exbksil), 1); EX.bicimDegisti = true; exBicimEditorCiz(); });
   const kos = document.getElementById('exBicimKosullar');
   kos.innerHTML = B.kosullar.map((r, i) => `<div class="row" style="margin:4px 0;"><input type="text" data-exbc="${i}" data-k="icerir" value="${ykEsc(r.icerir)}" placeholder="başlık içerir" style="width:160px;">
-      <select data-exbc="${i}" data-k="op">${[['<', '<'], ['<=', '≤'], ['>', '>'], ['>=', '≥'], ['=', '='], ['!=', '≠']].map(([v, t]) => `<option value="${v}"${r.op === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
-      <input type="text" data-exbc="${i}" data-k="deger" value="${ykEsc(r.deger)}" style="width:70px;"> dolgu <input type="color" data-exbc="${i}" data-k="dolgu" value="${exHexInput(r.dolgu)}"> yazı <input type="color" data-exbc="${i}" data-k="yazi" value="${exHexInput(r.yazi)}"><button class="btn y-btn" data-exbcsil="${i}">✕</button></div>`).join('');
+      <select data-exbc="${i}" data-k="op">${[['<', '<'], ['<=', '≤'], ['>', '>'], ['>=', '≥'], ['=', '='], ['!=', '≠'], ['icerir', 'içerir']].map(([v, t]) => `<option value="${v}"${r.op === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+      <input type="text" data-exbc="${i}" data-k="deger" value="${ykEsc(r.deger)}" placeholder="sayı ya da metin" style="width:120px;"> dolgu <input type="color" data-exbc="${i}" data-k="dolgu" value="${exHexInput(r.dolgu)}"> yazı <input type="color" data-exbc="${i}" data-k="yazi" value="${exHexInput(r.yazi)}"><button class="btn y-btn" data-exbcsil="${i}">✕</button></div>`).join('');
   kos.querySelectorAll('[data-exbc]').forEach(el => el.addEventListener(el.type === 'color' ? 'input' : 'change', () => { const r = B.kosullar[Number(el.dataset.exbc)]; r[el.dataset.k] = el.type === 'color' ? el.value.replace('#', '').toUpperCase() : (el.dataset.k === 'icerir' ? roUp(el.value) : el.value); EX.bicimDegisti = true; exBicimOnizlemeCiz(); }));
   kos.querySelectorAll('[data-exbcsil]').forEach(el => el.onclick = () => { B.kosullar.splice(Number(el.dataset.exbcsil), 1); EX.bicimDegisti = true; exBicimEditorCiz(); });
   document.getElementById('exBicimKuralEkle').onclick = () => { B.kurallar.push({ icerir: '', bicim: '0.00' }); EX.bicimDegisti = true; exBicimEditorCiz(); };
@@ -12476,8 +12496,7 @@ function exModelCiz(m, uyarilar, baslik){
   const grupAdi = []; if (m.grup){ let i = 0; m.grup.forEach(g => { for (let j = 0; j < g.n; j++) grupAdi[i++] = g.baslik; }); }
   const bicimOf = (k, i) => { const kr = B.kurallar.find(r => r.bicim && exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i])); return kr ? (kr.bicim === 'Genel' ? null : kr.bicim) : k.bicim; };
   const kosul = (k, i, v) => {
-    if (typeof v !== 'number') return null;
-    return B.kosullar.find(r => { const n = roNum(r.deger); if (n === null || !exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i])) return false; return { '<': v < n, '<=': v <= n, '>': v > n, '>=': v >= n, '=': v === n, '!=': v !== n }[r.op]; }) || null;
+    return B.kosullar.find(r => exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i]) && exKosulDegerUyar(r, v)) || null;
   };
   const W = m.sol.length + m.kol.length;
   const goster = m.satir.slice(0, 200), tv = exModelToplam(m);
@@ -12713,6 +12732,39 @@ function exFxAc(j){
   } catch(e){}
   EX.dlg = [];
   exIslevPencereAc({ formul: j, tumu: !m, a: inp.selectionStart, b: inp.selectionEnd }, null, []);
+}
+// 🎨 Hesap sütunundaki değerlere renk: önizlemedeki farklı değerler → seçili biçim şablonuna koşullu renk (= değer)
+const EX_RENK_ONERI = [['C6EFCE', '006100'], ['FFC7CE', '9C0006'], ['FFEB9C', '9C5700'], ['DDEBF7', '1F4E78'], ['E4DFEC', '5B2C6F'], ['F2F2F2', '404040']];
+function exRenkPaneli(j, row){
+  const kap = row.querySelector('[data-exhrenkpanel]');
+  if (kap.innerHTML){ kap.innerHTML = ''; return; }
+  const ad = roUp(EX.hesaplar[j].baslik || 'HESAP ' + (j + 1));
+  const M = EX.sonModel && EX.sonModel.m;
+  const degerler = [];
+  if (M){
+    const grupAdi = []; if (M.grup){ let i = 0; M.grup.forEach(g => { for (let x = 0; x < g.n; x++) grupAdi[i++] = g.baslik; }); }
+    M.kol.forEach((k, i) => { if (roUp(k.alanAd || grupAdi[i] || k.baslik) !== ad && roUp(k.baslik) !== ad) return; M.satir.forEach(r => { const v = r.v[i]; if (v === null || v === undefined || v === '' || typeof v === 'number') return; const t = typeof v === 'boolean' ? (v ? 'DOĞRU' : 'YANLIŞ') : String(v); if (!degerler.includes(t) && degerler.length < 12) degerler.push(t); }); });
+  }
+  if (!degerler.length){ kap.innerHTML = `<div class="hint" style="margin:6px 0 0 180px;color:var(--danger);">Renk verilecek metin değer bulunamadı. Önce Önizle'ye bas (bu sütun metin sonuç vermeli; sayılar için Görünüm › Koşullu renk).</div>`; return; }
+  const mevcut = t => (EX.bicim.kosullar || []).find(r => roUp(r.icerir) === ad && r.op === '=' && roUp(r.deger) === roUp(t));
+  kap.innerHTML = `<div class="ex-renk-panel"><b style="font-size:13px;">${ykEsc(ad)} renkleri</b>` +
+    degerler.map((t, i) => { const m = mevcut(t), o = EX_RENK_ONERI[i % EX_RENK_ONERI.length];
+      return `<div class="row" style="gap:8px;margin-top:4px;"><span class="ex-renk-ornek" data-rorn="${i}" style="background:#${m ? m.dolgu : o[0]};color:#${m ? m.yazi : o[1]};">${ykEsc(t)}</span>
+        dolgu <input type="color" data-rd="${i}" value="#${(m ? m.dolgu : o[0]).toLowerCase()}"> yazı <input type="color" data-ry="${i}" value="#${(m ? m.yazi : o[1]).toLowerCase()}">
+        <label class="ro-sec"><input type="checkbox" data-rk="${i}" checked> uygula</label></div>`; }).join('') +
+    `<div class="row" style="margin-top:8px;"><button class="btn ok" data-ruygula>Renkleri uygula</button><button class="btn" data-rkapat>Kapat</button><span class="hint" style="margin:0;" data-rnot></span></div></div>`;
+  const ornek = i => { const o = kap.querySelector(`[data-rorn="${i}"]`); o.style.background = kap.querySelector(`[data-rd="${i}"]`).value; o.style.color = kap.querySelector(`[data-ry="${i}"]`).value; };
+  degerler.forEach((t, i) => { kap.querySelector(`[data-rd="${i}"]`).addEventListener('input', () => ornek(i)); kap.querySelector(`[data-ry="${i}"]`).addEventListener('input', () => ornek(i)); });
+  kap.querySelector('[data-rkapat]').onclick = () => { kap.innerHTML = ''; };
+  kap.querySelector('[data-ruygula]').onclick = () => {
+    EX.bicim.kosullar = (EX.bicim.kosullar || []).filter(r => !(roUp(r.icerir) === ad && r.op === '=' && degerler.some(t => roUp(t) === roUp(r.deger))));
+    degerler.forEach((t, i) => { if (!kap.querySelector(`[data-rk="${i}"]`).checked) return;
+      EX.bicim.kosullar.push({ icerir: ad, op: '=', deger: t, dolgu: kap.querySelector(`[data-rd="${i}"]`).value.replace('#', '').toUpperCase(), yazi: kap.querySelector(`[data-ry="${i}"]`).value.replace('#', '').toUpperCase() }); });
+    EX.bicimDegisti = true;
+    if (document.getElementById('exBicimEditor').style.display === 'block') exBicimEditorCiz(); else exOnizlemeYenidenCiz();
+    const sec = document.getElementById('exBicim').value, hazir = exBicimListesi().some(b => b.ad === sec && b.yerlesik);
+    kap.querySelector('[data-rnot]').innerHTML = `✓ Önizlemede ve Excel'de uygulanır. Kalıcı olması için Görünüm kartında ${hazir ? '<b>yeni bir ad verip</b> ' : ''}<b>💾 Şablonu Kaydet</b>.`;
+  };
 }
 // Sonuç metinse biçim kendiliğinden Metin
 function exFormulMetinMi(ast){

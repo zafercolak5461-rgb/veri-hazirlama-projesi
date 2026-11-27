@@ -78,6 +78,9 @@
   .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
   table.prev{ border-collapse:collapse; width:100%; font-size:12px; margin-top:14px; }
+  .kat-rozet{ display:inline-block; color:#fff; font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; }
+  .kat-saglik{ margin-top:12px; padding:10px 14px; border:1px solid var(--line); border-radius:8px; background:var(--panel2); font-size:13px; }
+  .kat-saglik ul{ margin:6px 0 0; padding-left:18px; line-height:1.7; }
   .ro-liste{ display:flex; flex-wrap:wrap; gap:6px 16px; font-size:13px; }
   .ro-sec{ display:inline-flex; align-items:center; gap:5px; white-space:nowrap; cursor:pointer; }
   .ro-not{ font-size:11px; color:var(--dim2); }
@@ -774,6 +777,54 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <b style="font-size:13px;">Hesaplanan sütunlar</b> <span class="hint" style="margin:0;">Excel'e formül olarak yazılır (ör. =D3/E3)</span>
             <div id="roListeHesaplar" style="margin-top:6px;"></div>
             <div class="row" style="margin-top:6px;"><button class="btn" id="roHesapEkle">+ Hesaplanan Sütun</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== VERİ KATALOĞU (27.11.2026) — panelin tanıdığı bütün tablolar: yapı, anahtarlar, alanlar, veri sağlığı. RAPOR AYARLARI > KATALOG sekmeleri ===== -->
+      <div id="yk-rokat" class="yk-alt" style="display:none;">
+        <div class="page-title">Veri Kataloğu</div>
+        <div class="page-sub">Panel bir tabloyu bir kez tanır: hangi sekmelerin tek tablo olduğu (aylık sekmeler, aynı başlıklı sekmeler), başlık satırı, sicil / tarih / ay / takım sütunları, tablonun taneciği (kişi × ay, gün…), alanların tipi ve nasıl toplanacağı. Sen yalnız onaylar ya da düzeltirsin; Excel Oluştur bu bilgiyle bütün tabloları birbirine bağlar. Kayıt Drive › ALO-144 › <b>RAPOR AYARLARI</b> dosyasının KATALOG sekmelerinde (<a id="katAyarLink" target="_blank" rel="noopener">dosyayı aç</a>). Tablolara yalnız <b>okunur</b>, hiçbirine yazılmaz.</div>
+        <div class="card">
+          <h2>Dosyalar</h2>
+          <div class="hint">Kataloğa girecek e-tablolar. Yeni dosya için bağlantısını (ya da ID'sini) yapıştır → <b>Ekle</b>; sonra <b>Tara</b>. Aktif olmayan dosya taranmaz ama kataloğu silinmez.</div>
+          <div class="row" style="margin-bottom:8px;">
+            <input type="text" id="katLink" placeholder="https://docs.google.com/spreadsheets/d/… ya da Sheet ID" style="min-width:420px;">
+            <button class="btn" id="katDosyaEkle">+ Ekle</button>
+            <button class="btn ok" id="katDosyaKaydet">💾 Kaydet</button>
+            <span id="katDosyaDurum" class="status" style="margin:0;"></span>
+          </div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="katDosyaTablo" style="width:auto;margin-top:0;"></table></div>
+        </div>
+        <div class="card">
+          <h2>Tarama</h2>
+          <div class="hint"><b>Tara</b>: aktif dosyaların bütün sekmelerinin başlıklarını ve ilk satırlarını okur; yeni tablo, yeni sütun ya da değişen yapı varsa işaretler. Onayladığın ayarlar korunur. <b>Veri Sağlığı</b>: kapsam dışı olmayan tabloların verisini okur; hangi tarihten hangi tarihe veri olduğunu, eksik ay/günleri, aynı kişinin aynı dönemde çift satırını ve Personel Listesi'nde olmayan sicilleri gösterir (büyük tablolarda birkaç saniye sürer).</div>
+          <div class="row">
+            <button class="btn primary" id="katTara">🔍 Tara</button>
+            <button class="btn" id="katSaglikBtn">🩺 Veri Sağlığı</button>
+            <button class="btn" id="katYenile" title="Katalog RAPOR AYARLARI'ndan yeniden okunur">↻ Yeniden Oku</button>
+          </div>
+          <div id="katTaramaDurum" class="status"></div>
+          <div id="katOzet" class="hint" style="margin:8px 0 0;"></div>
+        </div>
+        <div class="card">
+          <h2>Tablolar</h2>
+          <div class="row" id="katFiltre" style="margin-bottom:8px;"></div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="katTabloListe" style="margin-top:0;"></table></div>
+        </div>
+        <div class="card" id="katDetay" style="display:none;">
+          <div class="row" style="justify-content:space-between;"><h2 id="katDetayBaslik" style="margin:0;"></h2><button class="btn y-btn" id="katDetayKapat">✕ Kapat</button></div>
+          <div id="katDetayBilgi" class="hint" style="margin:10px 0;"></div>
+          <div class="kat-form" id="katDetayForm"></div>
+          <div id="katDetaySaglik"></div>
+          <h2 style="margin-top:16px;">Alanlar</h2>
+          <div class="hint">Görünen Ad: Excel'de ve seçim listelerinde görünecek ad. Tip ve Toplama: değerin nasıl okunacağı ve aya / takıma / lokasyona toplanırken ne yapılacağı. Eş Adlar: aynı alanın eski aylardaki başka adları (" | " ile). Gizli: kişisel bilgi; rapor seçimlerinde çıkmaz.</div>
+          <div class="prev-wrap" style="max-height:none;"><table class="prev" id="katAlanTablo" style="width:auto;margin-top:0;"></table></div>
+          <div class="row" style="margin-top:14px;">
+            <button class="btn ok" id="katOnayla">✓ Onayla ve Kaydet</button>
+            <button class="btn" id="katDetayKaydet">💾 Kaydet</button>
+            <button class="btn danger" id="katKapsamDisi">Kapsam Dışı Bırak</button>
+            <span id="katDetayDurum" class="status" style="margin:0;"></span>
           </div>
         </div>
       </div>
@@ -4082,6 +4133,7 @@ function ykSayfaAc(id){
   if (id === 'ro') roSayfasi();
   if (id === 'rosab') roSablonSayfasi();
   if (id === 'roayar') roAyarSayfasi();
+  if (id === 'rokat') katSayfasi();
   if (id === 'gv'){ gvDosyaBilgiCiz(); if (!document.getElementById('gvTarih').value) document.getElementById('gvTarih').value = ykTarihToIso(ykTarihEkle(ykTarih(new Date()), -1)); gvSonuGetir(); }
   if (id === 'gunluk' && !document.getElementById('ykTarih').value) document.getElementById('ykTarih').value = ykTarihToIso(ykTarih(new Date()));
 }
@@ -5229,7 +5281,7 @@ document.addEventListener('focusout', e => {
 // Kişiler Yoklama'nın Personel Listesi'nden (Tegsoft Adı → Sicil, Görev, Takım Lideri) gelir.
 // ============================================================================
 const GV_TAB = 'GÜNLÜK VERİ SÜTUNLAR';
-const RO_SAYFALAR = [ { id:'ro', ad:'Rapor Al', ikon:'🏭', svg:'dosya' }, { id:'rosab', ad:'Şablonlar', ikon:'▦', svg:'tablo' }, { id:'roayar', ad:'Rapor Kaynakları', ikon:'⚙', svg:'ayar' } ];   // Rapor Oluşturucu (en alttaki script) — yalnız userPerms.raporOlusturucu
+const RO_SAYFALAR = [ { id:'ro', ad:'Rapor Al', ikon:'🏭', svg:'dosya' }, { id:'rosab', ad:'Şablonlar', ikon:'▦', svg:'tablo' }, { id:'rokat', ad:'Veri Kataloğu', ikon:'🗂', svg:'klasor' }, { id:'roayar', ad:'Rapor Kaynakları', ikon:'⚙', svg:'ayar' } ];   // Rapor Oluşturucu (en alttaki script) — yalnız userPerms.raporOlusturucu
 const KP_SAYFALAR = [ { id:'kopuk', ad:'Köpük Çağrı', ikon:'☎', svg:'telefon' }, { id:'kopukper', ad:'Köpük Personel Listesi', ikon:'👥', svg:'kisiler' } ];   // Köpük Çağrı bölümü (en alttaki script)
 const GV_SAYFALAR = [
   { id:'gv',     ad:'Günlük Veri Hazırlama', ikon:'📊', svg:'grafik' },
@@ -9835,6 +9887,732 @@ document.getElementById('roGorunum').addEventListener('change', roListeCiz);
 document.getElementById('roListeEkle').addEventListener('click', () => { RO_L.kolonlar.push({ baslik: '', alan: '', bicim: '' }); roListeCiz(); });
 document.getElementById('roHesapEkle').addEventListener('click', () => { if (RO_L.kolonlar.length < 2) return; RO_L.hesaplar.push({ baslik: '', a: null, op: '/', b: null }); roListeCiz(); });
 document.getElementById('roGorunumYukleBtn').addEventListener('click', roGorunumYukle);
+
+// ==KAT-MOTOR-BAS==
+// ===== Veri Kataloğu — motor (ağ ve ekran yok; Node'da test edilebilir; roUp/roSade/roNum/roAyKey/roSicil'i kullanır) =====
+// Panel bir tabloyu ilk gördüğünde analizcinin anladıklarını çıkarır: sekme grubu (aylık sekmeler / aynı başlıklı sekmeler),
+// başlık satırı, yapı (liste / yatay), anahtarlar (sicil, tarih, ay, takım, ad, lokasyon), tanecik, alan tipleri ve toplama kuralı.
+// Çıkan öneri RAPOR AYARLARI'ndaki KATALOG sekmelerine yazılır; Zafer onaylar ya da düzeltir. Kurallar burada yalnız "ilk tahmin"dir.
+const KAT_TIPLER = ['Sayı', 'Yüzde', 'Tarih', 'Saat', 'Ay', 'Metin', 'Evet/Hayır'];
+const KAT_TOPLAMALAR = ['Toplam', 'Ortalama', 'En Büyük', 'En Küçük', 'Say', 'Son', 'İlk', 'Yok'];
+const KAT_DURUMLAR = ['Yeni', 'Onaylı', 'Değişti', 'Kapsam Dışı'];
+const KAT_YAPILAR = { liste: 'Liste', yataykisi: 'Yatay (Kişi × Gün)', yatayolcu: 'Yatay (Ölçü × Gün)' };
+const KAT_AYLIK = 'AYLIK SEKMELER';
+const KAT_TIP_KOD = { sayi: 'Sayı', yuzde: 'Yüzde', tarih: 'Tarih', saat: 'Saat', ay: 'Ay', metin: 'Metin', mantik: 'Evet/Hayır' };
+
+function katNorm(h){ return roSade(h).replace(/[^A-Z0-9%]+/g, ' ').trim(); }
+// Gün anahtarı: 1970'ten beri gün (UTC). "05.12.2022", "5.12.2022", "2026-11-27", Sheets seri numarası
+function katGun(v){
+  if (typeof v === 'number') return (v > 20000 && v < 80000) ? Math.round(v) - 25569 : null;
+  const s = String(v == null ? '' : v).trim();
+  let m = s.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})(?:\s.*)?$/);
+  let y, a, g;
+  if (m){ g = +m[1]; a = +m[2]; y = +m[3]; }
+  else if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))){ y = +m[1]; a = +m[2]; g = +m[3]; }
+  else return null;
+  if (a < 1 || a > 12 || g < 1 || g > 31) return null;
+  const d = Date.UTC(y, a - 1, g);
+  if (new Date(d).getUTCDate() !== g) return null;
+  return Math.round(d / 86400000);
+}
+function katGunMetin(n){ const d = new Date(n * 86400000); return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear(); }
+function katGunAy(n){ const d = new Date(n * 86400000); return d.getUTCFullYear() * 12 + d.getUTCMonth(); }
+const KAT_BOS = /^(OFF|-|—|YOK|#N\/A|#YOK|#DIV\/0!|#SAYI\/0!|#REF!|#BAŞV!|#VALUE!|#DEĞER!)$/i;
+function katHucreTipi(v){
+  if (v === null || v === undefined || v === '') return 'bos';
+  if (typeof v === 'boolean') return 'mantik';
+  if (typeof v === 'number') return 'sayi';
+  const s = String(v).replace(/ /g, ' ').trim();
+  if (!s || KAT_BOS.test(s)) return 'bos';
+  if (/%$/.test(s) && roNum(s.replace(/%$/, '').replace(/^%/, '')) !== null) return 'yuzde';
+  if (/^%/.test(s) && roNum(s.slice(1)) !== null) return 'yuzde';
+  if (katGun(s) !== null) return 'tarih';
+  if (/^\d{1,3}:\d{2}(:\d{2})?$/.test(s)) return 'saat';
+  if (roAyKey(s) !== null) return 'ay';
+  if (/^(EVET|HAYIR|TRUE|FALSE|DOĞRU|YANLIŞ)$/i.test(roUp(s))) return 'mantik';
+  if (roNum(s) !== null) return 'sayi';
+  return 'metin';
+}
+// Başlık hücresi bir gün mü? ("01.10.2026", "1-Şub", "1 Şubat")
+function katBaslikGun(h){
+  if (katGun(h) !== null) return true;
+  const m = roSade(h).match(/^(\d{1,2})[\s\-.]+([A-Z]{3,})/);
+  return !!(m && RO_AY_SADE.some(a => a.startsWith(m[2].slice(0, 3))));
+}
+// Başlık satırı: ilk 10 satırda yeterince dolu ve çoğu sayı olmayan ilk satır (0 tabanlı)
+function katBaslikSatiri(rows){
+  const ilk = (rows || []).slice(0, 10);
+  const dolu = r => (r || []).filter(v => katHucreTipi(v) !== 'bos');
+  const enCok = Math.max(0, ...ilk.map(r => dolu(r).length));
+  for (let i = 0; i < ilk.length; i++){
+    const d = dolu(ilk[i]);
+    if (d.length < Math.max(2, Math.ceil(enCok * 0.6))) continue;
+    const sayi = d.filter(v => { const t = katHucreTipi(v); return t === 'sayi' || t === 'yuzde'; }).length;
+    if (sayi / d.length <= 0.4) return i;
+  }
+  return 0;
+}
+// Bir sütunun örnek değerlerinden profil: baskın tip, doluluk, örnek
+function katProfil(degerler){
+  const say = {}; let dolu = 0, ornek = '';
+  degerler.forEach(v => { const t = katHucreTipi(v); if (t === 'bos') return; dolu++; say[t] = (say[t] || 0) + 1; if (!ornek) ornek = String(v); });
+  let tip = 'metin', en = 0;
+  Object.keys(say).forEach(t => { if (say[t] > en){ en = say[t]; tip = t; } });
+  // sayı + metin karışık (ör. KKO'da "Rapor") → sayı sayılır; metinler boş kabul edilir
+  if (tip === 'metin' && (say.sayi || 0) >= dolu * 0.3) tip = 'sayi';
+  return { tip, doluluk: degerler.length ? dolu / degerler.length : 0, ornek, sayilar: say };
+}
+const KAT_GIZLI = /(TC KIMLIK|^TC$|^TCKN|SIFRE|TELEFON|^TEL$|GSM|ADRES|E POSTA|EPOSTA|MAIL|FOTOGRAF|IBAN)/;
+function katGizliMi(ad){ return KAT_GIZLI.test(katNorm(ad)); }
+function katVarsayilanToplama(ad, tip){
+  if (['metin', 'tarih', 'ay', 'saat', 'mantik'].includes(tip)) return 'Son';
+  if (tip === 'yuzde') return 'Ortalama';
+  const n = katNorm(ad);
+  if (/MAX/.test(n)) return 'En Büyük';
+  if (/(^| )MIN( |$)/.test(n)) return 'En Küçük';
+  if (/(ORAN|ORTALAMA|(^| )ORT( |$)|ANKET|KKO|PUAN|PERFORMANS|(^| )SL( |$)|(^| )AR( |$)|ASA|AHT|ACH|YUZDE|SINAV|NOTU|SKOR|SEVIYE|%)/.test(n)) return 'Ortalama';
+  return 'Toplam';
+}
+// Anahtar sütunları (alan adı döner). alanlar: [{ad, tip, ornekler}]
+function katAnahtarBul(alanlar, personel){
+  const n = a => katNorm(a.ad);
+  const bul = f => { const a = alanlar.find(f); return a ? a.ad : ''; };
+  let sicil = bul(a => /(^| )SICIL/.test(n(a)));
+  if (!sicil){
+    const aday = alanlar.find(a => {
+      const v = (a.ornekler || []).filter(x => katHucreTipi(x) !== 'bos');
+      if (v.length < 3) return false;
+      const s = v.filter(x => /^\d{4,6}$/.test(roSicil(x)));
+      if (s.length < v.length * 0.8) return false;
+      return personel && personel.size ? s.filter(x => personel.has(roSicil(x))).length >= s.length * 0.5 : /(^| )NO$/.test(n(a));
+    });
+    sicil = aday ? aday.ad : '';
+  }
+  const tarihAday = alanlar.filter(a => a.tip === 'tarih' && /TARIH|GUN/.test(n(a)) && !/(GIRIS|DOGUM|KAYIT|CIKIS|DEGISTIR)/.test(n(a)));
+  let tarih = (tarihAday.find(a => n(a) === 'TARIH') || tarihAday[0] || {}).ad || '';
+  if (!tarih){ const t = alanlar.filter(a => a.tip === 'tarih' && !/(GIRIS|DOGUM|KAYIT|CIKIS)/.test(n(a))); if (t.length === 1 && alanlar.indexOf(t[0]) === 0) tarih = t[0].ad; }
+  const ay = bul(a => a.tip === 'ay' || ['AY', 'DONEM', 'AY YIL'].includes(n(a)));
+  const takim = bul(a => /(^| )TAKIM( |$)|TAKIM LIDERI|EKIP LIDERI/.test(n(a)) && a.tip === 'metin');
+  const ad = bul(a => a.ad !== sicil && a.tip === 'metin' && (/AD SOYAD|ADI SOYADI|^PERSONEL$|PERSONEL ADI/.test(n(a))));
+  const lokasyon = bul(a => ['IL', 'LOKASYON', 'SEHIR', 'IL ADI', 'BOLGE'].includes(n(a)) && a.tip === 'metin');
+  return { sicil, tarih, ay, takim, ad, lokasyon };
+}
+// Tek sekmenin analizi. hiZorla: kayıtlı başlık satırı (1 tabanlı) varsa o kullanılır
+function katSekmeAnaliz(rows, personel, hiZorla){
+  rows = rows || [];
+  const hi = hiZorla ? hiZorla - 1 : katBaslikSatiri(rows);
+  const h = rows[hi] || [];
+  const veri = rows.slice(hi + 1).filter(r => (r || []).some(v => katHucreTipi(v) !== 'bos'));
+  const gunKol = []; h.forEach((x, i) => { if (katBaslikGun(x)) gunKol.push(i); });
+  const kolon = i => veri.map(r => (r || [])[i]);
+  if (gunKol.length >= 5){
+    const ilkGun = gunKol[0];
+    const kimlik = h.slice(0, ilkGun).map((x, i) => ({ i, ad: String(x == null ? '' : x).trim() })).filter(o => o.ad && !/^TOPLAM$/.test(katNorm(o.ad)));
+    const kimAlan = kimlik.map(o => { const p = katProfil(kolon(o.i)); return { ad: o.ad, tip: p.tip, doluluk: p.doluluk, ornek: p.ornek, ornekler: kolon(o.i).slice(0, 60) }; });
+    const ank = katAnahtarBul(kimAlan, personel);
+    const gunDeg = []; veri.slice(0, 60).forEach(r => gunKol.forEach(i => gunDeg.push((r || [])[i])));
+    if (ank.sicil){
+      const p = katProfil(gunDeg);
+      const alanlar = kimAlan.concat([{ ad: 'GÜNLÜK DEĞER', tip: p.tip, doluluk: p.doluluk, ornek: p.ornek, sanal: true }]);
+      return { yapi: 'yataykisi', baslikSatiri: hi + 1, alanlar, anahtar: Object.assign(ank, { tarih: '(sütun başlıkları)' }), gunSutunu: gunKol.length, satir: veri.length };
+    }
+    // satırlarda ölçü, sütunlarda gün (ör. bakanlık "Alo 144": Planlanan, Gelen Çağrı Sayısı…)
+    const alanlar = veri.map(r => ({ ad: String((r || [])[kimlik.length ? kimlik[0].i : 0] == null ? '' : (r || [])[kimlik.length ? kimlik[0].i : 0]).trim(), r }))
+      .filter(o => o.ad)
+      .map(o => { const p = katProfil(gunKol.map(i => o.r[i])); return { ad: o.ad, tip: p.tip, doluluk: p.doluluk, ornek: p.ornek }; });
+    return { yapi: 'yatayolcu', baslikSatiri: hi + 1, alanlar, anahtar: { sicil: '', tarih: '(sütun başlıkları)', ay: '', takim: '', ad: '', lokasyon: '' }, gunSutunu: gunKol.length, satir: veri.length };
+  }
+  // başlığı boş ama değerleri ay ya da tarih olan sütun (ör. bakanlık "2025": A sütununda "Ocak 2025") → AY / TARİH adıyla alınır
+  const genislik = Math.max(h.length, ...veri.slice(0, 50).map(r => (r || []).length));
+  const alanlar = Array.from({ length: genislik }, (_, i) => ({ i, ad: String(h[i] == null ? '' : h[i]).trim() }))
+    .map(o => { const k = kolon(o.i); const p = katProfil(k.slice(0, 200)); if (!o.ad && p.doluluk > 0.5 && (p.tip === 'ay' || p.tip === 'tarih')) o.ad = p.tip === 'ay' ? 'AY' : 'TARİH'; return { o, k, p }; })
+    .filter(({ o }) => o.ad)
+    .map(({ o, k, p }) => ({ ad: o.ad, tip: p.tip, doluluk: p.doluluk, ornek: p.ornek, ornekler: k.slice(0, 60) }));
+  // aynı başlık iki kez geçerse ikinciye sıra eklenir (her alan tek)
+  const gor = {}; alanlar.forEach(a => { const k = katNorm(a.ad); if (gor[k]){ gor[k]++; a.ad = a.ad + ' (' + gor[k] + ')'; } else gor[k] = 1; });
+  return { yapi: 'liste', baslikSatiri: hi + 1, alanlar, anahtar: katAnahtarBul(alanlar, personel), gunSutunu: 0, satir: veri.length };
+}
+function katImza(yapi, alanlar){
+  const s = yapi + '|' + alanlar.map(a => katNorm(a.ad)).sort().join(',');
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+function katTanecik(t){
+  const p = [];
+  if (t.anahtar.sicil) p.push('Kişi');
+  if (t.anahtar.lokasyon && !t.anahtar.sicil) p.push(t.anahtar.lokasyon);
+  if (t.grupBoyutu && t.grupBoyutu !== 'AY') p.push(t.grupBoyutu);
+  if (t.yapi === 'yatayolcu') p.push('Ölçü');
+  if (t.anahtar.tarih || t.yapi !== 'liste') p.push('Gün');
+  else if (t.anahtar.ay || t.grupBoyutu === 'AY') p.push('Ay');
+  return p.length ? p.join(' × ') : '—';
+}
+// Bir dosyanın sekmelerini tablolara ayırır. sekmeler: [{ad, rows}] (başlık + örnek satırlar). kayitli: Map(anahtar → {baslikSatiri})
+function katDosyaAnaliz(dosya, sheetId, sekmeler, personel, kayitli){
+  kayitli = kayitli || new Map();
+  const tablolar = [];
+  const aylik = sekmeler.filter(s => roAyKey(s.ad) !== null);
+  const kalan = aylik.length >= 2 ? sekmeler.filter(s => roAyKey(s.ad) === null) : sekmeler.slice();
+  const hiAl = anahtar => { const k = kayitli.get(sheetId + '|' + anahtar); return k && k.baslikSatiri ? k.baslikSatiri : 0; };
+  if (aylik.length >= 2){
+    const sirali = aylik.slice().sort((a, b) => roAyKey(a.ad) - roAyKey(b.ad));
+    const hz = hiAl(KAT_AYLIK);
+    const analizler = sirali.map(s => ({ x: roAyKey(s.ad), ad: s.ad, a: katSekmeAnaliz(s.rows, personel, hz) }));
+    const dolu = analizler.filter(o => o.a.satir > 0);
+    const yeni = (dolu.length ? dolu : analizler)[(dolu.length ? dolu : analizler).length - 1].a;
+    // alanları birleştir: normal ad aynıysa tek alan; ad değiştiren alan (hiç aynı ayda görünmeyen, biri diğerini içeren) eş ad olur
+    const alan = new Map();   // norm → {ad, tip, ilk, son, esAdlar:Set, ornek}
+    analizler.forEach(o => o.a.alanlar.forEach(a => {
+      const k = katNorm(a.ad);
+      if (!alan.has(k)) alan.set(k, { ad: a.ad, tip: a.tip, ornek: a.ornek, ilk: o.x, son: o.x, aylar: new Set([o.x]), esAdlar: new Set(), sanal: a.sanal });
+      const z = alan.get(k);
+      if (o.a.satir > 0 || z.aylar.size === 1 && z.aylar.has(o.x)){ z.son = Math.max(z.son, o.x); z.ilk = Math.min(z.ilk, o.x); z.aylar.add(o.x); }
+      if (o.a.satir > 0){ z.ad = a.ad; if (a.tip !== 'metin' || z.tip === 'metin') z.tip = a.tip; if (a.ornek) z.ornek = a.ornek; }
+    }));
+    const liste = [...alan.entries()];
+    liste.forEach(([k, z]) => {
+      if (z.birlesti) return;
+      const es = liste.find(([k2, z2]) => k2 !== k && !z2.birlesti && z2.ilk > z.son && (k2.startsWith(k) || k.startsWith(k2)) && Math.min(k.length, k2.length) >= 4 && ![...z.aylar].some(x => z2.aylar.has(x)));
+      if (es){ const [, z2] = es; z2.esAdlar.add(z.ad); z.esAdlar.forEach(e => z2.esAdlar.add(e)); z2.ilk = Math.min(z2.ilk, z.ilk); z.aylar.forEach(x => z2.aylar.add(x)); z.birlesti = true; }
+    });
+    const alanlar = liste.filter(([, z]) => !z.birlesti).map(([, z]) => ({ ad: z.ad, tip: z.tip, ornek: z.ornek, ilk: z.ilk, son: z.son, esAdlar: [...z.esAdlar], sanal: z.sanal }));
+    tablolar.push({
+      kod: roUp(dosya), dosya, sheetId, sekmeler: KAT_AYLIK, sekmeListesi: sirali.map(s => s.ad), grupBoyutu: 'AY',
+      yapi: yeni.yapi, baslikSatiri: yeni.baslikSatiri, anahtar: yeni.anahtar, alanlar, satir: analizler.reduce((t, o) => t + o.a.satir, 0),
+      bosSekmeler: analizler.filter(o => o.a.satir === 0).map(o => o.ad),
+    });
+  }
+  // aynı başlıklı sekmeler (ör. KÖPÜK: OSMANİYE, AYDIN, AFYON, GAZİANTEP) tek tablo; sekme adı bir boyut olur
+  const tek = kalan.map(s => { const a = katSekmeAnaliz(s.rows, personel, hiAl(s.ad)); return { s, a, imza: a.alanlar.length >= 2 ? katImza(a.yapi, a.alanlar) : null }; });
+  const gruplar = new Map();
+  tek.forEach(o => { if (o.imza){ if (!gruplar.has(o.imza)) gruplar.set(o.imza, []); gruplar.get(o.imza).push(o); } });
+  const kullanildi = new Set();
+  gruplar.forEach(g => {
+    if (g.length < 2) return;
+    g.forEach(o => kullanildi.add(o));
+    const ilk = g.find(o => o.a.satir > 0) || g[0];
+    const adlar = g.map(o => o.s.ad);
+    tablolar.push({
+      kod: roUp(dosya) + ' › ' + adlar.join('/'), dosya, sheetId, sekmeler: adlar.slice().sort().join(' | '), sekmeListesi: adlar, grupBoyutu: 'SEKME',
+      yapi: ilk.a.yapi, baslikSatiri: ilk.a.baslikSatiri, anahtar: ilk.a.anahtar, alanlar: ilk.a.alanlar.map(a => ({ ad: a.ad, tip: a.tip, ornek: a.ornek, esAdlar: [] })),
+      satir: g.reduce((t, o) => t + o.a.satir, 0), bosSekmeler: g.filter(o => o.a.satir === 0).map(o => o.s.ad),
+    });
+  });
+  tek.filter(o => !kullanildi.has(o)).forEach(o => tablolar.push({
+    kod: roUp(dosya) + ' › ' + roUp(o.s.ad), dosya, sheetId, sekmeler: o.s.ad, sekmeListesi: [o.s.ad], grupBoyutu: '',
+    yapi: o.a.yapi, baslikSatiri: o.a.baslikSatiri, anahtar: o.a.anahtar, alanlar: o.a.alanlar.map(a => ({ ad: a.ad, tip: a.tip, ornek: a.ornek, esAdlar: [], sanal: a.sanal })),
+    satir: o.a.satir, bosSekmeler: o.a.satir === 0 ? [o.s.ad] : [],
+  }));
+  if (tablolar.length === 1) tablolar[0].kod = roUp(dosya);
+  tablolar.forEach(t => {
+    t.imza = katImza(t.yapi, t.alanlar);
+    t.tanecik = katTanecik(t);
+    const ank = t.anahtar, anahtarVar = ank.sicil || ank.tarih || ank.ay || ank.lokasyon || t.grupBoyutu;
+    t.durumOnerisi = 'Yeni'; t.not = '';
+    if (t.satir === 0){ t.durumOnerisi = 'Kapsam Dışı'; t.not = 'Otomatik: veri satırı yok'; }
+    else if (!anahtarVar){ t.durumOnerisi = 'Kapsam Dışı'; t.not = 'Otomatik: sicil, tarih ya da ay sütunu bulunamadı (ayar/not sekmesi olabilir)'; }
+    const anahtarAdlari = new Set(['sicil', 'tarih', 'ay', 'takim', 'ad', 'lokasyon'].map(k => ank[k]).filter(Boolean));
+    t.alanlar.forEach(a => {
+      a.gizli = katGizliMi(a.ad);
+      a.toplama = anahtarAdlari.has(a.ad) ? 'Yok' : katVarsayilanToplama(a.ad, a.tip);
+      a.tipAd = KAT_TIP_KOD[a.tip] || 'Metin';
+    });
+  });
+  return tablolar;
+}
+// Kayıtlı katalogla birleştirme. eski: { tablolar:[satır nesnesi], alanlar:[satır nesnesi] } (RAPOR AYARLARI'ndan)
+// Kullanıcının düzelttikleri (tablo adı, durum, anahtarlar, grup boyutu, alanların görünen adı/tipi/toplaması/eş adları/gizli) korunur.
+function katBirlestir(eski, yeniTablolar, tarama){
+  const anahtar = t => t.sheetId + '|' + roUp(t.sekmeler);
+  const eskiMap = new Map(eski.tablolar.map(t => [anahtar(t), t]));
+  const ozet = { yeni: [], degisen: [], ayni: [], kayip: [] };
+  const tablolar = [], alanlar = [];
+  const gorulen = new Set();
+  yeniTablolar.forEach(y => {
+    const e = eskiMap.get(anahtar(y));
+    gorulen.add(anahtar(y));
+    const eAlan = e ? eski.alanlar.filter(a => a.tablo === e.tablo) : [];
+    const kod = e ? e.tablo : y.kod;
+    let durum = e ? e.durum : y.durumOnerisi;
+    const degisti = e && e.imza && e.imza !== y.imza;
+    if (degisti && durum === 'Onaylı') durum = 'Değişti';
+    if (!e) ozet.yeni.push(kod); else if (degisti) ozet.degisen.push(kod); else ozet.ayni.push(kod);
+    const ank = e ? { sicil: e.sicil, tarih: e.tarih, ay: e.ay, takim: e.takim, ad: e.ad, lokasyon: e.lokasyon } : y.anahtar;
+    const t = {
+      tablo: kod, dosya: y.dosya, sheetId: y.sheetId, sekmeler: y.sekmeler, yapi: KAT_YAPILAR[y.yapi] || y.yapi,
+      baslikSatiri: String(y.baslikSatiri), grupBoyutu: e ? (e.grupBoyutu || y.grupBoyutu) : y.grupBoyutu,
+      sicil: ank.sicil || '', tarih: ank.tarih || '', ay: ank.ay || '', takim: ank.takim || '', ad: ank.ad || '', lokasyon: ank.lokasyon || '',
+      tanecik: '', durum, kapsam: e ? e.kapsam : '', not: e && e.not && !/^Otomatik/.test(e.not) ? e.not : (e && e.durum !== y.durumOnerisi && e.durum === 'Kapsam Dışı' ? e.not : y.not),
+      imza: y.imza, sonTarama: tarama, sekmeListesi: y.sekmeListesi, bosSekmeler: y.bosSekmeler, satirSayisi: y.satir,
+    };
+    t.tanecik = katTanecik({ anahtar: { sicil: t.sicil, tarih: t.tarih, ay: t.ay, lokasyon: t.lokasyon }, grupBoyutu: t.grupBoyutu, yapi: y.yapi });
+    tablolar.push(t);
+    const kalanEski = new Set(eAlan);
+    // kapsam dışı tablonun alanları saklanmaz (ayar/not sekmeleri kataloğu şişirmesin); durumu değişince Tara alanları getirir
+    if (durum === 'Kapsam Dışı') return;
+    y.alanlar.forEach(a => {
+      const k = katNorm(a.ad);
+      const ea = eAlan.find(x => katNorm(x.alan) === k || String(x.esAdlar || '').split('|').map(katNorm).includes(k) || (a.esAdlar || []).map(katNorm).includes(katNorm(x.alan)));
+      if (ea) kalanEski.delete(ea);
+      const esler = new Set(String(ea ? ea.esAdlar : '').split('|').map(s => s.trim()).filter(Boolean));
+      (a.esAdlar || []).forEach(x => esler.add(x));
+      if (ea && katNorm(ea.alan) !== k) esler.add(ea.alan);
+      esler.delete(a.ad);
+      alanlar.push({
+        tablo: kod, alan: a.ad, gorunen: ea ? ea.gorunen : roUp(a.ad), tip: ea ? ea.tip : a.tipAd, toplama: ea ? ea.toplama : a.toplama,
+        esAdlar: [...esler].join(' | '), gizli: ea ? ea.gizli : (a.gizli ? 'Evet' : ''),
+        ilk: a.ilk != null ? roAyEtiket(a.ilk) : '', son: a.son != null ? roAyEtiket(a.son) : '',
+        durum: ea ? (ea.durum === 'Yok' ? 'Yeni' : (ea.durum || '')) : (e ? 'Yeni' : ''), ornek: a.ornek || '',
+      });
+    });
+    kalanEski.forEach(ea => alanlar.push(Object.assign({}, ea, { durum: 'Yok' })));
+  });
+  eski.tablolar.filter(t => !gorulen.has(anahtar(t))).forEach(t => {
+    ozet.kayip.push(t.tablo);
+    tablolar.push(Object.assign({}, t, { not: 'Bulunamadı: dosya ya da sekme silinmiş, adı değişmiş olabilir' }));
+    eski.alanlar.filter(a => a.tablo === t.tablo).forEach(a => alanlar.push(a));
+  });
+  return { tablolar, alanlar, ozet };
+}
+
+// ---------- Sağlık / kapsam (veri tam mı?) ----------
+// tablo: katalog satırı (anahtar alan adlarıyla); parcalar: [{ sekme, rows }] (sekme sırası önemsiz); personel: Set(sicil)
+function katSaglik(tablo, parcalar, personel){
+  const sonuc = { kapsam: '', eksik: [], bosSekmeler: [], cift: 0, ciftOrnek: [], bilinmeyen: 0, bilinmeyenOrnek: [], satir: 0, birim: '' };
+  const hi = Math.max(1, Number(tablo.baslikSatiri) || 1) - 1;
+  const aylik = tablo.sekmeler === KAT_AYLIK;
+  const kol = (h, ad, veri) => {
+    if (!ad || ad.startsWith('(')) return -1;
+    const n = katNorm(ad); let i = (h || []).findIndex(x => katNorm(x) === n);
+    if (i < 0 && (n === 'AY' || n === 'TARIH') && veri){   // başlığı boş ay/tarih sütunu
+      const w = Math.max((h || []).length, ...veri.slice(0, 20).map(r => (r || []).length));
+      for (let c = 0; c < w && i < 0; c++) if (!String((h || [])[c] == null ? '' : h[c]).trim() && veri.slice(0, 20).filter(r => (n === 'AY' ? roAyKey((r || [])[c]) : katGun((r || [])[c])) !== null).length > veri.slice(0, 20).length / 2) i = c;
+    }
+    return i;
+  };
+  const zaman = new Set(), anahtarlar = new Map(), bilinmeyen = new Set();
+  let birim = aylik ? 'ay' : '';
+  parcalar.forEach(p => {
+    const rows = p.rows || [], h = rows[hi] || [];
+    const veri = rows.slice(hi + 1).filter(r => (r || []).some(v => katHucreTipi(v) !== 'bos'));
+    if (!veri.length){ sonuc.bosSekmeler.push(p.sekme); return; }
+    sonuc.satir += veri.length;
+    const si = kol(h, tablo.sicil), ti = kol(h, tablo.tarih, veri), ai = kol(h, tablo.ay, veri), li = kol(h, tablo.lokasyon);
+    const ayX = aylik ? roAyKey(p.sekme) : null;
+    if (tablo.yapi === KAT_YAPILAR.yatayolcu || (tablo.yapi === KAT_YAPILAR.yataykisi && !aylik)){
+      h.forEach(x => { const g = katGun(x); if (g !== null) zaman.add(g); });
+      birim = birim || 'gün';
+    }
+    veri.forEach(r => {
+      let z = null;
+      if (ti >= 0){ z = katGun(r[ti]); birim = birim || 'gün'; if (z !== null && !aylik) zaman.add(z); }
+      else if (ai >= 0){ z = roAyKey(r[ai]); birim = birim || 'ay'; if (z !== null) zaman.add(z); }
+      if (aylik) zaman.add(ayX);
+      const s = si >= 0 ? roSicil(r[si]) : '';
+      if (si >= 0 && s && personel && personel.size && !personel.has(s)) bilinmeyen.add(s);
+      if (tablo.yapi === KAT_YAPILAR.yatayolcu) return;
+      const k = [aylik ? ayX : '', tablo.grupBoyutu && !aylik ? p.sekme : '', z === null ? '' : z, s, li >= 0 ? roUp(r[li]) : ''].join('|');
+      if (si < 0 && ti < 0 && ai < 0 && li < 0) return;
+      if (anahtarlar.has(k)){ sonuc.cift++; if (sonuc.ciftOrnek.length < 5) sonuc.ciftOrnek.push([s, z === null ? '' : (birim === 'gün' ? katGunMetin(z) : roAyEtiket(z)), aylik ? p.sekme : ''].filter(Boolean).join(' · ')); }
+      else anahtarlar.set(k, 1);
+    });
+  });
+  sonuc.birim = birim;
+  sonuc.bilinmeyen = bilinmeyen.size; sonuc.bilinmeyenOrnek = [...bilinmeyen].slice(0, 8);
+  const z = [...zaman].filter(x => x !== null).sort((a, b) => a - b);
+  if (z.length){
+    const et = birim === 'gün' ? katGunMetin : roAyEtiket;
+    sonuc.kapsam = et(z[0]) + ' – ' + et(z[z.length - 1]);
+    const set = new Set(z);
+    for (let x = z[0]; x <= z[z.length - 1]; x++) if (!set.has(x)) sonuc.eksik.push(et(x));
+  } else if (tablo.yapi === KAT_YAPILAR.yatayolcu && parcalar.length){
+    const g = ((parcalar[0].rows || [])[hi] || []).filter(katBaslikGun).length;
+    sonuc.kapsam = `${g} gün sütunu (başlıkta yıl yok), ${sonuc.satir} ölçü`;
+  } else if (sonuc.satir) sonuc.kapsam = sonuc.satir + ' satır (zaman sütunu yok)';
+  return sonuc;
+}
+function katSaglikOzet(s){
+  if (!s) return '';
+  const p = [s.kapsam || 'veri yok'];
+  p.push(s.eksik.length ? `eksik ${s.eksik.length} ${s.birim || ''}`.trim() : 'eksik yok');
+  if (s.cift) p.push(`çift kayıt ${s.cift}`);
+  if (s.bilinmeyen) p.push(`listede olmayan sicil ${s.bilinmeyen}`);
+  return p.join('; ');
+}
+// ==KAT-MOTOR-SON==
+
+
+// ============================================================================
+// ===== VERİ KATALOĞU — ekran (27.11.2026) =====
+// RAPOR AYARLARI > KATALOG DOSYALAR / KATALOG TABLOLAR / KATALOG ALANLAR. Okuma sıralı ve önbellekli (roSirayla);
+// tarama biçimli değerle (yüzde, tarih tipleri görünsün), sağlık biçimsiz değerle okur (Excel Oluştur aynı önbelleği kullanır).
+// Veri dosyalarına hiçbir koşulda yazılmaz; yalnız RAPOR AYARLARI'na yazılır.
+// ============================================================================
+const KAT_S = { dosya: 'KATALOG DOSYALAR', tablo: 'KATALOG TABLOLAR', alan: 'KATALOG ALANLAR' };
+const KAT_DB = [['Dosya', 'dosya'], ['Sheet ID', 'sheetId'], ['Aktif', 'aktif'], ['Salt Okunur', 'saltOkunur'], ['Not', 'not']];
+const KAT_TB = [['Tablo', 'tablo'], ['Dosya', 'dosya'], ['Sheet ID', 'sheetId'], ['Sekmeler', 'sekmeler'], ['Yapı', 'yapi'], ['Başlık Satırı', 'baslikSatiri'], ['Grup Boyutu', 'grupBoyutu'],
+  ['Sicil Sütunu', 'sicil'], ['Tarih Sütunu', 'tarih'], ['Ay Sütunu', 'ay'], ['Takım Sütunu', 'takim'], ['Ad Sütunu', 'ad'], ['Lokasyon Sütunu', 'lokasyon'],
+  ['Tanecik', 'tanecik'], ['Durum', 'durum'], ['Kapsam', 'kapsam'], ['Not', 'not'], ['İmza', 'imza'], ['Son Tarama', 'sonTarama']];
+const KAT_AB = [['Tablo', 'tablo'], ['Alan', 'alan'], ['Görünen Ad', 'gorunen'], ['Tip', 'tip'], ['Toplama', 'toplama'], ['Eş Adlar', 'esAdlar'], ['Gizli', 'gizli'], ['İlk', 'ilk'], ['Son', 'son'], ['Durum', 'durum']];
+const KAT_ANAHTARLAR = [['sicil', 'Sicil'], ['tarih', 'Tarih'], ['ay', 'Ay'], ['takim', 'Takım'], ['ad', 'Ad'], ['lokasyon', 'Lokasyon']];
+const KAT = { yuklendi: false, dosyalar: [], tablolar: [], alanlar: [], eskiSatir: {}, saglik: new Map(), ek: new Map(), meta: new Map(), filtre: 'Hepsi', acik: null, taslak: null };
+
+function katSatirlariOku(rows, kolonlar){
+  const h = (rows[0] || []).map(roUp);
+  const idx = kolonlar.map(([b]) => h.indexOf(roUp(b)));
+  return rows.slice(1).filter(r => (r || []).some(v => String(v == null ? '' : v).trim()))
+    .map(r => { const o = {}; kolonlar.forEach(([, k], j) => { const i = idx[j]; o[k] = i < 0 ? '' : String(r[i] == null ? '' : r[i]).trim(); }); return o; });
+}
+async function katSekmeleriHazirla(){
+  const meta = await roSirayla(() => authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}?fields=sheets.properties(sheetId,title)`));
+  const var_ = new Set((meta.sheets || []).map(s => roUp(s.properties.title)));
+  const eksik = [[KAT_S.dosya, KAT_DB], [KAT_S.tablo, KAT_TB], [KAT_S.alan, KAT_AB]].filter(([ad]) => !var_.has(roUp(ad)));
+  if (!eksik.length) return;
+  await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}:batchUpdate`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: eksik.map(([ad]) => ({ addSheet: { properties: { title: ad, gridProperties: { frozenRowCount: 1 } } } })) }) });
+  for (const [ad, kol] of eksik){
+    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}/values/${encodeURIComponent(`'${ad}'!A1`)}?valueInputOption=RAW`,
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: [kol.map(k => k[0])] }) });
+  }
+}
+async function katYukle(zorla){
+  if (KAT.yuklendi && !zorla) return;
+  await katSekmeleriHazirla();
+  const aralik = s => `'${s}'!A1:Z20000`;
+  [KAT_S.dosya, KAT_S.tablo, KAT_S.alan].forEach(s => RO.cache.delete(RO_AYAR_ID + '|' + aralik(s)));
+  const [d, t, a] = await roBatchGet(RO_AYAR_ID, [KAT_S.dosya, KAT_S.tablo, KAT_S.alan].map(aralik));
+  KAT.dosyalar = katSatirlariOku(d, KAT_DB).filter(x => x.sheetId);
+  KAT.tablolar = katSatirlariOku(t, KAT_TB).filter(x => x.tablo);
+  KAT.alanlar = katSatirlariOku(a, KAT_AB).filter(x => x.tablo && x.alan);
+  KAT.eskiSatir = { [KAT_S.dosya]: d.length, [KAT_S.tablo]: t.length, [KAT_S.alan]: a.length };
+  KAT.yuklendi = true;
+}
+async function katSekmeYaz(sekme, kolonlar, nesneler){
+  const rows = [kolonlar.map(k => k[0])].concat(nesneler.map(o => kolonlar.map(([, k]) => String(o[k] == null ? '' : o[k]))));
+  const son = roKol(kolonlar.length - 1);
+  await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}/values/${encodeURIComponent(`'${sekme}'!A1:${son}${rows.length}`)}?valueInputOption=RAW`,
+    { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: rows }) });
+  const eski = KAT.eskiSatir[sekme] || 0;
+  if (eski > rows.length){
+    await authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${RO_AYAR_ID}/values/${encodeURIComponent(`'${sekme}'!A${rows.length + 1}:${son}${eski}`)}:clear`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  }
+  KAT.eskiSatir[sekme] = rows.length;
+  RO.cache.delete(RO_AYAR_ID + '|' + `'${sekme}'!A1:Z20000`);
+}
+async function katKatalogKaydet(){
+  await katSekmeYaz(KAT_S.tablo, KAT_TB, KAT.tablolar);
+  await katSekmeYaz(KAT_S.alan, KAT_AB, KAT.alanlar);
+}
+const katSheetUrl = id => `https://docs.google.com/spreadsheets/d/${id}/edit`;
+const katSekmeAdi = t => "'" + String(t).replace(/'/g, "''") + "'";
+// Dosya yapısı (sekme adları ve boyutları), oturum boyunca önbellekli
+async function katMeta(sheetId, zorla){
+  if (KAT.meta.has(sheetId) && !zorla) return KAT.meta.get(sheetId);
+  const m = await roSirayla(() => authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title,sheets.properties(title,gridProperties(rowCount,columnCount))`));
+  const v = { ad: (m.properties || {}).title || '', sekmeler: (m.sheets || []).map(s => ({ ad: s.properties.title, satir: (s.properties.gridProperties || {}).rowCount || 1000, sutun: (s.properties.gridProperties || {}).columnCount || 26 })) };
+  KAT.meta.set(sheetId, v);
+  return v;
+}
+// Biçimli okuma (tarama): yüzde, tarih, saat ekranda nasıl görünüyorsa öyle gelir → tip doğru anlaşılır
+async function katBicimliOku(sheetId, ranges){
+  const out = [];
+  for (let p = 0; p < ranges.length; p += 20){
+    const parca = ranges.slice(p, p + 20);
+    const q = parca.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const d = await roSirayla(() => authFetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchGet?${q}&valueRenderOption=FORMATTED_VALUE`));
+    (d.valueRanges || []).forEach(vr => out.push(vr.values || []));
+  }
+  return out;
+}
+async function katPersonelSeti(){
+  try {
+    await roAyarYukle();
+    const ad = roUp(roAyarDeger('Personel Listesi Kaynağı', 'PERSONEL LİSTESİ'));
+    const k = RO.kaynaklar.find(x => x.adi === ad);
+    if (!k) return new Set();
+    const [rows] = await roBatchGet(k.sheetId, [`'${k.sekme}'!A1:ZZ3000`]);
+    const si = roSutunBul(rows[0] || [], k.sicil);
+    return new Set(si < 0 ? [] : rows.slice(1).map(r => roSicil(r[si])).filter(Boolean));
+  } catch(e){ return new Set(); }
+}
+
+// ---------- Sayfa ----------
+async function katSayfasi(){
+  if (!userPerms.raporOlusturucu) return;
+  document.getElementById('katAyarLink').href = katSheetUrl(RO_AYAR_ID);
+  try {
+    ykDurum('katTaramaDurum', 'Katalog okunuyor…');
+    await katYukle();
+    ykDurum('katTaramaDurum', KAT.tablolar.length ? '' : 'Katalog boş. Dosyaları kontrol edip Tara\'ya bas.', KAT.tablolar.length ? '' : 'warn');
+  } catch(err){ ykDurum('katTaramaDurum', '✗ ' + err.message, 'err'); }
+  katDosyalariCiz(); katListeCiz();
+}
+function katDosyalariCiz(){
+  const t = document.getElementById('katDosyaTablo');
+  t.innerHTML = '<thead><tr><th>Dosya</th><th>Sheet ID</th><th>Aktif</th><th>Salt Okunur</th><th>Not</th><th></th></tr></thead><tbody>' +
+    KAT.dosyalar.map((d, i) => `<tr><td><a href="${katSheetUrl(ykEsc(d.sheetId))}" target="_blank" rel="noopener">${ykEsc(d.dosya || '(adsız)')}</a></td><td style="font-family:monospace;font-size:11px;">${ykEsc(d.sheetId)}</td>
+      <td style="text-align:center;"><input type="checkbox" data-kd="${i}" data-k="aktif" ${roEvet(d.aktif) || !d.aktif ? 'checked' : ''}></td>
+      <td style="text-align:center;"><input type="checkbox" data-kd="${i}" data-k="saltOkunur" ${roEvet(d.saltOkunur) ? 'checked' : ''}></td>
+      <td><input type="text" data-kd="${i}" data-k="not" value="${ykEsc(d.not)}" style="width:260px;"></td>
+      <td><button class="btn y-btn" data-kdsil="${i}" title="Listeden çıkar (Kaydet ile yazılır; kataloğu silinmez)">✕</button></td></tr>`).join('') + '</tbody>';
+  t.querySelectorAll('[data-kd]').forEach(el => el.addEventListener('change', () => {
+    const d = KAT.dosyalar[Number(el.dataset.kd)];
+    d[el.dataset.k] = el.type === 'checkbox' ? (el.checked ? 'Evet' : 'Hayır') : el.value;
+    ykDurum('katDosyaDurum', 'Kaydedilmemiş değişiklik var.', 'warn');
+  }));
+  t.querySelectorAll('[data-kdsil]').forEach(b => b.onclick = () => { KAT.dosyalar.splice(Number(b.dataset.kdsil), 1); katDosyalariCiz(); ykDurum('katDosyaDurum', 'Dosya çıkarıldı — Kaydet ile yazılır.', 'warn'); });
+}
+async function katDosyaEkle(){
+  const v = document.getElementById('katLink').value.trim();
+  const m = v.match(/\/d\/([a-zA-Z0-9_-]{20,})/) || v.match(/^([a-zA-Z0-9_-]{20,})$/);
+  if (!m) return ykDurum('katDosyaDurum', 'Bağlantıda Sheet ID bulunamadı.', 'err');
+  const id = m[1];
+  if (KAT.dosyalar.some(d => d.sheetId === id)) return ykDurum('katDosyaDurum', 'Bu dosya zaten listede.', 'warn');
+  try {
+    ykDurum('katDosyaDurum', 'Dosya okunuyor…');
+    const meta = await katMeta(id, true);
+    KAT.dosyalar.push({ dosya: meta.ad, sheetId: id, aktif: 'Evet', saltOkunur: '', not: '' });
+    document.getElementById('katLink').value = '';
+    katDosyalariCiz();
+    ykDurum('katDosyaDurum', `"${meta.ad}" eklendi (${meta.sekmeler.length} sekme) — Kaydet, sonra Tara.`, 'warn');
+  } catch(err){ ykDurum('katDosyaDurum', '✗ Dosya açılamadı (paylaşım ya da ID): ' + err.message, 'err'); }
+}
+async function katDosyaKaydet(){
+  try { ykDurum('katDosyaDurum', 'Kaydediliyor…'); await katSekmeYaz(KAT_S.dosya, KAT_DB, KAT.dosyalar); ykDurum('katDosyaDurum', `✓ Kaydedildi (${KAT.dosyalar.length} dosya).`, 'ok'); }
+  catch(err){ ykDurum('katDosyaDurum', '✗ ' + err.message, 'err'); }
+}
+
+// ---------- Tarama ----------
+async function katTara(){
+  const btn = document.getElementById('katTara'); btn.disabled = true;
+  try {
+    await katYukle();
+    const aktif = KAT.dosyalar.filter(d => !d.aktif || roEvet(d.aktif));
+    if (!aktif.length) throw new Error('Aktif dosya yok.');
+    ykDurum('katTaramaDurum', 'Personel Listesi okunuyor…');
+    const personel = await katPersonelSeti();
+    const kayitli = new Map(KAT.tablolar.map(t => [t.sheetId + '|' + t.sekmeler, { baslikSatiri: Number(t.baslikSatiri) || 0 }]));
+    const yeniler = [], hatalar = [], taranan = new Set();
+    const tarih = new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    for (let i = 0; i < aktif.length; i++){
+      const d = aktif[i];
+      ykDurum('katTaramaDurum', `${i + 1}/${aktif.length}: ${d.dosya || d.sheetId} taranıyor…`);
+      try {
+        const meta = await katMeta(d.sheetId, true);
+        if (meta.ad && meta.ad !== d.dosya) d.dosya = meta.ad;
+        const ranges = meta.sekmeler.map(s => `${katSekmeAdi(s.ad)}!A1:${roKol(Math.min(s.sutun, 702) - 1)}${Math.min(s.satir, 60)}`);
+        const veri = await katBicimliOku(d.sheetId, ranges);
+        const tablolar = katDosyaAnaliz(d.dosya || meta.ad, d.sheetId, meta.sekmeler.map((s, j) => ({ ad: s.ad, rows: veri[j] || [] })), personel, kayitli);
+        tablolar.forEach(t => { KAT.ek.set(t.sheetId + '|' + roUp(t.sekmeler), { sekmeListesi: t.sekmeListesi, bosSekmeler: t.bosSekmeler, satir: t.satir, ornek: new Map(t.alanlar.map(a => [katNorm(a.ad), a.ornek])) }); });
+        yeniler.push(...tablolar); taranan.add(d.sheetId);
+      } catch(err){ hatalar.push(`${d.dosya || d.sheetId}: ${err.message.slice(0, 160)}`); }
+    }
+    // taranmayan dosyaların kataloğu olduğu gibi kalır
+    const eski = { tablolar: KAT.tablolar.filter(t => taranan.has(t.sheetId)), alanlar: KAT.alanlar.filter(a => KAT.tablolar.some(t => t.tablo === a.tablo && taranan.has(t.sheetId))) };
+    const kalanT = KAT.tablolar.filter(t => !taranan.has(t.sheetId)), kalanA = KAT.alanlar.filter(a => kalanT.some(t => t.tablo === a.tablo));
+    const b = katBirlestir(eski, yeniler, tarih);
+    // aynı adlı iki tablo olmasın (yeni tablonun adına sayı eklenir)
+    const adlar = new Set(kalanT.map(t => roUp(t.tablo)));
+    b.tablolar.forEach(t => {
+      let ad = t.tablo, n = 2;
+      while (adlar.has(roUp(ad))) ad = t.tablo + ' (' + (n++) + ')';
+      if (ad !== t.tablo){ b.alanlar.filter(a => a.tablo === t.tablo).forEach(a => a.tablo = ad); t.tablo = ad; }
+      adlar.add(roUp(ad));
+    });
+    KAT.tablolar = kalanT.concat(b.tablolar); KAT.alanlar = kalanA.concat(b.alanlar);
+    ykDurum('katTaramaDurum', 'Kaydediliyor…');
+    await katKatalogKaydet();
+    await katSekmeYaz(KAT_S.dosya, KAT_DB, KAT.dosyalar);
+    katDosyalariCiz();
+    const o = b.ozet;
+    document.getElementById('katOzet').innerHTML = [`<b>${tarih}</b> taraması: ${yeniler.length} tablo.`,
+      o.yeni.length ? `Yeni: ${o.yeni.length}` : '', o.degisen.length ? `<span style="color:var(--accent)">Yapısı değişen: ${o.degisen.map(ykEsc).join(', ')}</span>` : '',
+      o.kayip.length ? `<span style="color:var(--danger)">Bulunamayan: ${o.kayip.map(ykEsc).join(', ')}</span>` : '', `Değişmeyen: ${o.ayni.length}`].filter(Boolean).join(' · ');
+    ykDurum('katTaramaDurum', hatalar.length ? '⚠ Okunamayan dosyalar:\n' + hatalar.join('\n') : '✓ Tarama bitti ve kaydedildi.', hatalar.length ? 'warn' : 'ok');
+    katListeCiz();
+    if (KAT.acik) katDetayAc(KAT.acik);
+  } catch(err){ ykDurum('katTaramaDurum', '✗ ' + err.message, 'err'); }
+  finally { btn.disabled = false; }
+}
+
+// ---------- Veri sağlığı ----------
+async function katTabloSaglik(t, personel){
+  const meta = await katMeta(t.sheetId);
+  let sekmeler;
+  if (t.sekmeler === KAT_AYLIK) sekmeler = meta.sekmeler.filter(s => roAyKey(s.ad) !== null);
+  else { const ad = String(t.sekmeler).split('|').map(x => roUp(x)); sekmeler = meta.sekmeler.filter(s => ad.includes(roUp(s.ad))); }
+  if (!sekmeler.length) throw new Error('sekme bulunamadı');
+  const yatayOlcu = t.yapi === KAT_YAPILAR.yatayolcu;
+  const ranges = sekmeler.map(s => `${katSekmeAdi(s.ad)}!A1:${roKol(Math.min(s.sutun, 702) - 1)}${yatayOlcu ? 200 : ''}`);
+  const veri = await roBatchGet(t.sheetId, ranges);
+  return katSaglik(t, sekmeler.map((s, i) => ({ sekme: s.ad, rows: veri[i] || [] })), personel);
+}
+async function katSaglikTara(yalniz){
+  const btn = document.getElementById('katSaglikBtn'); btn.disabled = true;
+  try {
+    await katYukle();
+    const liste = yalniz ? KAT.tablolar.filter(t => t.tablo === yalniz) : KAT.tablolar.filter(t => t.durum !== 'Kapsam Dışı' && !/^Bulunamadı/.test(t.not));
+    if (!liste.length) throw new Error('Taranacak tablo yok (önce Tara).');
+    const personel = await katPersonelSeti();
+    const hatalar = [];
+    for (let i = 0; i < liste.length; i++){
+      const t = liste[i];
+      ykDurum(yalniz ? 'katDetayDurum' : 'katTaramaDurum', `${i + 1}/${liste.length}: ${t.tablo} verisi okunuyor…`);
+      try { const s = await katTabloSaglik(t, personel); KAT.saglik.set(t.tablo, s); t.kapsam = katSaglikOzet(s); }
+      catch(err){ hatalar.push(`${t.tablo}: ${err.message.slice(0, 160)}`); }
+    }
+    await katSekmeYaz(KAT_S.tablo, KAT_TB, KAT.tablolar);
+    const msg = hatalar.length ? '⚠ Okunamayanlar:\n' + hatalar.join('\n') : `✓ ${liste.length} tablonun veri sağlığı okundu.`;
+    ykDurum(yalniz ? 'katDetayDurum' : 'katTaramaDurum', msg, hatalar.length ? 'warn' : 'ok');
+    katListeCiz();
+    if (KAT.acik) katDetaySaglikCiz();
+  } catch(err){ ykDurum(yalniz ? 'katDetayDurum' : 'katTaramaDurum', '✗ ' + err.message, 'err'); }
+  finally { btn.disabled = false; }
+}
+
+// ---------- Liste ----------
+const KAT_ROZET = { 'Yeni': '#2563EB', 'Onaylı': '#047857', 'Değişti': '#B45309', 'Kapsam Dışı': '#6B7280' };
+const katRozet = d => `<span class="kat-rozet" style="background:${KAT_ROZET[d] || '#6B7280'}">${ykEsc(d || 'Yeni')}</span>`;
+function katListeCiz(){
+  const sira = { 'Değişti': 0, 'Yeni': 1, 'Onaylı': 2, 'Kapsam Dışı': 3 };
+  const say = d => KAT.tablolar.filter(t => d === 'Hepsi' || (t.durum || 'Yeni') === d).length;
+  document.getElementById('katFiltre').innerHTML = ['Hepsi'].concat(KAT_DURUMLAR).map(d =>
+    `<button class="btn y-btn${KAT.filtre === d ? ' primary' : ''}" data-katf="${d}">${d} (${say(d)})</button>`).join('');
+  document.querySelectorAll('[data-katf]').forEach(b => b.onclick = () => { KAT.filtre = b.dataset.katf; katListeCiz(); });
+  const liste = KAT.tablolar.filter(t => KAT.filtre === 'Hepsi' || (t.durum || 'Yeni') === KAT.filtre)
+    .sort((a, b) => (sira[a.durum] ?? 1) - (sira[b.durum] ?? 1) || String(a.tablo).localeCompare(String(b.tablo), 'tr'));
+  const tab = document.getElementById('katTabloListe');
+  if (!liste.length){ tab.innerHTML = '<tbody><tr><td class="hint">Tablo yok.</td></tr></tbody>'; return; }
+  tab.innerHTML = '<thead><tr><th>Tablo</th><th>Yapı</th><th>Tanecik</th><th>Anahtarlar</th><th>Alan</th><th>Kapsam</th><th>Durum</th><th></th></tr></thead><tbody>' + liste.map(t => {
+    const ek = KAT.ek.get(t.sheetId + '|' + roUp(t.sekmeler));
+    const sek = t.sekmeler === KAT_AYLIK ? `Aylık sekmeler${ek ? ' (' + ek.sekmeListesi.length + ')' : ''}` : (t.grupBoyutu ? `${String(t.sekmeler).split('|').length} sekme → ${ykEsc(t.grupBoyutu)}` : 'Tek sekme');
+    const ank = KAT_ANAHTARLAR.filter(([k]) => t[k]).map(([, ad]) => ad).join(', ') || '—';
+    const n = KAT.alanlar.filter(a => a.tablo === t.tablo && a.durum !== 'Yok').length;
+    const yeniAlan = KAT.alanlar.filter(a => a.tablo === t.tablo && a.durum === 'Yeni').length;
+    return `<tr${KAT.acik === t.tablo ? ' style="background:var(--accent-soft)"' : ''}><td><b>${ykEsc(t.tablo)}</b>${t.not ? `<div class="ro-not${/^Bulunamadı/.test(t.not) ? ' uyari' : ''}">${ykEsc(t.not)}</div>` : ''}</td>
+      <td>${ykEsc(t.yapi)}<div class="ro-not">${sek}</div></td><td>${ykEsc(t.tanecik)}</td><td>${ykEsc(ank)}</td>
+      <td>${n}${yeniAlan ? ` <span class="ro-not uyari">+${yeniAlan} yeni</span>` : ''}</td>
+      <td style="white-space:normal;max-width:320px;">${ykEsc(t.kapsam || '')}</td><td>${katRozet(t.durum)}</td>
+      <td><button class="btn y-btn" data-katac="${ykEsc(t.tablo)}">Aç</button></td></tr>`;
+  }).join('') + '</tbody>';
+  tab.querySelectorAll('[data-katac]').forEach(b => b.onclick = () => katDetayAc(b.dataset.katac));
+}
+
+// ---------- Ayrıntı (onay / düzeltme) ----------
+function katDetayAc(ad){
+  const t = KAT.tablolar.find(x => x.tablo === ad);
+  if (!t){ document.getElementById('katDetay').style.display = 'none'; KAT.acik = null; return; }
+  KAT.acik = ad;
+  KAT.taslak = { t: Object.assign({}, t), alanlar: KAT.alanlar.filter(a => a.tablo === ad).map(a => Object.assign({}, a)) };
+  document.getElementById('katDetay').style.display = 'block';
+  katDetayCiz();
+  katListeCiz();
+  document.getElementById('katDetay').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function katDetayCiz(){
+  const { t, alanlar } = KAT.taslak;
+  const ek = KAT.ek.get(t.sheetId + '|' + roUp(t.sekmeler));
+  document.getElementById('katDetayBaslik').innerHTML = ykEsc(t.tablo) + ' ' + katRozet(t.durum);
+  const sekmeBilgi = t.sekmeler === KAT_AYLIK
+    ? (ek ? `Aylık sekmeler: ${ykEsc(ek.sekmeListesi[0])} … ${ykEsc(ek.sekmeListesi[ek.sekmeListesi.length - 1])} (${ek.sekmeListesi.length})` : 'Aylık sekmeler (her ay ayrı sekme; ay sekme adından)') + (ek && ek.bosSekmeler.length ? ` · boş: ${ek.bosSekmeler.map(ykEsc).join(', ')}` : '')
+    : `Sekmeler: ${ykEsc(t.sekmeler)}`;
+  document.getElementById('katDetayBilgi').innerHTML = `Dosya: <a href="${katSheetUrl(ykEsc(t.sheetId))}" target="_blank" rel="noopener">${ykEsc(t.dosya)}</a> · ${sekmeBilgi} · Yapı: <b>${ykEsc(t.yapi)}</b> · Tanecik: <b>${ykEsc(t.tanecik)}</b>${t.sonTarama ? ' · Son tarama: ' + ykEsc(t.sonTarama) : ''}${ek ? ' · ' + ek.satir + ' veri satırı (ilk satırlara göre)' : ''}`;
+  const adlar = alanlar.filter(a => a.durum !== 'Yok').map(a => a.alan);
+  const sec = (k, v) => {
+    const ops = [''].concat(adlar);
+    if (v && !ops.includes(v)) ops.push(v);
+    if (t.yapi !== 'Liste' && k === 'tarih' && !ops.includes('(sütun başlıkları)')) ops.push('(sütun başlıkları)');
+    return `<select data-katk="${k}" style="min-width:150px;">${ops.map(o => `<option value="${ykEsc(o)}"${o === v ? ' selected' : ''}>${o ? ykEsc(o) : '—'}</option>`).join('')}</select>`;
+  };
+  document.getElementById('katDetayForm').innerHTML = `
+    <div class="row" style="margin-bottom:8px;">
+      <label>Tablo adı: <input type="text" data-katk="tablo" value="${ykEsc(t.tablo)}" style="min-width:300px;"></label>
+      <label>Başlık satırı: <input type="number" min="1" max="50" data-katk="baslikSatiri" value="${ykEsc(t.baslikSatiri || 1)}"></label>
+      ${t.grupBoyutu && t.grupBoyutu !== 'AY' ? `<label title="Sekme adı bu adla bir sütun olur (ör. LOKASYON)">Sekme adı = <input type="text" data-katk="grupBoyutu" value="${ykEsc(t.grupBoyutu)}" style="width:130px;"></label>` : ''}
+    </div>
+    <div class="row" style="margin-bottom:8px;">${KAT_ANAHTARLAR.map(([k, ad]) => `<label>${ad}: ${sec(k, t[k])}</label>`).join('')}</div>
+    <div class="row"><label>Durum: <select data-katk="durum">${KAT_DURUMLAR.map(d => `<option${d === (t.durum || 'Yeni') ? ' selected' : ''}>${d}</option>`).join('')}</select></label><label>Not: <input type="text" data-katk="not" value="${ykEsc(t.not)}" style="min-width:480px;"></label></div>`;
+  document.querySelectorAll('#katDetayForm [data-katk]').forEach(el => el.addEventListener('change', () => {
+    const k = el.dataset.katk;
+    t[k] = k === 'grupBoyutu' || k === 'tablo' ? roUp(el.value) || t[k] : String(el.value).trim();
+    if (k === 'tablo'){ el.value = t.tablo; }
+    t.tanecik = katTanecik({ anahtar: { sicil: t.sicil, tarih: t.tarih, ay: t.ay, lokasyon: t.lokasyon }, grupBoyutu: t.grupBoyutu, yapi: Object.keys(KAT_YAPILAR).find(x => KAT_YAPILAR[x] === t.yapi) || 'liste' });
+    katDetayKaydedilmedi();
+  }));
+  const ornek = ek ? ek.ornek : new Map();
+  if (!alanlar.length){ document.getElementById('katAlanTablo').innerHTML = `<tbody><tr><td class="hint">${t.durum === 'Kapsam Dışı' ? 'Kapsam dışı tabloların alanları saklanmaz. Kataloğa almak için Durum\'u "Yeni" yapıp Kaydet, sonra Tara.' : 'Alan yok — Tara.'}</td></tr></tbody>`; katDetaySaglikCiz(); ykDurum('katDetayDurum', ''); return; }
+  const tab = document.getElementById('katAlanTablo');
+  tab.innerHTML = '<thead><tr><th>Alan</th><th>Görünen Ad</th><th>Tip</th><th>Toplama</th><th>Eş Adlar</th><th>Gizli</th><th>İlk – Son</th><th>Örnek</th><th></th></tr></thead><tbody>' +
+    alanlar.map((a, i) => `<tr${a.durum === 'Yok' ? ' style="opacity:.5"' : ''}><td><b>${ykEsc(a.alan)}</b></td>
+      <td><input type="text" data-kat-a="${i}" data-k="gorunen" value="${ykEsc(a.gorunen)}" style="width:${Math.min(Math.max(String(a.gorunen).length, 8) * 8 + 24, 300)}px;"></td>
+      <td><select data-kat-a="${i}" data-k="tip">${KAT_TIPLER.map(x => `<option${x === a.tip ? ' selected' : ''}>${x}</option>`).join('')}</select></td>
+      <td><select data-kat-a="${i}" data-k="toplama">${KAT_TOPLAMALAR.map(x => `<option${x === a.toplama ? ' selected' : ''}>${x}</option>`).join('')}</select></td>
+      <td><input type="text" data-kat-a="${i}" data-k="esAdlar" value="${ykEsc(a.esAdlar)}" style="width:180px;"></td>
+      <td style="text-align:center;"><input type="checkbox" data-kat-a="${i}" data-k="gizli" ${roEvet(a.gizli) ? 'checked' : ''}></td>
+      <td class="ro-not">${ykEsc([a.ilk, a.son].filter(Boolean).join(' – '))}</td>
+      <td class="ro-not" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${roEvet(a.gizli) ? '•••' : ykEsc(ornek.get(katNorm(a.alan)) || '')}</td>
+      <td>${a.durum === 'Yeni' ? katRozet('Yeni') : (a.durum === 'Yok' ? '<span class="ro-not uyari">artık yok</span>' : '')}</td></tr>`).join('') + '</tbody>';
+  tab.querySelectorAll('[data-kat-a]').forEach(el => el.addEventListener('change', () => {
+    const a = alanlar[Number(el.dataset.katA)], k = el.dataset.k;
+    a[k] = el.type === 'checkbox' ? (el.checked ? 'Evet' : '') : (k === 'gorunen' ? roUp(el.value) : String(el.value).trim());
+    if (k === 'gorunen') el.value = a[k];
+    katDetayKaydedilmedi();
+  }));
+  katDetaySaglikCiz();
+  ykDurum('katDetayDurum', '');
+}
+function katDetayKaydedilmedi(){ ykDurum('katDetayDurum', 'Kaydedilmemiş değişiklik var.', 'warn'); }
+function katDetaySaglikCiz(){
+  const el = document.getElementById('katDetaySaglik');
+  if (!KAT.taslak){ el.innerHTML = ''; return; }
+  const s = KAT.saglik.get(KAT.acik);
+  const dugme = `<button class="btn y-btn" id="katTekSaglik">🩺 Bu tablonun veri sağlığı</button>`;
+  if (!s){ el.innerHTML = `<div class="row" style="margin-top:12px;">${dugme}${KAT.taslak.t.kapsam ? `<span class="hint" style="margin:0;">Son bilinen: ${ykEsc(KAT.taslak.t.kapsam)}</span>` : ''}</div>`; }
+  else {
+    const kisa = (a, n) => a.slice(0, n).map(ykEsc).join(', ') + (a.length > n ? ` … (+${a.length - n})` : '');
+    el.innerHTML = `<div class="kat-saglik"><b>Veri sağlığı</b> ${dugme}<ul>
+      <li>Kapsam: <b>${ykEsc(s.kapsam || 'veri yok')}</b> · ${s.satir} veri satırı</li>
+      <li>${s.eksik.length ? `<span style="color:var(--accent)">Eksik ${ykEsc(s.birim)}: ${kisa(s.eksik, 25)}</span>` : 'Eksik dönem yok'}</li>
+      ${s.bosSekmeler.length ? `<li>Boş sekme: ${kisa(s.bosSekmeler, 12)}</li>` : ''}
+      ${s.cift ? `<li style="color:var(--danger)">Çift kayıt: ${s.cift} (ör. ${kisa(s.ciftOrnek, 5)})</li>` : '<li>Çift kayıt yok</li>'}
+      ${s.bilinmeyen ? `<li>Personel Listesi'nde olmayan sicil: ${s.bilinmeyen} (ayrılmış personel olabilir; ör. ${kisa(s.bilinmeyenOrnek, 8)})</li>` : ''}
+    </ul></div>`;
+  }
+  const b = document.getElementById('katTekSaglik');
+  if (b) b.onclick = () => katSaglikTara(KAT.acik);
+}
+async function katDetayKaydet(durum){
+  if (!KAT.taslak) return;
+  const { t, alanlar } = KAT.taslak;
+  const eskiAd = KAT.acik;
+  if (roUp(t.tablo) !== roUp(eskiAd) && KAT.tablolar.some(x => x.tablo !== eskiAd && roUp(x.tablo) === roUp(t.tablo)))
+    return ykDurum('katDetayDurum', `"${t.tablo}" adında başka bir tablo var.`, 'err');
+  if (durum === 'Onaylı' && !alanlar.length) return ykDurum('katDetayDurum', 'Alanı olmayan tablo onaylanamaz: Durum\'u "Yeni" yapıp Kaydet, sonra Tara.', 'err');
+  if (durum) t.durum = durum;
+  let yeniAlanlar = alanlar.map(a => Object.assign(a, { tablo: t.tablo }));
+  if (durum === 'Onaylı') yeniAlanlar = yeniAlanlar.filter(a => a.durum !== 'Yok').map(a => Object.assign(a, { durum: '' }));
+  const i = KAT.tablolar.findIndex(x => x.tablo === eskiAd);
+  KAT.tablolar[i] = t;
+  KAT.alanlar = KAT.alanlar.filter(a => a.tablo !== eskiAd).concat(yeniAlanlar);
+  if (eskiAd !== t.tablo && KAT.saglik.has(eskiAd)){ KAT.saglik.set(t.tablo, KAT.saglik.get(eskiAd)); KAT.saglik.delete(eskiAd); }
+  try {
+    ykDurum('katDetayDurum', 'Kaydediliyor…');
+    await katKatalogKaydet();
+    KAT.acik = t.tablo;
+    katDetayAc(t.tablo);
+    ykDurum('katDetayDurum', durum === 'Onaylı' ? '✓ Onaylandı ve kaydedildi.' : (durum === 'Kapsam Dışı' ? '✓ Kapsam dışı bırakıldı.' : '✓ Kaydedildi.'), 'ok');
+  } catch(err){ ykDurum('katDetayDurum', '✗ ' + err.message, 'err'); }
+}
+
+document.getElementById('katDosyaEkle').addEventListener('click', katDosyaEkle);
+document.getElementById('katDosyaKaydet').addEventListener('click', katDosyaKaydet);
+document.getElementById('katTara').addEventListener('click', katTara);
+document.getElementById('katSaglikBtn').addEventListener('click', () => katSaglikTara());
+document.getElementById('katYenile').addEventListener('click', async () => { KAT.meta.clear(); KAT.saglik.clear(); roOnbellekTemizle(); await katYukle(true); katDosyalariCiz(); katListeCiz(); if (KAT.acik) katDetayAc(KAT.acik); ykDurum('katTaramaDurum', '✓ Katalog yeniden okundu.', 'ok'); });
+document.getElementById('katDetayKapat').addEventListener('click', () => { KAT.acik = null; KAT.taslak = null; document.getElementById('katDetay').style.display = 'none'; katListeCiz(); });
+document.getElementById('katOnayla').addEventListener('click', () => katDetayKaydet('Onaylı'));
+document.getElementById('katDetayKaydet').addEventListener('click', () => katDetayKaydet(null));
+document.getElementById('katKapsamDisi').addEventListener('click', () => katDetayKaydet('Kapsam Dışı'));
 </script>
 </body>
 </html>

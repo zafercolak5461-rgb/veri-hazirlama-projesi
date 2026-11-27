@@ -11377,7 +11377,7 @@ function exFiltrele(sonuc, f){
   f = f || {};
   const tlI = sonuc.boyutKol.findIndex(b => b.k === 'tl'), sI = sonuc.boyutKol.findIndex(b => b.k === 'sicil');
   const tlSet = new Set((f.tl || []).map(roUp)), sSet = new Set((f.siciller || []).map(String));
-  const kos = (f.kosullar || []).map(k => ({ i: sonuc.kolonlar.findIndex(c => String(c.id) === String(k.kolon)), op: k.op, d: k.deger })).filter(k => k.i >= 0);
+  const kos = (f.kosullar || []).filter(k => k.mod !== 'renk').map(k => ({ i: sonuc.kolonlar.findIndex(c => String(c.id) === String(k.kolon)), op: k.op, d: k.deger })).filter(k => k.i >= 0);
   let satirlar = sonuc.satirlar.filter(s => (!tlSet.size || tlI < 0 || tlSet.has(roUp(s.sol[tlI])))
     && (!sSet.size || sI < 0 || sSet.has(String(s.sol[sI])))
     && kos.every(k => exKosulUyar(s.deg[k.i], k.op, k.d)));
@@ -11677,7 +11677,8 @@ function exExcelSayfalar(ExcelJS, sekmeler, ayar, bicimHam){
       const son = ilk + m.satir.length - 1;
       if (!ws._exOncelik) ws._exOncelik = 1;   // her koşullu kural ayrı öncelik (Excel aynı önceliği sevmez)
       // koşullu renk kuralları (veri hücrelerine)
-      if (m.satir.length) [true, false].forEach(tamTur => B.kosullar.forEach(kr => {
+      const KOS = (m.ekKosullar || []).concat(B.kosullar);   // sayfanın "Renklendir" koşulları şablondakilerden önce
+      if (m.satir.length) [true, false].forEach(tamTur => KOS.forEach(kr => {
         const uyar = (k, i) => exKuralUyar(kr.icerir, k.baslik, k.alanAd || grupAdi[i]) && exKuralTam(kr.icerir, k.baslik, k.alanAd || grupAdi[i]) === tamTur;
         if (kr.tur === 'skala' || kr.tur === 'enYuksek' || kr.tur === 'enDusuk'){
           m.kol.forEach((k, i) => {
@@ -12010,6 +12011,16 @@ function exFormuleEkle(metin){
   f.focus(); f.setSelectionRange(yer, metin.indexOf('[ ]') >= 0 ? yer + 1 : yer);
   f.dispatchEvent(new Event('input'));
 }
+// "Renklendir" koşulları → koşullu renk kuralları (başlık adı + işaret + değer)
+function exRenkKosullari(f){
+  const yazi = d => ({ C6EFCE: '006100', FFC7CE: '9C0006', FFEB9C: '9C5700' })[d] || '000000';
+  return ((f && f.kosullar) || []).filter(k => k.mod === 'renk' && k.op !== 'bos' && k.op !== 'dolu' && String(k.deger || '').trim()).map(k => {
+    const s = EX.sepet.find(x => String(x.id) === String(k.kolon));
+    const ad = s ? s.gorunen : (/^h\d+$/.test(String(k.kolon)) ? roUp((EX.hesaplar[Number(String(k.kolon).slice(1))] || {}).baslik || 'HESAP ' + (Number(String(k.kolon).slice(1)) + 1)) : '');
+    const d = String(k.dolgu || 'FFC7CE').toUpperCase();
+    return ad ? { icerir: ad, op: k.op, deger: k.deger, dolgu: d, yazi: yazi(d) } : null;
+  }).filter(Boolean);
+}
 function exKosulSiraCiz(){
   const f = EX.filtre;
   const kap = document.getElementById('exKosullar');
@@ -12017,10 +12028,17 @@ function exKosulSiraCiz(){
       <select data-exk="kolon">${exAlanSecenekleri(k.kolon, true)}</select>
       <select data-exk="op">${EX_KOSULLAR.map(([v, t]) => `<option value="${v}"${k.op === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
       <input type="text" data-exk="deger" value="${ykEsc(k.deger)}" placeholder="değer" style="width:90px;${k.op === 'bos' || k.op === 'dolu' ? 'display:none;' : ''}">
+      <select data-exk="mod" title="Süz: yalnız koşulu sağlayanlar gelir · Renklendir: herkes kalır, koşulu sağlayan hücreler boyanır">${[['suz', 'Süz'], ['renk', 'Renklendir']].map(([v, t]) => `<option value="${v}"${(k.mod || 'suz') === v ? ' selected' : ''}${v === 'renk' && (k.op === 'bos' || k.op === 'dolu') ? ' disabled' : ''}>${t}</option>`).join('')}</select>
+      <input type="color" data-exk="dolgu" value="${exHexInput(k.dolgu || 'FFC7CE')}" title="Renk" style="${k.mod === 'renk' ? '' : 'display:none;'}">
       <button class="btn y-btn" data-exksil title="Kaldır">✕</button></div>`).join('');
   kap.querySelectorAll('[data-exkrow]').forEach(row => {
     const k = f.kosullar[Number(row.dataset.exkrow)];
-    row.querySelectorAll('[data-exk]').forEach(el => el.addEventListener('change', () => { k[el.dataset.exk] = el.value; if (el.dataset.exk === 'op') exKosulSiraCiz(); }));
+    row.querySelectorAll('[data-exk]').forEach(el => el.addEventListener(el.type === 'color' ? 'input' : 'change', () => {
+      k[el.dataset.exk] = el.type === 'color' ? el.value.replace('#', '').toUpperCase() : el.value;
+      if (el.dataset.exk === 'op' && (k.op === 'bos' || k.op === 'dolu')) k.mod = 'suz';
+      if (el.dataset.exk === 'op' || el.dataset.exk === 'mod') exKosulSiraCiz();
+      if (el.dataset.exk !== 'kolon' && k.mod === 'renk' && typeof exOnizlemeYenidenCiz === 'function' && EX.sonModel){ EX.sonModel.m.ekKosullar = exRenkKosullari(EX.filtre); exOnizlemeYenidenCiz(); }
+    }));
     row.querySelector('[data-exksil]').addEventListener('click', () => { f.kosullar.splice(Number(row.dataset.exkrow), 1); exKosulSiraCiz(); });
   });
   const D = exKirilim();
@@ -12224,7 +12242,8 @@ function exSayfaUret(veri, ay){
   if (hesapAtla.length) uyarilar.push(`Formülü hatalı ya da sepette olmayan alan kullanan hesaplanan sütun atlandı: ${hesapAtla.join(', ')}.`);
   if (once !== sonuc.satirlar.length) uyarilar.push(`Filtre: ${once} satırdan ${sonuc.satirlar.length} tanesi kaldı.`);
   const duzen = exEtkinDuzen(ay.duzen, ay.bol, D.zaman);
-  const parcalar = exBol(sonuc, ay.bol, duzen).map(p => ({ deger: p.deger, model: exModel(p.sonuc, duzen, ay.filtre && ay.filtre.sira) })).filter(p => p.model.satir.length || !ay.bol);
+  const ekKos = exRenkKosullari(ay.filtre);
+  const parcalar = exBol(sonuc, ay.bol, duzen).map(p => ({ deger: p.deger, model: Object.assign(exModel(p.sonuc, duzen, ay.filtre && ay.filtre.sira), { ekKosullar: ekKos }) })).filter(p => p.model.satir.length || !ay.bol);
   if (duzen !== ay.duzen) uyarilar.push('Her sekmede tek dönem kaldığı için "Aylar sütunda" yerine düz liste yazıldı (GENEL sütunu tekrar olurdu).');
   if (ay.bol) uyarilar.push(`${parcalar.length} sekmeye bölündü: ${parcalar.slice(0, 6).map(p => p.deger).join(', ')}${parcalar.length > 6 ? ' …' : ''}`);
   return { parcalar, model: parcalar.length ? parcalar[0].model : exModel(sonuc, ay.duzen), uyarilar, tlTumu };
@@ -12548,7 +12567,8 @@ function exModelCiz(m, uyarilar, baslik){
   const istOnb = {};
   const kosul = (k, i, v) => {
     const g = k.alanAd || grupAdi[i];
-    const sirali = B.kosullar.filter(r => exKuralTam(r.icerir, k.baslik, g)).concat(B.kosullar.filter(r => !exKuralTam(r.icerir, k.baslik, g)));
+    const KOS = (m.ekKosullar || []).concat(B.kosullar);
+    const sirali = KOS.filter(r => exKuralTam(r.icerir, k.baslik, g)).concat(KOS.filter(r => !exKuralTam(r.icerir, k.baslik, g)));
     for (const r of sirali){
       if (!exKuralUyar(r.icerir, k.baslik, g)) continue;
       if (r.tur){ const ist = istOnb[i] !== undefined ? istOnb[i] : (istOnb[i] = exSutunIstat(m.satir.map(s => s.v[i]))); const x = exOzelKuralRengi(r, v, ist); if (x) return x; continue; }

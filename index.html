@@ -147,6 +147,7 @@
   .gt-tablo td.gt-g input:focus{ outline:2px solid var(--accent); }
   .gt-renkler span{ display:inline-block; width:12px; height:12px; border:1px solid #999; vertical-align:-2px; margin:0 4px 0 10px; }
   .gv-gun-dd{ position:relative; }
+  .ex-donem.etkin{ border-color:var(--accent) !important; box-shadow:0 0 0 2px var(--accent-soft); }
   .gv-gun-btn{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer; min-width:150px; text-align:left; white-space:nowrap; }
   .gv-gun-btn::after{ content:'▾'; float:right; margin-left:12px; color:var(--dim); }
   .gv-gun-liste{ position:absolute; top:calc(100% + 4px); left:0; z-index:50; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.12); min-width:100%; max-height:320px; overflow:auto; padding:4px; }
@@ -829,8 +830,11 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
         <div class="card">
           <h2>2. Dönem</h2>
           <div class="row">
-            <label>Başlangıç: <select id="exAyA"></select></label>
-            <label>Bitiş: <select id="exAyB"></select></label>
+            <label>Yıl: <select id="exYil" class="ex-donem"></select></label>
+            <label>Ay: <select id="exAy" class="ex-donem"></select></label>
+            <span style="width:14px;"></span>
+            <label>Başlangıç: <input type="date" id="exTarihA" class="ex-donem"></label>
+            <label>Bitiş: <input type="date" id="exTarihB" class="ex-donem"></label>
           </div>
           <div id="exKapsam" class="hint" style="margin:10px 0 0;"></div>
         </div>
@@ -10888,6 +10892,7 @@ function exKayitlar(t, alanlar, parcalar, donem){
   const out = [];
   const aylik = t.sekmeler === KAT_AYLIK;
   const icinde = x => x !== null && x >= donem.a && x <= donem.b;
+  const gunIcinde = g => g === null || donem.ga === undefined || donem.ga === null || (g >= donem.ga && g <= donem.gb);   // gün bilgisi olan kayıtta tam tarih aralığı
   parcalar.forEach(p => {
     const rows = p.rows || [], h = rows[hi] || [];
     const veri = rows.slice(hi + 1).filter(r => (r || []).some(v => katHucreTipi(v) !== 'bos'));
@@ -10906,7 +10911,7 @@ function exKayitlar(t, alanlar, parcalar, donem){
         const k = kimlik(r);
         if (si >= 0 && !k.sicil && !k.ad) return;
         gunler.forEach(({ c, g }) => {
-          const ay = katGunAy(g); if (!icinde(ay)) return;
+          const ay = katGunAy(g); if (!icinde(ay) || !gunIcinde(g)) return;
           const d = {}; kol.forEach(({ a, i }) => { d[a.alan] = exDeger(i === -2 ? r[c] : (i >= 0 ? r[i] : null), a.tip); });
           out.push(Object.assign({ gun: g, ay }, k, { d }));
         });
@@ -10917,7 +10922,7 @@ function exKayitlar(t, alanlar, parcalar, donem){
       let gun = null, ay = sekmeAy;
       if (ti >= 0){ gun = katGun(r[ti]); if (gun !== null) ay = katGunAy(gun); }
       else if (yi >= 0) ay = roAyKey(r[yi]);
-      if (sev.zaman && !icinde(ay)) return;
+      if (sev.zaman && (!icinde(ay) || !gunIcinde(gun))) return;
       const k = kimlik(r);
       if (si >= 0 && !k.sicil && !k.ad) return;
       const d = {}; kol.forEach(({ a, i }) => { d[a.alan] = exDeger(i >= 0 ? r[i] : null, a.tip); });
@@ -11448,15 +11453,64 @@ async function exSayfasi(){
     ykDurum('exDurum', tablolar.length ? '' : 'Katalogda onaylı tablo yok: önce Veri Kataloğu\'nda tabloları onayla.', tablolar.length ? '' : 'warn');
   } catch(err){ ykDurum('exDurum', '✗ ' + err.message, 'err'); }
 }
-function exDonemDoldur(){
-  const A = document.getElementById('exAyA'), B = document.getElementById('exAyB');
-  if (A.options.length) return;
-  const bugun = new Date(), simdi = bugun.getFullYear() * 12 + bugun.getMonth();
-  let ilk = simdi - 24;
+// ---- Dönem: Yıl / Ay seçici + takvimle aralık (ALO-144 Dashboard Genel Çağrı'daki gibi) ----
+// EX.donem: { tur: 'tum' | 'yil' | 'ay' | 'aralik', yil, ay (0-11), a, b ('yyyy-mm-dd') }
+const exIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function exIlkAy(){
+  const bugun = new Date(); let ilk = bugun.getFullYear() * 12 + bugun.getMonth() - 24;
   exOnayliTablolar().forEach(t => { const m = String(t.kapsam || '').match(/^([A-ZÇĞİÖŞÜ]+ \d{4})|^(\d{2}\.\d{2}\.\d{4})/); if (!m) return; const x = m[1] ? roAyKey(m[1]) : katGunAy(katGun(m[2])); if (x !== null && x < ilk) ilk = x; });
-  const ops = []; for (let x = ilk; x <= simdi; x++) ops.push(`<option value="${x}">${roAyEtiket(x)}</option>`);
-  A.innerHTML = ops.join(''); B.innerHTML = ops.join('');
-  A.value = String(bugun.getFullYear() * 12); B.value = String(simdi);
+  return ilk;
+}
+function exDonemDoldur(){
+  const Y = document.getElementById('exYil'), A = document.getElementById('exAy');
+  if (Y.options.length) return;
+  const bu = new Date().getFullYear(), ilkYil = Math.floor(exIlkAy() / 12);
+  Y.innerHTML = '<option value="">Tüm Yıllar</option>' + Array.from({ length: bu - ilkYil + 1 }, (_, i) => bu - i).map(y => `<option value="${y}">${y}</option>`).join('');
+  A.innerHTML = '<option value="">Tüm Aylar</option>' + RO_AYLAR.map((m, i) => `<option value="${i}">${m.charAt(0) + m.slice(1).toLocaleLowerCase('tr')}</option>`).join('');
+  exDonemKur(EX.donem || { tur: 'yil', yil: bu });
+}
+// Seçimi ekrana koy ve tarihleri doldur
+function exDonemKur(d){
+  const Y = document.getElementById('exYil'), A = document.getElementById('exAy'), TA = document.getElementById('exTarihA'), TB = document.getElementById('exTarihB');
+  const bugun = new Date();
+  if (d.tur === 'aralik'){ Y.value = ''; A.value = ''; TA.value = d.a; TB.value = d.b; }
+  else {
+    Y.value = d.tur === 'tum' ? '' : String(d.yil); A.value = d.tur === 'ay' ? String(d.ay) : '';
+    let bas, bit;
+    if (d.tur === 'tum'){ const ilk = exIlkAy(); bas = new Date(Math.floor(ilk / 12), ilk % 12, 1); bit = bugun; }
+    else if (d.tur === 'yil'){ bas = new Date(d.yil, 0, 1); bit = new Date(d.yil, 11, 31); }
+    else { bas = new Date(d.yil, d.ay, 1); bit = new Date(d.yil, d.ay + 1, 0); }
+    TA.value = exIso(bas); TB.value = exIso(bit);
+  }
+  EX.donem = d;
+  [Y, A].forEach(e => e.classList.toggle('etkin', d.tur !== 'aralik'));
+  [TA, TB].forEach(e => e.classList.toggle('etkin', d.tur === 'aralik'));
+  const o = exDonemOku(true);
+  document.getElementById('exKapsam').textContent = o ? `Seçilen dönem: ${o.etiket} (${TA.value.split('-').reverse().join('.')} – ${TB.value.split('-').reverse().join('.')}). Aylık tablolarda bu tarihlerin düştüğü aylar, günlük tablolarda tam bu günler alınır.` : '';
+}
+function exYilAyDegisti(){
+  const y = document.getElementById('exYil').value, a = document.getElementById('exAy').value;
+  if (!y && !a) return exDonemKur({ tur: 'tum' });
+  const yil = y ? Number(y) : new Date().getFullYear();   // ay seçilip yıl "Tüm"se bu yıl
+  exDonemKur(a === '' ? { tur: 'yil', yil } : { tur: 'ay', yil, ay: Number(a) });
+}
+function exTarihDegisti(){
+  const a = document.getElementById('exTarihA').value, b = document.getElementById('exTarihB').value;
+  if (!a || !b) return;
+  exDonemKur({ tur: 'aralik', a, b });
+}
+// Okuma: ay anahtarları (a, b), gün numaraları (ga, gb), başlık etiketi
+function exDonemOku(sessiz){
+  const ta = document.getElementById('exTarihA').value, tb = document.getElementById('exTarihB').value;
+  if (!ta || !tb){ if (sessiz) return null; throw new Error('Dönemi seç (yıl / ay ya da başlangıç – bitiş tarihi).'); }
+  const ga = katGun(ta), gb = katGun(tb);
+  if (gb < ga){ if (sessiz) return null; throw new Error('Bitiş tarihi başlangıçtan önce olamaz.'); }
+  const a = katGunAy(ga), b = katGunAy(gb);
+  const dA = new Date(ta + 'T00:00:00'), dB = new Date(tb + 'T00:00:00');
+  const tamAy = dA.getDate() === 1 && new Date(dB.getFullYear(), dB.getMonth() + 1, 0).getDate() === dB.getDate();
+  const aylar = []; for (let x = a; x <= b; x++) aylar.push(x);
+  const etiket = tamAy ? roDonem(aylar) : (ta === tb ? ta.split('-').reverse().join('.') : `${ta.split('-').reverse().join('.')}-${tb.split('-').reverse().join('.')}`);
+  return { a, b, ga, gb, etiket };
 }
 function exTabloSecildi(){
   const t = exTabloBul(document.getElementById('exTablo').value);
@@ -11608,9 +11662,8 @@ function exDuzenGuncelle(){
 // ---- veri okuma (dönem + sepet), sayfa üretimi ----
 async function exVeriOku(){
   if (!EX.sepet.length) throw new Error('Sepet boş.');
-  const a = Number(document.getElementById('exAyA').value), b = Number(document.getElementById('exAyB').value);
-  if (b < a) throw new Error('Bitiş ayı başlangıçtan önce olamaz.');
-  const donem = { a, b };
+  const D0 = exDonemOku(), a = D0.a, b = D0.b;
+  const donem = { a, b, ga: D0.ga, gb: D0.gb };
   const gruplar = new Map();
   EX.sepet.forEach(s => { const t = exSepetTablosu(s); if (!t) return; if (!gruplar.has(t.tablo)) gruplar.set(t.tablo, { t, alanlar: [] }); gruplar.get(t.tablo).alanlar.push(s); });
   const kayitlar = new Map(), bosTablo = [];
@@ -11637,9 +11690,9 @@ async function exVeriOku(){
   const sonTl = s => { for (const x of ayDesc){ const v = harita.get(x).get(s); if (v && v.tl) return v.tl; } return ''; };
   if (kayitlar.has(EX_HAZIR.tablo)) kayitlar.get(EX_HAZIR.tablo).forEach(r => { r.tl = sonTl(r.sicil) || EX_TL_BELIRSIZ; });   // hazır alanlar: dönemin son TL'si
   const adlar = [...new Set(EX.sepet.map(s => s.gorunen))];
-  const baslik = `${roDonem([a, b])} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …'}`;
-  const dosya = (`${roDonem([a, b])} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ')} RAPORU`).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() + '.xlsx';
-  return { kayitlar, bosTablo, tlBul, adBul, baslik, dosya, donemEtiket: roDonem([a, b]), alanlar: adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …' };
+  const baslik = `${D0.etiket} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …'}`;
+  const dosya = (`${D0.etiket} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ')} RAPORU`).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() + '.xlsx';
+  return { kayitlar, bosTablo, tlBul, adBul, baslik, dosya, donemEtiket: D0.etiket, alanlar: adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …' };
 }
 function exModelCiz(m, uyarilar, baslik){
   const t = document.getElementById('exOnizleme');
@@ -11988,7 +12041,7 @@ async function exKayitlilariYukle(secili){
 function exRaporJson(){
   return { v: 1, sepet: EX.sepet.map(s => ({ id: s.id, tabloAd: s.tabloAd, sekme: s.sekme, alan: s.alan, gorunen: s.gorunen, tip: s.tip, toplama: s.toplama, esAdlar: s.esAdlar })),
     hesaplar: JSON.parse(JSON.stringify(EX.hesaplar)), sayfalar: JSON.parse(JSON.stringify(EX.sayfalar)), simdi: exAyarlarSimdi(), bicim: EX.bicim.ad || 'Standart',
-    donem: { a: Number(document.getElementById('exAyA').value), b: Number(document.getElementById('exAyB').value) } };
+    donem: Object.assign({}, EX.donem) };
 }
 async function exKayitliKaydet(){
   const ad = roUp(document.getElementById('exKayitliAd').value) || document.getElementById('exKayitli').value;
@@ -12027,7 +12080,7 @@ function exKayitliAc(){
     if (f.sira && /^kol:\d+$/.test(f.sira.kolon)){ const n = yeniId(f.sira.kolon.slice(4)); f.sira.kolon = n ? 'kol:' + n : ''; } return f; };
   EX.hesaplar = (j.hesaplar || []).map(h => { const c = o => o && o.id !== undefined ? (yeniId(o.id) ? { id: yeniId(o.id) } : {}) : o; return Object.assign({}, h, { a: c(h.a), b: c(h.b) }); });
   EX.sayfalar = (j.sayfalar || []).map(s => Object.assign({}, s, { filtre: filtreCevir(s.filtre) }));
-  if (j.donem){ document.getElementById('exAyA').value = String(j.donem.a); document.getElementById('exAyB').value = String(j.donem.b); }
+  if (j.donem && j.donem.tur) exDonemKur(j.donem);
   exSepetCiz(); exSayfalarCiz();
   if (j.simdi) exAyarYukle(Object.assign({}, j.simdi, { ad: k.ad, filtre: filtreCevir(j.simdi.filtre) }));
   exHesaplarCiz(); exKosulSiraCiz();
@@ -12035,6 +12088,8 @@ function exKayitliAc(){
   ykDurum('exKayitliDurum', `✓ "${k.ad}" açıldı. Dönemi değiştirip Excel'e Aktar.` + (eksik.length ? ` ⚠ Katalogda bulunamayan alanlar atlandı: ${eksik.join(', ')}` : ''), eksik.length ? 'warn' : 'ok');
 }
 document.getElementById('exBicim').addEventListener('change', exBicimSec);
+['exYil', 'exAy'].forEach(id => document.getElementById(id).addEventListener('change', exYilAyDegisti));
+['exTarihA', 'exTarihB'].forEach(id => document.getElementById(id).addEventListener('change', exTarihDegisti));
 document.getElementById('exBicimDuzenle').addEventListener('click', () => { const e = document.getElementById('exBicimEditor'); e.style.display = e.style.display === 'none' ? 'block' : 'none'; if (e.style.display === 'block') exBicimEditorCiz(); });
 document.getElementById('exBicimKaydet').addEventListener('click', exBicimKaydet);
 document.getElementById('exBicimSil').addEventListener('click', exBicimSil);

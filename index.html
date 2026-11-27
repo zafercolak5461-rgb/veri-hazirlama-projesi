@@ -777,7 +777,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
           </div>
           <div class="row" style="margin:14px 0 6px;"><b style="font-size:13px;">Takım lideri</b> <span class="hint" style="margin:0;">hiçbiri işaretli değilse herkes</span> <button class="btn y-btn" id="raTlTemizle">Temizle</button></div>
           <div id="raTlListe" class="ro-liste"></div>
-          <div class="row" style="margin-top:12px;"><label>Yalnız bu siciller: <input type="text" id="raSiciller" placeholder="ör. 10849, 10850 (boş = herkes)" style="min-width:320px;"></label></div>
+          <div class="row" style="margin-top:12px;"><label>Yalnız bu siciller: <input type="text" id="raSiciller" placeholder="ör. 10001, 10002 (boş = herkes)" style="min-width:320px;"></label></div>
         </div>
         <div class="row" style="margin:4px 0 6px;"><button class="btn primary" id="raOlustur" disabled>📥 Excel Oluştur</button></div>
         <div id="raDurum" class="status"></div>
@@ -918,7 +918,7 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <div class="row" style="margin-bottom:6px;"><b style="font-size:13px;">Takım lideri</b> <span class="hint" style="margin:0;">hiçbiri işaretli değilse hepsi</span> <button class="btn y-btn" id="exTlTemizle">Temizle</button></div>
             <div id="exTlListe" class="ro-liste"></div>
           </div>
-          <div class="row" style="margin-bottom:10px;"><label>Yalnız bu siciller: <input type="text" id="exSiciller" placeholder="ör. 10849, 10850 (boş = herkes)" style="min-width:320px;"></label></div>
+          <div class="row" style="margin-bottom:10px;"><label>Yalnız bu siciller: <input type="text" id="exSiciller" placeholder="ör. 10001, 10002 (boş = herkes)" style="min-width:320px;"></label></div>
           <div><b style="font-size:13px;">Koşullar</b> <span class="hint" style="margin:0;">satır bu koşulların hepsini sağlıyorsa kalır (ör. ÇAĞRI SAYISI ≠ 0)</span></div>
           <div id="exKosullar" style="margin-top:6px;"></div>
           <div class="row" style="margin:6px 0 12px;"><button class="btn" id="exKosulEkle">+ Koşul</button></div>
@@ -11049,7 +11049,7 @@ function exHesapla(sepet, kayitlar, D, tlBul){
     grup.set(a.id, sonuc);
   });
   if (!alanlar.some(a => a.tam)) return { hata: 'Seçilen satır kırılımına inen alan yok: en az bir alan bütün kırılımlara inebilmeli.', kolonlar: [], satirlar: [], uyarilar };
-  // kişi adı: aynı sicilin her satırında en son dönemdeki yazım (İNEKCİ / İNEKÇİ gibi farklar tek ada iner)
+  // kişi adı: aynı sicilin her satırında en son dönemdeki yazım (YILMAZ / YİLMAZ gibi farklar tek ada iner)
   const sonAd = new Map();
   alanlar.filter(a => a.kisi).forEach(a => (kayitlar.get(a.tablo.tablo) || []).forEach(r => {
     if (!r.ad) return; const k = kisiAnahtar(r), z = r.gun ?? r.ay ?? -1, o = sonAd.get(k);
@@ -12511,7 +12511,7 @@ function exBicimOnizlemeCiz(){
   const hx = h => '#' + String(h || 'FFFFFF').replace('#', '');
   const kenar = B.kenar.stil === 'none' ? 'none' : `${B.kenar.stil === 'medium' ? 2 : 1}px solid ${hx(B.kenar.renk)}`;
   const css = (s, ek) => `background:${hx(s.dolgu)};color:${hx(s.yazi)};font-weight:${s.kalin ? 700 : 400};border:${kenar};padding:3px 8px;font-family:${B.yaziTipi};font-size:${Number(B.boyut) + 1}px;${ek || ''}`;
-  const sat = [['10849', 'AHMET SADIK İNEKÇİ', 'CUMHUR BOZKURT', 4.763, 1458], ['10850', 'ASLI MUDU', 'GÖKHAN GÜNEŞ', 4.412, 1423], ['10852', 'AYBİKE ECE KALENDER', 'GÖKHAN GÜNEŞ', 4.832, 1866]];
+  const sat = [['10001', 'AYŞE YILMAZ', 'TAKIM LİDERİ A', 4.763, 1458], ['10002', 'MEHMET KAYA', 'TAKIM LİDERİ B', 4.412, 1423], ['10003', 'ELİF DEMİR', 'TAKIM LİDERİ B', 4.832, 1866]];
   const anketKosul = v => { const k = B.kosullar.find(r => !r.tur && exKuralUyar(r.icerir, 'ANKET', '')); if (!k) return null; const n = roNum(k.deger); const ok = { '<': v < n, '<=': v <= n, '>': v > n, '>=': v >= n, '=': v === n, '!=': v !== n }[k.op]; return ok ? k : null; };
   const anketBicim = (B.kurallar.find(r => exKuralUyar(r.icerir, 'ANKET', '')) || {}).bicim || '0.00';
   const ond = (anketBicim.split('.')[1] || '').replace(/[^0]/g, '').length;
@@ -12547,7 +12547,7 @@ async function exBicimSil(){
 async function exBicimOrnek(){
   const m = { sol: ['SİCİL', 'AD SOYAD', 'TAKIM LİDERİ'], grup: null, etiket: 'TOPLAM',
     kol: [{ baslik: 'ANKET', alanAd: 'ANKET', bicim: '0.000', tur: 'v', toplam: 'AVG0' }, { baslik: 'ÇAĞRI SAYISI', alanAd: 'ÇAĞRI SAYISI', bicim: '#,##0', tur: 'v', toplam: 'SUM' }],
-    satir: [[10849, 'AHMET SADIK İNEKÇİ', 'CUMHUR BOZKURT', 4.763, 1458], [10850, 'ASLI MUDU', 'GÖKHAN GÜNEŞ', 4.412, 1423], [10852, 'AYBİKE ECE KALENDER', 'GÖKHAN GÜNEŞ', 4.832, 1866]].map(r => ({ sol: r.slice(0, 3), v: r.slice(3) })) };
+    satir: [[10001, 'AYŞE YILMAZ', 'TAKIM LİDERİ A', 4.763, 1458], [10002, 'MEHMET KAYA', 'TAKIM LİDERİ B', 4.412, 1423], [10003, 'ELİF DEMİR', 'TAKIM LİDERİ B', 4.832, 1866]].map(r => ({ sol: r.slice(0, 3), v: r.slice(3) })) };
   const wb = exExcelSayfalar(ExcelJS, [{ ad: 'ÖRNEK', baslik: exBaslikMetni(EX.bicim.baslikMetni, { donem: '2026 OCAK-EKİM', alanlar: 'ANKET - ÇAĞRI SAYISI', sayfa: 'ÖRNEK' }), bloklar: [m] }], { yazar: (RO.ayar || {}).yazar }, EX.bicim);
   await roIndir(wb, `BİÇİM ÖRNEĞİ - ${EX.bicim.ad || 'ŞABLON'}.xlsx`);
   ykDurum('exBicimDurum', 'Örnek indi: Excel\'de renkleri, yazıları, kenarlıkları, sayı biçimlerini ve koşullu biçimleri değiştir; sonra "Excel\'den şablon" ile yükle.', 'ok');

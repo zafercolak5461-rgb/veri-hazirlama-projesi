@@ -10139,7 +10139,8 @@ function katBirlestir(eski, yeniTablolar, tarama){
     const degisti = e && e.imza && e.imza !== y.imza;
     if (degisti && durum === 'Onaylı') durum = 'Değişti';
     if (!e) ozet.yeni.push(kod); else if (degisti) ozet.degisen.push(kod); else ozet.ayni.push(kod);
-    const ank = e ? { sicil: e.sicil, tarih: e.tarih, ay: e.ay, takim: e.takim, ad: e.ad, lokasyon: e.lokasyon } : y.anahtar;
+    // anahtarlar: henüz onaylanmamış (Yeni) tablolarda her taramada yeniden bulunur; onaylı/değişen/kapsam dışı tabloda kullanıcınınki korunur
+    const ank = e && e.durum !== 'Yeni' ? { sicil: e.sicil, tarih: e.tarih, ay: e.ay, takim: e.takim, ad: e.ad, lokasyon: e.lokasyon } : y.anahtar;
     const t = {
       tablo: kod, dosya: y.dosya, sheetId: y.sheetId, sekmeler: y.sekmeler, yapi: KAT_YAPILAR[y.yapi] || y.yapi,
       baslikSatiri: String(y.baslikSatiri), grupBoyutu: e ? (e.grupBoyutu || y.grupBoyutu) : y.grupBoyutu,

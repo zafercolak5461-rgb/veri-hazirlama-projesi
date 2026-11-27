@@ -12603,7 +12603,7 @@ function exIslevPencereCiz(){
     if (at.tur === 'alan') giris = `<select class="ex-dlg-giris" data-dlgarg="${i}">${alanOps(String(deger).replace(/^\[|\]$/g, ''))}</select>`;
     else if (at.tur === 'yon') giris = `<select class="ex-dlg-giris" data-dlgarg="${i}"><option value="">En yüksek 1.</option><option value="1"${deger === '1' ? ' selected' : ''}>En düşük 1.</option></select>`;
     else giris = `<input type="text" class="ex-dlg-giris" data-dlgarg="${i}" value="${ykEsc(deger)}" spellcheck="false" placeholder="${at.tur === 'kosul' ? 'ör. [ANKET DEĞERLENDİRMESİ] >= 4,7' : (at.istege ? 'isteğe bağlı' : '')}">`;
-    const araclar = at.tur === 'alan' || at.tur === 'yon' ? '' : `<select class="ex-dlg-alan" data-dlgalan="${i}" title="Kutuya alan ekle">${alanOps()}</select><button class="btn y-btn" data-dlgic="${i}" title="Bu kutuya işlev koy (iç içe)">ƒ</button>`;
+    const araclar = at.tur === 'alan' || at.tur === 'yon' ? '' : (at.tur === 'kosul' ? '' : `<select class="ex-dlg-alan" data-dlgalan="${i}" title="Kutuya alan ekle">${alanOps()}</select>`) + `<button class="btn y-btn" data-dlgic="${i}" title="Bu kutuya işlev koy (iç içe), ör. VE / YADA">ƒ</button>`;
     const kosul = at.tur === 'kosul' ? `<div class="ex-dlg-kosul" data-dlgkos="${i}"><span class="hint" style="margin:0;">Karşılaştırma kur:</span>
         <select data-k="a">${alanOps()}</select>
         <select data-k="op">${[['>=', '≥'], ['>', '>'], ['<=', '≤'], ['<', '<'], ['=', '='], ['<>', '≠']].map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
@@ -12619,7 +12619,9 @@ function exIslevPencereCiz(){
   const guncelle = () => {
     const f = exDlgFormul(fr);
     document.getElementById('exDlgFormul').textContent = f;
-    for (let i = 0; i < n; i++){ const el = kap.querySelector(`[data-dlgson="${i}"]`); el.textContent = exDlgDegerMetni(exDlgDeger(exArgMetni(fr.args[i], exDlgArgTanim(tn, i)))); }
+    for (let i = 0; i < n; i++){ const el = kap.querySelector(`[data-dlgson="${i}"]`), at = exDlgArgTanim(tn, i), x = String(fr.args[i] || '').trim();
+      if (at.tur === 'kosul' && x && !exKosulMu(x)){ el.textContent = '⚠ karşılaştırma yok'; el.style.color = 'var(--danger)'; continue; }
+      el.style.color = ''; el.textContent = exDlgDegerMetni(exDlgDeger(exArgMetni(fr.args[i], at))); }
     const r = exDlgDeger(f);
     document.getElementById('exDlgSonuc').textContent = r ? exDlgDegerMetni(r) : '=';
     document.getElementById('exDlgSonucNot').textContent = EX.onizSonuc && EX.onizSonuc.satirlar.length ? `(önizlemedeki ilk satır: ${EX.onizSonuc.satirlar[0].sol.filter(x => x !== '' && x != null).slice(0, 4).join(' · ')})` : '(canlı sonuç için bir kez Önizle\'ye bas)';
@@ -12651,10 +12653,15 @@ function exIslevPencereCiz(){
   kap.querySelectorAll('[data-dlgkos]').forEach(k => {
     const i = Number(k.dataset.dlgkos);
     k.querySelector('[data-k="yaz"]').addEventListener('click', () => {
-      const a = k.querySelector('[data-k="a"]').value, op = k.querySelector('[data-k="op"]').value, bh = k.querySelector('[data-k="b"]').value.trim();
-      if (!a || !bh) return;
+      const inpK = kap.querySelector(`[data-dlgarg="${i}"]`), mevcut = inpK.value.trim();
+      let a = k.querySelector('[data-k="a"]').value ? `[${k.querySelector('[data-k="a"]').value}]` : '';
+      const op = k.querySelector('[data-k="op"]').value, bh = k.querySelector('[data-k="b"]').value.trim();
+      if (!a && mevcut && !exKosulMu(mevcut)) a = mevcut;   // kutuda yalnız alan (ya da işlem) varsa onu kullan
+      const uyar = m => { document.getElementById('exDlgAc').innerHTML = `<b style="color:var(--danger);">⚠ ${m}</b>`; };
+      if (!a) return uyar('Karşılaştırma için önce Alan seç.');
+      if (!bh) return uyar('Karşılaştırılacak değeri yaz (ör. 4,7 ya da HEDEFTE).');
       const b = /^\[.*\]$/.test(bh) || /^-?\d+([.,]\d+)?$/.test(bh) ? bh : `"${bh.replace(/^"|"$/g, '')}"`;
-      fr.args[i] = `[${a}] ${op} ${b}`;
+      fr.args[i] = `${a} ${op} ${b}`;
       const inp = kap.querySelector(`[data-dlgarg="${i}"]`); inp.value = fr.args[i]; inp.dispatchEvent(new Event('input'));
     });
   });
@@ -12663,6 +12670,8 @@ function exIslevPencereCiz(){
   kap.querySelector('#exDlgTamam').onclick = () => {
     const eksik = []; for (let i = 0; i < n; i++){ const at = exDlgArgTanim(tn, i); if (!String(fr.args[i] || '').trim() && !at.istege && !(tn.coklu && i >= (tn.en || 1))) eksik.push(i); }
     if (eksik.length){ kap.querySelector(`[data-dlgarg="${eksik[0]}"]`).focus(); acikla(eksik[0]); document.getElementById('exDlgAc').innerHTML += ' <b style="color:var(--danger);">← doldurulmalı</b>'; return; }
+    for (let i = 0; i < n; i++){ const at = exDlgArgTanim(tn, i), x = String(fr.args[i] || '').trim();
+      if (at.tur === 'kosul' && x && !exKosulMu(x)){ kap.querySelector(`[data-dlgarg="${i}"]`).focus(); document.getElementById('exDlgAc').innerHTML = `<b style="color:var(--danger);">⚠ ${ykEsc(at.ad)} bir karşılaştırma olmalı (ör. ${ykEsc(x)} >= 4,7). Altındaki "Karşılaştırma kur" ile tamamla.</b>`; return; } }
     const f = exDlgFormul(fr);
     try { exFormulCoz(f); } catch(e){ document.getElementById('exDlgAc').innerHTML = `<b style="color:var(--danger);">⚠ ${ykEsc(e.message)}</b>`; return; }
     EX.dlg.pop();
@@ -12673,6 +12682,11 @@ function exIslevPencereCiz(){
   guncelle();
   const ilk = kap.querySelector(`[data-dlgarg="${Math.min(fr.odak || 0, n - 1)}"]`) || kap.querySelector('[data-dlgarg]');
   if (ilk){ ilk.focus(); acikla(Number(ilk.dataset.dlgarg)); }
+}
+// Koşul kutusu: karşılaştırma, VE / YADA / DEĞİL ya da DOĞRU / YANLIŞ olmalı
+function exKosulMu(metin){
+  try { const a = exFormulCoz(metin); return (a.n === 'op' && ['=', '<>', '<', '>', '<=', '>='].includes(a.op)) || (a.n === 'fn' && ['AND', 'OR', 'NOT'].includes(a.fn)) || (a.n === 'sayi' && typeof a.v === 'boolean'); }
+  catch(e){ return true; }   // yazım hatası ayrıca gösterilir
 }
 function exDlgIptal(){ EX.dlg.pop(); if (EX.dlg.length) exIslevPencereCiz(); else document.getElementById('exDlg').style.display = 'none'; }
 function exDlgFormuleYaz(h, f){

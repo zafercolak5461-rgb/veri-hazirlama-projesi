@@ -11294,7 +11294,7 @@ function exHesapFormuleCevir(h, adBul){
   if (h.formul !== undefined) return h;
   const isl = o => !o ? '' : (o.sabit !== undefined ? String(o.sabit).replace('.', ',') : (o.id !== undefined ? `[${adBul(o.id) || '?'}]` : ''));
   const a = isl(h.a), b = isl(h.b);
-  return { baslik: h.baslik, formul: a && b ? `${a} ${h.op === '%' ? '/' : h.op === '*' ? '*' : h.op} ${b}` : '', bicim: h.op === '%' ? '0.00%' : '' };
+  return { baslik: h.baslik, formul: a && b ? `${a} ${h.op === '%' ? '/' : h.op === '*' ? '*' : h.op} ${b}` : '', bicim: a && b && h.op === '%' ? '0.00%' : '' };
 }
 
 // Formüldeki adlar: sepet alanları (görünen ad, tablo › ad, sütun başlığı), önceki hesaplar, satır boyutları (SİCİL, AD SOYAD, TAKIM LİDERİ, LOKASYON)

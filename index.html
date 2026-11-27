@@ -80,6 +80,10 @@
   table.prev{ border-collapse:collapse; width:100%; font-size:12px; margin-top:14px; }
   .ex-sepet{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
   .ex-cip{ display:inline-flex; align-items:center; gap:6px; padding:5px 6px 5px 10px; border:1px solid var(--accent); border-radius:16px; background:var(--accent-soft); font-size:12.5px; }
+  .ex-sekme-dug{ display:flex; flex-wrap:wrap; gap:2px; margin-top:10px; }
+  .ex-sekme-dug button{ border:1px solid var(--line); border-bottom:none; background:#EEF1F5; color:#334155; padding:5px 12px; font-size:12px; border-radius:6px 6px 0 0; cursor:pointer; }
+  .ex-sekme-dug button.secili{ background:#fff; color:#15803d; font-weight:700; box-shadow:inset 0 -2px 0 #15803d; }
+  .ex-sekme-dug button.taslak{ background:#FFF7E6; color:#92400E; font-style:italic; }
   .ex-sayfa-liste{ display:flex; flex-direction:column; gap:4px; }
   .ex-sayfa-satir{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:5px 10px; background:var(--panel); font-size:13px; }
   .ex-sayfa-satir:not(.yeni){ margin-left:28px; border-left:3px solid var(--accent); }
@@ -947,7 +951,8 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <span id="exDurum" class="status" style="margin:0;"></span>
           </div>
           <div id="exUyari" style="margin-top:10px;"></div>
-          <div class="prev-wrap" style="max-height:520px;"><table class="prev" id="exOnizleme" style="width:auto;"></table></div>
+          <div id="exSekmeDugmeleri" class="ex-sekme-dug"></div>
+          <div class="prev-wrap" style="max-height:560px;" id="exOnizKap"><table class="prev" id="exOnizleme" style="width:auto;"></table></div>
         </div>
       </div>
 
@@ -12303,11 +12308,19 @@ function exSekmeleriKur(veri, ayarlar){
 async function exOnizle(){
   const b = document.getElementById('exOnizle'); b.disabled = true;
   try {
-    const veri = await exVeriOku(), ay = exAyarlarSimdi();
+    const veri = await exVeriOku(), ay = Object.assign({ ad: '' }, exAyarlarSimdi());
     const s = exSayfaUret(veri, ay);
     if (ay.D.tl || ay.bol === 'tl'){ EX.tlTumu = s.tlTumu; exTlListeCiz(); }
-    exModelCiz(s.model, s.uyarilar, exBaslikMetni(EX.bicim.baslikMetni, { donem: ay.bol === 'ay' || ay.bol === 'yil' ? (s.parcalar[0] || {}).deger : veri.donemEtiket, alanlar: veri.alanlar, sayfa: '' }));
-    if (s.parcalar.length > 1) document.getElementById('exUyari').insertAdjacentHTML('beforeend', `<div class="hint" style="margin:2px 0 0;">Önizlemede ilk sekme gösteriliyor: <b>${ykEsc(s.parcalar[0].deger)}</b> (${s.parcalar.length} sekmeden).</div>`);
+    if (EX.sayfalar.length){
+      const x = exSekmeleriKur(veri, EX.sayfalar);
+      const anahtar = o => JSON.stringify({ D: o.D, duzen: o.duzen, bol: o.bol || '', filtre: o.filtre });
+      const ayni = EX.sayfalar.some(p => anahtar(p) === anahtar(ay));   // ekran bir sayfayla aynıysa taslak sekmesi gösterilmez
+      const t = ayni ? null : exSekmeleriKur(veri, [Object.assign({}, ay, { yerlesim: 'yeni' })]).sekmeler;
+      exOnizlemeGoster(x.sekmeler, x.uyarilar, t);
+    } else {
+      const x = exSekmeleriKur(veri, [ay]);
+      exOnizlemeGoster(x.sekmeler, x.uyarilar);
+    }
     ykDurum('exDurum', '✓ Hazır.', 'ok');
   } catch(err){ ykDurum('exDurum', '✗ ' + err.message, 'err'); }
   finally { b.disabled = false; }
@@ -12319,7 +12332,7 @@ async function exExcel(){
     const ayarlar = EX.sayfalar.length ? EX.sayfalar : [Object.assign({ ad: '' }, exAyarlarSimdi())];
     const { sekmeler, uyarilar } = exSekmeleriKur(veri, ayarlar);
     if (!sekmeler.length) throw new Error('Seçilen ayarlarla satır çıkmadı.');
-    exModelCiz(sekmeler[0].bloklar[0], uyarilar, sekmeler[0].baslik);
+    exOnizlemeGoster(sekmeler, uyarilar);
     ykDurum('exDurum', 'Excel hazırlanıyor…');
     const wb = exExcelSayfalar(ExcelJS, sekmeler, { yazar: RO.ayar.yazar, baslikRengi: RO.ayar.baslikRengi }, EX.bicim);
     await roIndir(wb, veri.dosya);
@@ -12584,12 +12597,12 @@ function exSayiGoster(v, fmt){
   return Number.isInteger(v) ? String(v) : tr(v, Math.min(10, (String(v).split('.')[1] || '').length)).replace(/0+$/, '').replace(/,$/, '');
 }
 // Önizleme: Excel'deki görünümle (biçim şablonu: renkler, yazı, kenarlık, şerit, sayı biçimleri, koşullu renkler)
-function exModelCiz(m, uyarilar, baslik){
-  const t = document.getElementById('exOnizleme');
+// Bir bloğun tablosu (Excel'deki görünümle). baslik verilirse en üstte birleşik başlık satırı.
+function exModelTablo(m, baslik, W, id){
   const B = exBicimTamamla(EX.bicim, null);
   const hx = h => '#' + String(h || 'FFFFFF').replace('#', '').slice(0, 6);
   const kenar = B.kenar.stil === 'none' ? '1px solid transparent' : `${B.kenar.stil === 'medium' ? 2 : 1}px solid ${hx(B.kenar.renk)}`;
-  const css = (s, ek) => `background:${hx(s.dolgu)};color:${hx(s.yazi)};font-weight:${s.kalin ? 700 : 400};border:${kenar};padding:4px 8px;white-space:nowrap;${ek || ''}`;
+  const css = (st, ek) => `background:${hx(st.dolgu)};color:${hx(st.yazi)};font-weight:${st.kalin ? 700 : 400};border:${kenar};padding:4px 8px;white-space:nowrap;${ek || ''}`;
   const grupAdi = []; if (m.grup){ let i = 0; m.grup.forEach(g => { for (let j = 0; j < g.n; j++) grupAdi[i++] = g.baslik; }); }
   const bicimOf = (k, i) => { if (k.bicimSabit) return k.bicim; const kr = B.kurallar.find(r => r.bicim && exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i])); return kr ? (kr.bicim === 'Genel' ? null : kr.bicim) : k.bicim; };
   const istOnb = {};
@@ -12599,34 +12612,51 @@ function exModelCiz(m, uyarilar, baslik){
     const sirali = KOS.filter(r => exKuralTam(r.icerir, k.baslik, g)).concat(KOS.filter(r => !exKuralTam(r.icerir, k.baslik, g)));
     for (const r of sirali){
       if (!exKuralUyar(r.icerir, k.baslik, g)) continue;
-      if (r.tur){ const ist = istOnb[i] !== undefined ? istOnb[i] : (istOnb[i] = exSutunIstat(m.satir.map(s => s.v[i]))); const x = exOzelKuralRengi(r, v, ist); if (x) return x; continue; }
+      if (r.tur){ const ist = istOnb[i] !== undefined ? istOnb[i] : (istOnb[i] = exSutunIstat(m.satir.map(x => x.v[i]))); const x = exOzelKuralRengi(r, v, ist); if (x) return x; continue; }
       if (exKosulDegerUyar(r, v)) return r;
     }
     return null;
   };
-  const W = m.sol.length + m.kol.length;
+  const w = m.sol.length + m.kol.length;
   const goster = m.satir.slice(0, 200), tv = exModelToplam(m);
-  const th = (x, ek) => `<th style="${css(B.sutun, 'text-align:center;position:sticky;top:0;' + (ek || ''))}">${ykEsc(x)}</th>`;
-  const ust = `<tr><td colspan="${W}" style="${css(B.baslik, `text-align:center;font-size:${(Number(B.baslik.boyut) || 12) + 1}px;`)}">${ykEsc(baslik)}</td></tr>` + (m.grup
+  const th = x => `<th style="${css(B.sutun, 'text-align:center;')}">${ykEsc(x)}</th>`;
+  const ust = (baslik ? `<tr><td colspan="${Math.max(W || w, w)}" style="${css(B.baslik, `text-align:center;font-size:${(Number(B.baslik.boyut) || 12) + 1}px;`)}">${ykEsc(baslik)}</td></tr>` : '') + (m.grup
     ? '<tr>' + m.sol.map(b => `<th rowspan="2" style="${css(B.sutun, 'text-align:center;')}">${ykEsc(b)}</th>`).join('') + m.grup.map(g => `<th colspan="${g.n}" style="${css(B.sutun, 'text-align:center;')}">${ykEsc(g.baslik)}</th>`).join('') + '</tr><tr>' + m.kol.map(k => th(k.baslik)).join('') + '</tr>'
     : '<tr>' + m.sol.map(b => th(b)).join('') + m.kol.map(k => th(k.baslik)).join('') + '</tr>');
   const satirlar = goster.map((r, ri) => {
     const ser = B.serit.acik && ri % 2 === 1;
-    const st = s => Object.assign({}, s, ser && /^#?F{6}$/i.test(String(s.dolgu)) ? { dolgu: B.serit.renk } : {});
-    return '<tr>' + r.sol.map((v, i) => { const s = st(B.kimlik); if (r.sicilsiz && i < 2) s.yazi = '9C0006'; return `<td style="${css(s, typeof v === 'number' ? 'text-align:center;' : '')}">${ykEsc(v == null ? '' : v)}</td>`; }).join('') +
-      r.v.map((v, i) => { const k = m.kol[i], s = st(B.veri); if (k.tur !== 'v') s.kalin = true; const kr = kosul(k, i, v); if (kr){ s.dolgu = kr.dolgu || 'FFC7CE'; s.yazi = kr.yazi || '9C0006'; }
-        return `<td style="${css(s, 'text-align:center;')}">${ykEsc(exSayiGoster(v, bicimOf(k, i)))}</td>`; }).join('') + '</tr>';
+    const st = x => Object.assign({}, x, ser && /^#?F{6}$/i.test(String(x.dolgu)) ? { dolgu: B.serit.renk } : {});
+    return '<tr>' + r.sol.map((v, i) => { const x = st(B.kimlik); if (r.sicilsiz && i < 2) x.yazi = '9C0006'; return `<td style="${css(x, typeof v === 'number' ? 'text-align:center;' : '')}">${ykEsc(v == null ? '' : v)}</td>`; }).join('') +
+      r.v.map((v, i) => { const k = m.kol[i], x = st(B.veri); if (k.tur !== 'v') x.kalin = true; const kr = kosul(k, i, v); if (kr){ x.dolgu = kr.dolgu || 'FFC7CE'; x.yazi = kr.yazi || '9C0006'; }
+        return `<td style="${css(x, 'text-align:center;')}">${ykEsc(exSayiGoster(v, bicimOf(k, i)))}</td>`; }).join('') + '</tr>';
   }).join('');
   const toplam = m.satir.length > 1 && m.kol.some(k => k.toplam) ? `<tr><td colspan="${m.sol.length}" style="${css(B.toplam, 'text-align:center;')}">${m.etiket}</td>` + tv.map((v, i) => `<td style="${css(B.toplam, 'text-align:center;')}">${m.kol[i].toplam ? ykEsc(exSayiGoster(v, bicimOf(m.kol[i], i))) : ''}</td>`).join('') + '</tr>' : '';
-  t.className = 'ex-oniz';
-  t.style.cssText = `border-collapse:collapse;font-family:${B.yaziTipi || 'Arial'},sans-serif;font-size:${Number(B.boyut) + 1 || 12}px;margin-top:0;width:auto;` + (B.kilavuz ? '' : '');
-  t.innerHTML = '<thead>' + ust + '</thead><tbody>' + satirlar + toplam + '</tbody>';
-  document.getElementById('exUyari').innerHTML = (uyarilar.length ? '<ul class="ex-uyari">' + uyarilar.map(u => `<li>${ykEsc(u)}</li>`).join('') + '</ul>' : '') +
-    `<div class="hint" style="margin:6px 0 0;">${m.satir.length} satır${m.satir.length > 200 ? ' (ilk 200 gösteriliyor; Excel\'de hepsi)' : ''} · Görünüm: <b>${ykEsc(EX.bicim.ad || 'Standart')}</b>${EX.sayfalar.length ? ` · Excel'de <b>${EX.sayfalar.length} sayfa</b> olacak (Sayfalar listesi)` : ''}</div>`;
-  EX.sonModel = { m, uyarilar, baslik };
+  const fazla = m.satir.length > 200 ? `<tr><td colspan="${w}" style="padding:4px 8px;font-size:11px;color:#64748B;">… ${m.satir.length - 200} satır daha (Excel'de hepsi)</td></tr>` : '';
+  return `<table${id ? ` id="${id}"` : ''} class="ex-oniz" style="border-collapse:collapse;font-family:${B.yaziTipi || 'Arial'},sans-serif;font-size:${Number(B.boyut) + 1 || 12}px;width:auto;margin:0;"><thead>${ust}</thead><tbody>${satirlar}${toplam}${fazla}</tbody></table>`;
 }
+// Önizleme = Excel: sekme düğmeleri, seçili sekmede bloklar alt alta (arada boş satır)
+function exOnizlemeGoster(sekmeler, uyarilar, taslak){
+  EX.oniz = { sekmeler, uyarilar, taslak: taslak || null, secili: Math.min(EX.oniz && EX.oniz.secili || 0, sekmeler.length - 1 + (taslak ? taslak.length : 0)) };
+  exOnizlemeCizDurum();
+}
+function exOnizlemeCizDurum(){
+  const O = EX.oniz; if (!O) return;
+  const tum = O.sekmeler.map(x => Object.assign({ taslak: false }, x)).concat((O.taslak || []).map(x => Object.assign({}, x, { taslak: true })));
+  if (!tum.length) return;
+  if (O.secili >= tum.length) O.secili = 0;
+  document.getElementById('exSekmeDugmeleri').innerHTML = tum.length > 1 || O.taslak ? tum.map((x, i) => `<button data-exsekme="${i}" class="${i === O.secili ? 'secili' : ''}${x.taslak ? ' taslak' : ''}" title="${x.taslak ? 'Ekrandaki ayarlar — sayfa listesinde değil, Excel\'e girmez' : 'Excel sekmesi'}">${ykEsc(x.taslak ? '✎ ' + (x.ad || 'Ekrandaki') + ' (Excel\'de yok)' : x.ad)}</button>`).join('') : '';
+  document.querySelectorAll('#exSekmeDugmeleri [data-exsekme]').forEach(b => b.onclick = () => { O.secili = Number(b.dataset.exsekme); exOnizlemeCizDurum(); });
+  const sk = tum[O.secili], W = Math.max(...sk.bloklar.map(m => m.sol.length + m.kol.length));
+  document.getElementById('exOnizKap').innerHTML = sk.bloklar.map((m, bi) => exModelTablo(m, bi === 0 ? sk.baslik : null, W, bi === 0 ? 'exOnizleme' : null)).join('<div style="height:18px;"></div>');
+  EX.sonModel = { m: sk.bloklar[0], uyarilar: O.uyarilar, baslik: sk.baslik, bloklar: sk.bloklar };
+  const satir = sk.bloklar.reduce((t, m) => t + m.satir.length, 0);
+  document.getElementById('exUyari').innerHTML = (O.uyarilar.length ? '<ul class="ex-uyari">' + O.uyarilar.map(u => `<li>${ykEsc(u)}</li>`).join('') + '</ul>' : '') +
+    `<div class="hint" style="margin:6px 0 0;">${sk.taslak ? '<b>Ekrandaki ayarlar</b> (sayfa listesinde değil; Excel\'e girmesi için + Sayfa Ekle ya da bir sayfayı ⤓ Güncelle)' : `Excel: <b>${O.sekmeler.length} sekme</b>${EX.sayfalar.length ? ` (${EX.sayfalar.length} sayfadan)` : ''}`} · bu sekmede ${sk.bloklar.length > 1 ? sk.bloklar.length + ' tablo, ' : ''}${satir} satır · Görünüm: <b>${ykEsc(EX.bicim.ad || 'Standart')}</b></div>`;
+}
+// Eski çağrılar için: tek model
+function exModelCiz(m, uyarilar, baslik){ exOnizlemeGoster([{ ad: '', baslik, bloklar: [m] }], uyarilar); }
 // Görünüm değişince önizleme de yenilensin (veri yeniden okunmadan)
-function exOnizlemeYenidenCiz(){ if (EX.sonModel) exModelCiz(EX.sonModel.m, EX.sonModel.uyarilar, EX.sonModel.baslik); }
+function exOnizlemeYenidenCiz(){ exOnizlemeCizDurum(); }
 
 // ---------- Formül ağacından metin (İşlev penceresinde mevcut formülü kutulara açmak için) ----------
 function exFormulYaz(n, ust){

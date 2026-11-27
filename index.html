@@ -147,6 +147,26 @@
   .gt-tablo td.gt-g input:focus{ outline:2px solid var(--accent); }
   .gt-renkler span{ display:inline-block; width:12px; height:12px; border:1px solid #999; vertical-align:-2px; margin:0 4px 0 10px; }
   .gv-gun-dd{ position:relative; }
+  .ex-dlg-arka{ position:fixed; inset:0; background:rgba(15,23,42,.35); z-index:1000; display:none; align-items:flex-start; justify-content:center; padding-top:8vh; }
+  .ex-dlg{ background:#fff; color:#111; border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,.25); width:min(860px,94vw); max-height:84vh; overflow:auto; padding:14px 18px 16px; }
+  .ex-dlg-bas{ display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:10px; font-size:13px; }
+  .ex-dlg-fnbas{ margin-bottom:10px; font-size:14px; }
+  .ex-dlg-satir{ display:grid; grid-template-columns:150px 1fr 170px; gap:8px; align-items:center; padding:6px 8px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; background:#FAFBFC; }
+  .ex-dlg-satir.bos{ border-color:#FCA5A5; }
+  .ex-dlg-satir label{ font-weight:600; font-size:13px; text-align:right; }
+  .ex-dlg-kutu{ display:flex; gap:6px; align-items:center; }
+  .ex-dlg-giris{ flex:1; min-width:0; font-family:Consolas,monospace; }
+  .ex-dlg-alan{ width:120px; }
+  .ex-dlg-sonuc{ font-size:12px; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ex-dlg-kosul{ grid-column:2 / 4; display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:12px; }
+  .ex-dlg-ac{ min-height:34px; font-size:12px; color:#334155; background:#F1F5F9; border-radius:6px; padding:7px 10px; margin-top:6px; }
+  .ex-dlg-alt{ margin-top:10px; font-size:13px; display:grid; gap:4px; }
+  .ex-dlg-alt code{ font-size:12px; background:#F8FAFC; padding:2px 6px; border-radius:4px; }
+  .ex-dlg-liste{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .ex-dlg-fn{ text-align:left; border:1px solid var(--line); background:#fff; border-radius:8px; padding:8px 10px; cursor:pointer; display:flex; flex-direction:column; gap:2px; font-size:13px; color:#111; }
+  .ex-dlg-fn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  .ex-dlg-fn span{ font-size:11px; color:#64748B; }
+  .ex-islec{ min-width:30px; padding:4px 8px; font-family:Consolas,monospace; }
   .ex-donem.etkin{ border-color:var(--accent) !important; box-shadow:0 0 0 2px var(--accent-soft); }
   .gv-gun-btn{ background:#fff; color:#111; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-size:13px; cursor:pointer; min-width:150px; text-align:left; white-space:nowrap; }
   .gv-gun-btn::after{ content:'▾'; float:right; margin-left:12px; color:var(--dim); }
@@ -869,8 +889,9 @@ html.gorunum-beyaz .nav-grup::before, html.gorunum-beyaz .nav-grup::after{ conte
             <button class="btn" id="exHesapEkle">+ Hesaplanan Sütun</button>
             <span style="width:10px;"></span>
             <select id="exFAlan" title="Seçili formüle alan ekle"><option value="">＋ Alan ekle…</option></select>
-            <select id="exFIslev" title="Seçili formüle işlev ekle"><option value="">＋ İşlev ekle…</option></select>
+            <button class="btn" id="exFIslev" title="Excel'deki gibi işlev penceresi: kutuları doldur, ; ve parantezler kendiliğinden">ƒx İşlev ekle…</button>
           </div>
+          <div class="row" style="margin-top:6px;gap:4px;" id="exIslecler"><span class="hint" style="margin:0 6px 0 0;">İşleç:</span></div>
           <div class="row" style="margin-top:8px;">
             <b style="font-size:13px;">Hazır hesap:</b>
             <select id="exHazirTur"></select>
@@ -11888,7 +11909,8 @@ function exHesaplarCiz(){
   kap.innerHTML = EX.hesaplar.map((h, j) => `<div data-exhrow="${j}" style="margin-bottom:10px;">
       <div class="row" style="flex-wrap:nowrap;">
         <input type="text" data-exhad value="${ykEsc(h.baslik)}" placeholder="Sütun adı" style="width:170px;"> =
-        <input type="text" data-exhf value="${ykEsc(h.formul)}" placeholder="ör. [ANKET DEĞERLENDİRMESİ] - 4,70" spellcheck="false" style="flex:1;min-width:300px;font-family:Consolas,monospace;">
+        <button class="btn y-btn" data-exhfx title="İşlev penceresi: bu formüldeki işlevi kutu kutu aç ya da yeni işlev ekle" style="font-style:italic;font-weight:700;">ƒx</button>
+        <input type="text" data-exhf value="${ykEsc(h.formul)}" placeholder="ör. [ANKET DEĞERLENDİRMESİ] - 4,70 · ya da ƒx ile kutu kutu kur" spellcheck="false" style="flex:1;min-width:300px;font-family:Consolas,monospace;">
         <select data-exhb title="Sonucun biçimi">${EX_HESAP_BICIM.map(([v, t]) => `<option value="${v}"${(h.bicim || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn y-btn" data-exhsil title="Kaldır">✕</button>
       </div>
@@ -11898,7 +11920,9 @@ function exHesaplarCiz(){
     const j = Number(row.dataset.exhrow), h = EX.hesaplar[j];
     const f = row.querySelector('[data-exhf]');
     row.querySelector('[data-exhad]').addEventListener('change', e => { h.baslik = roUp(e.target.value); e.target.value = h.baslik; exKosulSiraCiz(); exHesapDurumlari(); });
-    f.addEventListener('input', () => { h.formul = f.value; durumYaz(row, j); });
+    f.addEventListener('input', () => { h.formul = f.value; durumYaz(row, j);
+      if (!h.bicim){ try { if (exFormulMetinMi(exFormulCoz(f.value))){ h.bicim = 'Metin'; row.querySelector('[data-exhb]').value = 'Metin'; } } catch(e){} } });
+    row.querySelector('[data-exhfx]').addEventListener('click', () => exFxAc(j));
     f.addEventListener('focus', () => { EX.fAktif = j; kap.querySelectorAll('[data-exhf]').forEach(x => x.style.outline = ''); f.style.outline = '2px solid var(--accent-soft)'; });
     row.querySelector('[data-exhb]').addEventListener('change', e => { h.bicim = e.target.value; });
     row.querySelector('[data-exhsil]').addEventListener('click', () => { EX.hesaplar.splice(j, 1); EX.fAktif = null; exHesaplarCiz(); exKosulSiraCiz(); });
@@ -11911,7 +11935,6 @@ function exFormulListeleri(){
   const l = exFormulAdListesi();
   const og = (ad, x) => x.length ? `<optgroup label="${ad}">${x.map(a => `<option value="${ykEsc(a)}">${ykEsc(a)}</option>`).join('')}</optgroup>` : '';
   document.getElementById('exFAlan').innerHTML = '<option value="">＋ Alan ekle…</option>' + og('Sepetteki alanlar', l.alan) + og('Hesaplanan sütunlar', l.hesap) + og('Satır bilgileri', l.sol);
-  document.getElementById('exFIslev').innerHTML = '<option value="">＋ İşlev ekle…</option>' + EX_ISLEV_EKLE.map(([v, t]) => `<option value="${ykEsc(v)}">${ykEsc(t)}</option>`).join('');
   const ht = document.getElementById('exHazirTur'), ha = document.getElementById('exHazirAlan'), onc = ht.value, onA = ha.value;
   ht.innerHTML = EX_HAZIR_HESAP.map(([v, t]) => `<option value="${v}">${t}</option>`).join(''); if (onc) ht.value = onc;
   ha.innerHTML = l.alan.concat(l.hesap).map(a => `<option value="${ykEsc(a)}">${ykEsc(a)}</option>`).join('') || '<option value="">(sepet boş)</option>'; if (onA && l.alan.concat(l.hesap).includes(onA)) ha.value = onA;
@@ -12007,19 +12030,6 @@ async function exVeriOku(){
   const dosya = (`${D0.etiket} ${adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ')} RAPORU`).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() + '.xlsx';
   return { kayitlar, bosTablo, tlBul, adBul, baslik, dosya, donemEtiket: D0.etiket, alanlar: adlar.length <= 3 ? adlar.join(' - ') : adlar.slice(0, 3).join(' - ') + ' …' };
 }
-function exModelCiz(m, uyarilar, baslik){
-  const t = document.getElementById('exOnizleme');
-  const fmt = (v, k) => v === null || v === undefined || v === '' ? '' : (typeof v === 'number' ? (k && k.bicim === '0.00%' ? (v * 100).toFixed(2).replace('.', ',') + '%' : (Number.isInteger(v) ? v.toLocaleString('tr-TR') : v.toLocaleString('tr-TR', { maximumFractionDigits: k && k.bicim === '0.000' ? 3 : 2 }))) : ykEsc(v));
-  const goster = m.satir.slice(0, 200), tv = exModelToplam(m);
-  const ust = m.grup
-    ? '<tr>' + m.sol.map(b => `<th rowspan="2">${ykEsc(b)}</th>`).join('') + m.grup.map(g => `<th colspan="${g.n}">${ykEsc(g.baslik)}</th>`).join('') + '</tr><tr>' + m.kol.map(k => `<th>${ykEsc(k.baslik)}</th>`).join('') + '</tr>'
-    : '<tr>' + m.sol.map(b => `<th>${ykEsc(b)}</th>`).join('') + m.kol.map(k => `<th>${ykEsc(k.baslik)}</th>`).join('') + '</tr>';
-  t.innerHTML = '<thead>' + ust + '</thead><tbody>' +
-    goster.map(r => `<tr${r.sicilsiz ? ' style="color:var(--danger)"' : ''}>` + r.sol.map(v => `<td>${ykEsc(v == null ? '' : v)}</td>`).join('') + r.v.map((v, i) => `<td style="text-align:right;${m.kol[i].tur !== 'v' ? 'font-weight:600;' : ''}">${fmt(v, m.kol[i])}</td>`).join('') + '</tr>').join('') +
-    (m.satir.length > 1 && m.kol.some(k => k.toplam) ? `<tr style="font-weight:700;background:var(--panel2);"><td colspan="${m.sol.length}">${m.etiket}</td>` + tv.map((v, i) => `<td style="text-align:right;">${fmt(v, m.kol[i])}</td>`).join('') + '</tr>' : '') + '</tbody>';
-  document.getElementById('exUyari').innerHTML = (uyarilar.length ? '<ul class="ex-uyari">' + uyarilar.map(u => `<li>${ykEsc(u)}</li>`).join('') + '</ul>' : '') +
-    `<div class="hint" style="margin:6px 0 0;">${m.satir.length} satır${m.satir.length > 200 ? ' (ilk 200 gösteriliyor; Excel\'de hepsi)' : ''} · Excel başlığı: <b>${ykEsc(baslik)}</b>${EX.sayfalar.length ? ` · Excel'de <b>${EX.sayfalar.length} sayfa</b> olacak (Sayfalar listesi)` : ''}</div>`;
-}
 // ---- sayfalar ----
 function exSayfalarCiz(){
   const kap = document.getElementById('exSayfalar');
@@ -12031,7 +12041,28 @@ function exSayfalarCiz(){
 }
 document.getElementById('exHesapEkle').addEventListener('click', () => { if (EX.sepet.length < 1) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn'); EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); EX.fAktif = EX.hesaplar.length - 1; exHesaplarCiz(); exKosulSiraCiz(); const f = document.querySelector(`#exHesaplar [data-exhrow="${EX.fAktif}"] [data-exhad]`); if (f) f.focus(); });
 document.getElementById('exFAlan').addEventListener('change', e => { if (!e.target.value) return; exFormuleEkle(`[${e.target.value}]`); e.target.value = ''; });
-document.getElementById('exFIslev').addEventListener('change', e => { if (!e.target.value) return; exFormuleEkle(e.target.value); e.target.value = ''; });
+document.getElementById('exFIslev').addEventListener('click', () => {
+  if (!EX.hesaplar.length){ EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); EX.fAktif = 0; exHesaplarCiz(); }
+  const j = EX.fAktif !== null && EX.fAktif !== undefined && EX.hesaplar[EX.fAktif] ? EX.fAktif : EX.hesaplar.length - 1;
+  const inp = document.querySelector(`#exHesaplar [data-exhrow="${j}"] [data-exhf]`);
+  EX.fAktif = j; EX.dlg = [];
+  exIslevPencereAc({ formul: j, tumu: !inp.value.trim(), a: inp.selectionStart, b: inp.selectionEnd }, null, []);
+});
+[['+', '+'], ['-', '−'], ['*', '×'], ['/', '÷'], ['>', '>'], ['>=', '≥'], ['<', '<'], ['<=', '≤'], ['=', '='], ['<>', '≠'], ['(', '('], [')', ')'], [';', ';'], ['""', '"metin"']].forEach(([v, t]) => {
+  const b = document.createElement('button'); b.className = 'btn y-btn ex-islec'; b.textContent = t; b.title = v === '""' ? 'Metin: tırnak çifti ekler, imleç arasına gelir' : `${t} ekle`;
+  b.addEventListener('mousedown', e => e.preventDefault());   // formül kutusu odağını kaybetmesin
+  b.addEventListener('click', () => {
+    if (!EX.hesaplar.length) return;
+    const j = EX.fAktif !== null && EX.fAktif !== undefined && EX.hesaplar[EX.fAktif] ? EX.fAktif : EX.hesaplar.length - 1;
+    const f = document.querySelector(`#exHesaplar [data-exhrow="${j}"] [data-exhf]`); if (!f) return;
+    const a = f.selectionStart ?? f.value.length, c = f.selectionEnd ?? f.value.length;
+    const ek = v === '""' ? '""' : (v === '(' || v === ')' ? v : (v === ';' ? '; ' : ` ${v} `));
+    const sol = f.value.slice(0, a).replace(/\s+$/, v === '(' || v === ')' || v === '""' ? '$&' : ''), sag = f.value.slice(c).replace(/^\s+/, v === '(' || v === ')' || v === '""' ? '$&' : '');
+    f.value = sol + ek + sag; const p = sol.length + (v === '""' ? 1 : ek.length);
+    f.focus(); f.setSelectionRange(p, p); f.dispatchEvent(new Event('input'));
+  });
+  document.getElementById('exIslecler').appendChild(b);
+});
 document.getElementById('exHazirEkle').addEventListener('click', () => {
   const t = EX_HAZIR_HESAP.find(x => x[0] === document.getElementById('exHazirTur').value), a = document.getElementById('exHazirAlan').value;
   if (!t || !a) return ykDurum('exDurum', 'Önce sepete alan ekle.', 'warn');
@@ -12129,6 +12160,7 @@ function exSayfaUret(veri, ay){
   sonuc = exHesapEkle(sonuc, gecerli);
   const once = sonuc.satirlar.length;
   sonuc = exFiltrele(sonuc, ay.filtre);
+  EX.onizSonuc = sonuc;
   const uyarilar = veri.bosTablo.map(t => `${t}: seçilen dönemde veri yok.`).concat(sonuc.uyarilar);
   if (hesapAtla.length) uyarilar.push(`Formülü hatalı ya da sepette olmayan alan kullanan hesaplanan sütun atlandı: ${hesapAtla.join(', ')}.`);
   if (once !== sonuc.satirlar.length) uyarilar.push(`Filtre: ${once} satırdan ${sonuc.satirlar.length} tanesi kaldı.`);
@@ -12168,7 +12200,8 @@ async function exOnizle(){
     const veri = await exVeriOku(), ay = exAyarlarSimdi();
     const s = exSayfaUret(veri, ay);
     if (ay.D.tl || ay.bol === 'tl'){ EX.tlTumu = s.tlTumu; exTlListeCiz(); }
-    exModelCiz(s.model, s.uyarilar, exBaslikMetni(EX.bicim.baslikMetni, { donem: ay.bol === 'ay' || ay.bol === 'yil' ? (s.parcalar[0] || {}).deger : veri.donemEtiket, alanlar: veri.alanlar, sayfa: '' }) + (s.parcalar.length > 1 ? ` — önizlemede ilk sekme (${s.parcalar[0].deger})` : ''));
+    exModelCiz(s.model, s.uyarilar, exBaslikMetni(EX.bicim.baslikMetni, { donem: ay.bol === 'ay' || ay.bol === 'yil' ? (s.parcalar[0] || {}).deger : veri.donemEtiket, alanlar: veri.alanlar, sayfa: '' }));
+    if (s.parcalar.length > 1) document.getElementById('exUyari').insertAdjacentHTML('beforeend', `<div class="hint" style="margin:2px 0 0;">Önizlemede ilk sekme gösteriliyor: <b>${ykEsc(s.parcalar[0].deger)}</b> (${s.parcalar.length} sekmeden).</div>`);
     ykDurum('exDurum', '✓ Hazır.', 'ok');
   } catch(err){ ykDurum('exDurum', '✗ ' + err.message, 'err'); }
   finally { b.disabled = false; }
@@ -12232,6 +12265,7 @@ function exBicimSec(){
   document.getElementById('exBicimAd').value = b.yerlesik ? '' : b.ad;
   document.getElementById('exBicimSil').disabled = !!b.yerlesik;
   exBicimEditorCiz();
+  if (typeof exOnizlemeYenidenCiz === 'function') exOnizlemeYenidenCiz();
 }
 const exHexInput = h => '#' + String(h || '000000').replace('#', '').slice(0, 6).toLowerCase();
 function exBicimEditorCiz(){
@@ -12274,6 +12308,7 @@ function exBicimEditorCiz(){
   exBicimOnizlemeCiz();
 }
 function exBicimOnizlemeCiz(){
+  if (typeof exOnizlemeYenidenCiz === 'function') exOnizlemeYenidenCiz();
   const B = EX.bicim, kap = document.getElementById('exBicimOnizleme'); if (!kap) return;
   const hx = h => '#' + String(h || 'FFFFFF').replace('#', '');
   const kenar = B.kenar.stil === 'none' ? 'none' : `${B.kenar.stil === 'medium' ? 2 : 1}px solid ${hx(B.kenar.renk)}`;
@@ -12415,6 +12450,265 @@ function exKayitliAc(){
   if (j.bicim){ exBicimSeciciCiz(j.bicim); exBicimSec(); }
   ykDurum('exKayitliDurum', `✓ "${k.ad}" açıldı. Dönemi değiştirip Excel'e Aktar.` + (eksik.length ? ` ⚠ Katalogda bulunamayan alanlar atlandı: ${eksik.join(', ')}` : ''), eksik.length ? 'warn' : 'ok');
 }
+// ============================================================================
+// ===== Excel Oluştur — biçimli önizleme ve İşlev penceresi (27.11.2026) =====
+// ============================================================================
+// Excel sayı biçimini ekranda göster
+function exSayiGoster(v, fmt){
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'boolean') return v ? 'DOĞRU' : 'YANLIŞ';
+  if (typeof v !== 'number') return String(v);
+  const tr = (x, n, grup) => x.toLocaleString('tr-TR', { minimumFractionDigits: n, maximumFractionDigits: n, useGrouping: !!grup });
+  const f = String(fmt || '');
+  const ond = s => ((s.split('.')[1] || '').match(/0/g) || []).length;
+  if (/%$/.test(f)) return tr(v * 100, ond(f.replace('%', ''))) + '%';
+  if (f.startsWith('#,##0')) return tr(v, ond(f), true);
+  if (/^0(\.0+)?$/.test(f)) return tr(v, ond(f));
+  return Number.isInteger(v) ? String(v) : tr(v, Math.min(10, (String(v).split('.')[1] || '').length)).replace(/0+$/, '').replace(/,$/, '');
+}
+// Önizleme: Excel'deki görünümle (biçim şablonu: renkler, yazı, kenarlık, şerit, sayı biçimleri, koşullu renkler)
+function exModelCiz(m, uyarilar, baslik){
+  const t = document.getElementById('exOnizleme');
+  const B = exBicimTamamla(EX.bicim, null);
+  const hx = h => '#' + String(h || 'FFFFFF').replace('#', '').slice(0, 6);
+  const kenar = B.kenar.stil === 'none' ? '1px solid transparent' : `${B.kenar.stil === 'medium' ? 2 : 1}px solid ${hx(B.kenar.renk)}`;
+  const css = (s, ek) => `background:${hx(s.dolgu)};color:${hx(s.yazi)};font-weight:${s.kalin ? 700 : 400};border:${kenar};padding:4px 8px;white-space:nowrap;${ek || ''}`;
+  const grupAdi = []; if (m.grup){ let i = 0; m.grup.forEach(g => { for (let j = 0; j < g.n; j++) grupAdi[i++] = g.baslik; }); }
+  const bicimOf = (k, i) => { const kr = B.kurallar.find(r => r.bicim && exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i])); return kr ? (kr.bicim === 'Genel' ? null : kr.bicim) : k.bicim; };
+  const kosul = (k, i, v) => {
+    if (typeof v !== 'number') return null;
+    return B.kosullar.find(r => { const n = roNum(r.deger); if (n === null || !exKuralUyar(r.icerir, k.baslik, k.alanAd || grupAdi[i])) return false; return { '<': v < n, '<=': v <= n, '>': v > n, '>=': v >= n, '=': v === n, '!=': v !== n }[r.op]; }) || null;
+  };
+  const W = m.sol.length + m.kol.length;
+  const goster = m.satir.slice(0, 200), tv = exModelToplam(m);
+  const th = (x, ek) => `<th style="${css(B.sutun, 'text-align:center;position:sticky;top:0;' + (ek || ''))}">${ykEsc(x)}</th>`;
+  const ust = `<tr><td colspan="${W}" style="${css(B.baslik, `text-align:center;font-size:${(Number(B.baslik.boyut) || 12) + 1}px;`)}">${ykEsc(baslik)}</td></tr>` + (m.grup
+    ? '<tr>' + m.sol.map(b => `<th rowspan="2" style="${css(B.sutun, 'text-align:center;')}">${ykEsc(b)}</th>`).join('') + m.grup.map(g => `<th colspan="${g.n}" style="${css(B.sutun, 'text-align:center;')}">${ykEsc(g.baslik)}</th>`).join('') + '</tr><tr>' + m.kol.map(k => th(k.baslik)).join('') + '</tr>'
+    : '<tr>' + m.sol.map(b => th(b)).join('') + m.kol.map(k => th(k.baslik)).join('') + '</tr>');
+  const satirlar = goster.map((r, ri) => {
+    const ser = B.serit.acik && ri % 2 === 1;
+    const st = s => Object.assign({}, s, ser && /^#?F{6}$/i.test(String(s.dolgu)) ? { dolgu: B.serit.renk } : {});
+    return '<tr>' + r.sol.map((v, i) => { const s = st(B.kimlik); if (r.sicilsiz && i < 2) s.yazi = '9C0006'; return `<td style="${css(s, typeof v === 'number' ? 'text-align:center;' : '')}">${ykEsc(v == null ? '' : v)}</td>`; }).join('') +
+      r.v.map((v, i) => { const k = m.kol[i], s = st(B.veri); if (k.tur !== 'v') s.kalin = true; const kr = kosul(k, i, v); if (kr){ s.dolgu = kr.dolgu || 'FFC7CE'; s.yazi = kr.yazi || '9C0006'; }
+        return `<td style="${css(s, 'text-align:center;')}">${ykEsc(exSayiGoster(v, bicimOf(k, i)))}</td>`; }).join('') + '</tr>';
+  }).join('');
+  const toplam = m.satir.length > 1 && m.kol.some(k => k.toplam) ? `<tr><td colspan="${m.sol.length}" style="${css(B.toplam, 'text-align:center;')}">${m.etiket}</td>` + tv.map((v, i) => `<td style="${css(B.toplam, 'text-align:center;')}">${m.kol[i].toplam ? ykEsc(exSayiGoster(v, bicimOf(m.kol[i], i))) : ''}</td>`).join('') + '</tr>' : '';
+  t.className = 'ex-oniz';
+  t.style.cssText = `border-collapse:collapse;font-family:${B.yaziTipi || 'Arial'},sans-serif;font-size:${Number(B.boyut) + 1 || 12}px;margin-top:0;width:auto;` + (B.kilavuz ? '' : '');
+  t.innerHTML = '<thead>' + ust + '</thead><tbody>' + satirlar + toplam + '</tbody>';
+  document.getElementById('exUyari').innerHTML = (uyarilar.length ? '<ul class="ex-uyari">' + uyarilar.map(u => `<li>${ykEsc(u)}</li>`).join('') + '</ul>' : '') +
+    `<div class="hint" style="margin:6px 0 0;">${m.satir.length} satır${m.satir.length > 200 ? ' (ilk 200 gösteriliyor; Excel\'de hepsi)' : ''} · Görünüm: <b>${ykEsc(EX.bicim.ad || 'Standart')}</b>${EX.sayfalar.length ? ` · Excel'de <b>${EX.sayfalar.length} sayfa</b> olacak (Sayfalar listesi)` : ''}</div>`;
+  EX.sonModel = { m, uyarilar, baslik };
+}
+// Görünüm değişince önizleme de yenilensin (veri yeniden okunmadan)
+function exOnizlemeYenidenCiz(){ if (EX.sonModel) exModelCiz(EX.sonModel.m, EX.sonModel.uyarilar, EX.sonModel.baslik); }
+
+// ---------- Formül ağacından metin (İşlev penceresinde mevcut formülü kutulara açmak için) ----------
+function exFormulYaz(n, ust){
+  const sayi = v => typeof v === 'boolean' ? (v ? 'DOĞRU' : 'YANLIŞ') : String(v).replace('.', ',');
+  switch (n.n){
+    case 'sayi': return sayi(n.v);
+    case 'metin': return '"' + String(n.v).replace(/"/g, '""') + '"';
+    case 'ad': return `[${n.ad}]`;
+    case 'eksi': return '-' + exFormulYaz(n.a, true);
+    case 'op': { const s = `${exFormulYaz(n.a, true)} ${n.op === '<>' ? '<>' : n.op} ${exFormulYaz(n.b, true)}`; return ust ? `(${s})` : s; }
+    case 'fn': return `${EX_FN_AD[n.fn]}(${n.args.map(a => exFormulYaz(a, false)).join('; ')})`;
+  }
+  return '';
+}
+// ---------- İşlev tanımları (pencere) ----------
+const EX_ISLEV_TANIM = [
+  { fn: 'IF', ad: 'EĞER', ac: 'Koşul doğruysa bir değer, yanlışsa başka bir değer verir.', args: [
+    { ad: 'Koşul', tur: 'kosul', ac: 'DOĞRU ya da YANLIŞ olabilecek bir karşılaştırma. Ör. [ANKET DEĞERLENDİRMESİ] >= 4,7. Birden çok koşul için ƒ ile VE / YADA koy.' },
+    { ad: 'Doğruysa değer', ac: 'Koşul doğruysa yazılacak değer: metin (ör. HEDEFTE), sayı, alan ya da başka bir işlev.' },
+    { ad: 'Yanlışsa değer', ac: 'Koşul yanlışsa yazılacak değer. Boş bırakılırsa YANLIŞ yazılır.', istege: true }] },
+  { fn: 'AND', ad: 'VE', ac: 'Bütün koşullar doğruysa DOĞRU verir.', coklu: { ad: 'Koşul', tur: 'kosul', ac: 'Bir karşılaştırma. Doldurdukça yeni kutu açılır.' }, en: 2 },
+  { fn: 'OR', ad: 'YADA', ac: 'Koşullardan biri doğruysa DOĞRU verir.', coklu: { ad: 'Koşul', tur: 'kosul', ac: 'Bir karşılaştırma. Doldurdukça yeni kutu açılır.' }, en: 2 },
+  { fn: 'NOT', ad: 'DEĞİL', ac: 'Koşulun tersini verir.', args: [{ ad: 'Koşul', tur: 'kosul', ac: 'Bir karşılaştırma.' }] },
+  { fn: 'ROUND', ad: 'YUVARLA', ac: 'Sayıyı belirtilen basamağa yuvarlar.', args: [{ ad: 'Sayı', ac: 'Yuvarlanacak sayı, alan ya da hesap.' }, { ad: 'Basamak', ac: 'Virgülden sonra kaç basamak (ör. 2). Boşsa 0.', istege: true, sayi: true }] },
+  { fn: 'MIN', ad: 'MİN', ac: 'Değerlerin en küçüğünü verir.', coklu: { ad: 'Sayı', ac: 'Sayı, alan ya da hesap.' }, en: 1 },
+  { fn: 'MAX', ad: 'MAKS', ac: 'Değerlerin en büyüğünü verir.', coklu: { ad: 'Sayı', ac: 'Sayı, alan ya da hesap.' }, en: 1 },
+  { fn: 'SUM', ad: 'TOPLA', ac: 'Değerleri toplar.', coklu: { ad: 'Sayı', ac: 'Sayı, alan ya da hesap.' }, en: 1 },
+  { fn: 'AVERAGE', ad: 'ORTALAMA', ac: 'Değerlerin ortalamasını verir.', coklu: { ad: 'Sayı', ac: 'Sayı, alan ya da hesap.' }, en: 1 },
+  { fn: 'ABS', ad: 'MUTLAK', ac: 'Sayının işaretsiz değerini verir (−3 → 3).', args: [{ ad: 'Sayı', ac: 'Sayı, alan ya da hesap.' }] },
+  { fn: 'ONCEKI', ad: 'ÖNCEKİ', ac: 'Alanın bir önceki aydaki değeri. Yalnız "Aylar sütunda" düzeninde dolar; ilk ay boştur.', args: [{ ad: 'Alan', tur: 'alan', ac: 'Önceki ayına bakılacak alan.' }] },
+  { fn: 'SIRA', ad: 'SIRA', ac: 'Satırın, o sütundaki sırası (aynı sekmede / aynı ayda).', args: [{ ad: 'Alan', tur: 'alan', ac: 'Sıralanacak alan.' }, { ad: 'Yön', tur: 'yon', ac: 'En yüksek mi 1., en düşük mü?', istege: true }] },
+  { fn: 'TLORT', ad: 'TL_ORTALAMA', ac: 'Satırın takım liderinin (ekibinin) o sütundaki ortalaması. 3. kartta Takım lideri işaretli olmalı.', args: [{ ad: 'Alan', tur: 'alan', ac: 'Ortalaması alınacak alan.' }] },
+  { fn: 'PAY', ad: 'PAY', ac: 'Satırın, o sütunun toplamındaki payı (yüzde biçimiyle göster).', args: [{ ad: 'Alan', tur: 'alan', ac: 'Payı hesaplanacak alan.' }] },
+];
+// Kutudaki metin: formülse olduğu gibi, değilse metin (tırnak kendiliğinden)
+function exArgMetni(ham, tanim){
+  const s = String(ham == null ? '' : ham).trim();
+  if (!s) return '';
+  if (tanim && tanim.tur === 'alan') return s.startsWith('[') ? s : `[${s}]`;
+  if (tanim && tanim.tur === 'yon') return s === '1' ? '1' : '';
+  try { const a = exFormulCoz(s); if (a.n === 'metin' || exFormulAdlari(a).length || a.n !== 'ad') return s; } catch(e){}
+  if (/^-?\d+([.,]\d+)?$/.test(s)) return s;
+  return '"' + s.replace(/^"|"$/g, '').replace(/"/g, '""') + '"';
+}
+// ---------- Pencere ----------
+EX.dlg = [];   // yığın: { tanim, args: [metin], hedef: { ust: index, arg: i } | { formul: j, tumu: bool, a, b } }
+function exIslevPencereAc(hedef, tanim, args){
+  if (!document.getElementById('exDlg')){
+    const d = document.createElement('div'); d.id = 'exDlg'; d.className = 'ex-dlg-arka';
+    d.innerHTML = '<div class="ex-dlg" role="dialog"><div class="ex-dlg-bas"><span id="exDlgYol"></span><button class="btn y-btn" id="exDlgKapat" title="Kapat">✕</button></div><div id="exDlgIcerik"></div></div>';
+    document.body.appendChild(d);
+    d.querySelector('#exDlgKapat').onclick = () => { EX.dlg = []; d.style.display = 'none'; };
+    d.addEventListener('keydown', e => { if (e.key === 'Escape'){ EX.dlg = []; d.style.display = 'none'; } });
+  }
+  EX.dlg.push({ tanim: tanim || null, args: args || [], hedef, odak: 0 });
+  document.getElementById('exDlg').style.display = 'flex';
+  exIslevPencereCiz();
+}
+function exDlgArgTanim(tn, i){ return tn.coklu ? tn.coklu : tn.args[i]; }
+function exDlgArgSayisi(fr){
+  const tn = fr.tanim; if (!tn.coklu) return tn.args.length;
+  let n = fr.args.length; while (n > 0 && !String(fr.args[n - 1] || '').trim()) n--;
+  return Math.min(9, Math.max(tn.en || 1, n + 1));
+}
+function exDlgFormul(fr){
+  const tn = fr.tanim, n = exDlgArgSayisi(fr);
+  const parca = []; for (let i = 0; i < n; i++) parca.push(exArgMetni(fr.args[i], exDlgArgTanim(tn, i)));
+  while (parca.length && !parca[parca.length - 1]) parca.pop();
+  return `${tn.ad}(${parca.join('; ')})`;
+}
+// İlk önizleme satırıyla canlı değer
+function exDlgDeger(metin){
+  const S = EX.onizSonuc; if (!S || !S.satirlar.length || !String(metin || '').trim()) return null;
+  try {
+    const ast = exFormulBagla(exFormulCoz(metin), exAdHaritasi(S.kolonlar, S.boyutKol));
+    const s = S.satirlar[0], solJ = k => S.boyutKol.findIndex(b => b.k === k), onb = {};
+    const v = exFormulDeger(ast, { v: f => s.deg[f], onceki: () => undefined, sutun: f => onb[f] || (onb[f] = S.satirlar.map(x => x.deg[f])), sol: k => solJ(k) >= 0 ? s.sol[solJ(k)] : undefined, solSutun: k => S.satirlar.map(x => x.sol[solJ(k)]), toplam: false });
+    return { v };
+  } catch(e){ return { hata: e.message }; }
+}
+function exDlgDegerMetni(r){ if (!r) return ''; if (r.hata) return '⚠ ' + r.hata; if (r.v === null) return '= (boş)'; return '= ' + (typeof r.v === 'number' ? exSayiGoster(r.v, Number.isInteger(r.v) ? null : '0.000') : exSayiGoster(r.v)); }
+function exIslevPencereCiz(){
+  const fr = EX.dlg[EX.dlg.length - 1], kap = document.getElementById('exDlgIcerik');
+  document.getElementById('exDlgYol').innerHTML = '<b>İşlev</b> ' + EX.dlg.map(f => f.tanim ? ykEsc(f.tanim.ad) : '…').join(' › ');
+  if (!fr.tanim){
+    kap.innerHTML = `<div class="hint" style="margin:0 0 8px;">Bir işlev seç:</div><div class="ex-dlg-liste">` + EX_ISLEV_TANIM.map((t, i) => `<button class="ex-dlg-fn" data-dlgfn="${i}"><b>${t.ad}</b><span>${ykEsc(t.ac)}</span></button>`).join('') + '</div>' +
+      `<div class="row" style="justify-content:flex-end;margin-top:12px;"><button class="btn" id="exDlgIptal">${EX.dlg.length > 1 ? '← Geri' : 'İptal'}</button></div>`;
+    kap.querySelectorAll('[data-dlgfn]').forEach(b => b.onclick = () => { fr.tanim = EX_ISLEV_TANIM[Number(b.dataset.dlgfn)]; fr.args = []; exIslevPencereCiz(); });
+    kap.querySelector('#exDlgIptal').onclick = exDlgIptal;
+    return;
+  }
+  const tn = fr.tanim, n = exDlgArgSayisi(fr), j = EX.fAktif ?? EX.hesaplar.length - 1;
+  const l = exFormulAdListesi(j), alanOps = (sec) => '<option value="">Alan seç…</option>' + l.alan.concat(l.hesap).map(a => `<option value="${ykEsc(a)}"${sec === a ? ' selected' : ''}>${ykEsc(a)}</option>`).join('') + (sec !== undefined ? '' : l.sol.map(a => `<option value="${ykEsc(a)}">${ykEsc(a)} (satır)</option>`).join(''));
+  const satirlar = [];
+  for (let i = 0; i < n; i++){
+    const at = exDlgArgTanim(tn, i), deger = fr.args[i] || '';
+    const ad = tn.coklu ? `${at.ad} ${i + 1}` : at.ad;
+    let giris;
+    if (at.tur === 'alan') giris = `<select class="ex-dlg-giris" data-dlgarg="${i}">${alanOps(String(deger).replace(/^\[|\]$/g, ''))}</select>`;
+    else if (at.tur === 'yon') giris = `<select class="ex-dlg-giris" data-dlgarg="${i}"><option value="">En yüksek 1.</option><option value="1"${deger === '1' ? ' selected' : ''}>En düşük 1.</option></select>`;
+    else giris = `<input type="text" class="ex-dlg-giris" data-dlgarg="${i}" value="${ykEsc(deger)}" spellcheck="false" placeholder="${at.tur === 'kosul' ? 'ör. [ANKET DEĞERLENDİRMESİ] >= 4,7' : (at.istege ? 'isteğe bağlı' : '')}">`;
+    const araclar = at.tur === 'alan' || at.tur === 'yon' ? '' : `<select class="ex-dlg-alan" data-dlgalan="${i}" title="Kutuya alan ekle">${alanOps()}</select><button class="btn y-btn" data-dlgic="${i}" title="Bu kutuya işlev koy (iç içe)">ƒ</button>`;
+    const kosul = at.tur === 'kosul' ? `<div class="ex-dlg-kosul" data-dlgkos="${i}"><span class="hint" style="margin:0;">Karşılaştırma kur:</span>
+        <select data-k="a">${alanOps()}</select>
+        <select data-k="op">${[['>=', '≥'], ['>', '>'], ['<=', '≤'], ['<', '<'], ['=', '='], ['<>', '≠']].map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+        <input type="text" data-k="b" placeholder="değer ya da metin" style="width:120px;">
+        <button class="btn y-btn" data-k="yaz">Kutuya yaz</button></div>` : '';
+    satirlar.push(`<div class="ex-dlg-satir${(!deger && !at.istege && !(tn.coklu && i >= (tn.en || 1))) ? ' bos' : ''}" data-dlgsatir="${i}">
+      <label>${ykEsc(ad)}</label><div class="ex-dlg-kutu">${giris}${araclar}</div><span class="ex-dlg-sonuc" data-dlgson="${i}"></span>${kosul}</div>`);
+  }
+  kap.innerHTML = `<div class="ex-dlg-fnbas"><b>${tn.ad}</b> <span class="hint" style="margin:0;">${ykEsc(tn.ac)}</span></div>` + satirlar.join('') +
+    `<div class="ex-dlg-ac" id="exDlgAc"></div>
+     <div class="ex-dlg-alt"><div><b>Formül:</b> <code id="exDlgFormul"></code></div><div><b>Formül sonucu</b> <span id="exDlgSonuc"></span> <span class="hint" style="margin:0;" id="exDlgSonucNot"></span></div></div>
+     <div class="row" style="justify-content:space-between;margin-top:12px;"><button class="btn y-btn" id="exDlgDegistir">Başka işlev</button><span><button class="btn" id="exDlgIptal">${EX.dlg.length > 1 ? '← Geri' : 'İptal'}</button> <button class="btn ok" id="exDlgTamam">Tamam</button></span></div>`;
+  const guncelle = () => {
+    const f = exDlgFormul(fr);
+    document.getElementById('exDlgFormul').textContent = f;
+    for (let i = 0; i < n; i++){ const el = kap.querySelector(`[data-dlgson="${i}"]`); el.textContent = exDlgDegerMetni(exDlgDeger(exArgMetni(fr.args[i], exDlgArgTanim(tn, i)))); }
+    const r = exDlgDeger(f);
+    document.getElementById('exDlgSonuc').textContent = r ? exDlgDegerMetni(r) : '=';
+    document.getElementById('exDlgSonucNot').textContent = EX.onizSonuc && EX.onizSonuc.satirlar.length ? `(önizlemedeki ilk satır: ${EX.onizSonuc.satirlar[0].sol.filter(x => x !== '' && x != null).slice(0, 4).join(' · ')})` : '(canlı sonuç için bir kez Önizle\'ye bas)';
+    kap.querySelectorAll('[data-dlgsatir]').forEach(row => { const i = Number(row.dataset.dlgsatir), at = exDlgArgTanim(tn, i); row.classList.toggle('bos', !String(fr.args[i] || '').trim() && !at.istege && !(tn.coklu && i >= (tn.en || 1))); });
+  };
+  const acikla = i => { const at = exDlgArgTanim(tn, i); document.getElementById('exDlgAc').innerHTML = `<b>${ykEsc(tn.coklu ? at.ad + ' ' + (i + 1) : at.ad)}</b> ${ykEsc(at.ac)}`; fr.odak = i; };
+  kap.querySelectorAll('[data-dlgarg]').forEach(el => {
+    const i = Number(el.dataset.dlgarg);
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+      fr.args[i] = el.tagName === 'SELECT' && exDlgArgTanim(tn, i).tur === 'alan' ? (el.value ? `[${el.value}]` : '') : el.value;
+      if (tn.coklu && exDlgArgSayisi(fr) !== n){ const pos = el.selectionStart; exIslevPencereCiz(); const y = document.querySelector(`#exDlgIcerik [data-dlgarg="${i}"]`); if (y){ y.focus(); if (y.setSelectionRange) y.setSelectionRange(pos, pos); } return; }
+      guncelle();
+    });
+    el.addEventListener('focus', () => acikla(i));
+  });
+  kap.querySelectorAll('[data-dlgalan]').forEach(sel => sel.addEventListener('change', () => {
+    const i = Number(sel.dataset.dlgalan), inp = kap.querySelector(`[data-dlgarg="${i}"]`); if (!sel.value) return;
+    const ek = `[${sel.value}]`, a = inp.selectionStart ?? inp.value.length, b = inp.selectionEnd ?? inp.value.length;
+    const bos = a > 0 && !/\s$/.test(inp.value.slice(0, a)) ? ' ' : '';
+    inp.value = inp.value.slice(0, a) + bos + ek + inp.value.slice(b); sel.value = '';
+    inp.focus(); const p = a + bos.length + ek.length; inp.setSelectionRange(p, p); inp.dispatchEvent(new Event('input'));
+  }));
+  kap.querySelectorAll('[data-dlgic]').forEach(b => b.addEventListener('click', () => {
+    const i = Number(b.dataset.dlgic), mevcut = String(fr.args[i] || '').trim();
+    let ic = null, icArgs = [];
+    try { const a = exFormulCoz(mevcut); if (a.n === 'fn'){ ic = EX_ISLEV_TANIM.find(t => t.fn === a.fn) || null; icArgs = a.args.map(x => x.n === 'metin' ? x.v : exFormulYaz(x, false)); if (ic && ic.fn === 'SIRA' && icArgs[1]) icArgs[1] = String(Number(String(icArgs[1]).replace(',', '.')) === 1 ? '1' : ''); } } catch(e){}
+    exIslevPencereAc({ ust: EX.dlg.length - 1, arg: i }, ic, icArgs);
+  }));
+  kap.querySelectorAll('[data-dlgkos]').forEach(k => {
+    const i = Number(k.dataset.dlgkos);
+    k.querySelector('[data-k="yaz"]').addEventListener('click', () => {
+      const a = k.querySelector('[data-k="a"]').value, op = k.querySelector('[data-k="op"]').value, bh = k.querySelector('[data-k="b"]').value.trim();
+      if (!a || !bh) return;
+      const b = /^\[.*\]$/.test(bh) || /^-?\d+([.,]\d+)?$/.test(bh) ? bh : `"${bh.replace(/^"|"$/g, '')}"`;
+      fr.args[i] = `[${a}] ${op} ${b}`;
+      const inp = kap.querySelector(`[data-dlgarg="${i}"]`); inp.value = fr.args[i]; inp.dispatchEvent(new Event('input'));
+    });
+  });
+  kap.querySelector('#exDlgIptal').onclick = exDlgIptal;
+  kap.querySelector('#exDlgDegistir').onclick = () => { fr.tanim = null; exIslevPencereCiz(); };
+  kap.querySelector('#exDlgTamam').onclick = () => {
+    const eksik = []; for (let i = 0; i < n; i++){ const at = exDlgArgTanim(tn, i); if (!String(fr.args[i] || '').trim() && !at.istege && !(tn.coklu && i >= (tn.en || 1))) eksik.push(i); }
+    if (eksik.length){ kap.querySelector(`[data-dlgarg="${eksik[0]}"]`).focus(); acikla(eksik[0]); document.getElementById('exDlgAc').innerHTML += ' <b style="color:var(--danger);">← doldurulmalı</b>'; return; }
+    const f = exDlgFormul(fr);
+    try { exFormulCoz(f); } catch(e){ document.getElementById('exDlgAc').innerHTML = `<b style="color:var(--danger);">⚠ ${ykEsc(e.message)}</b>`; return; }
+    EX.dlg.pop();
+    if (fr.hedef.ust !== undefined){ const ust = EX.dlg[fr.hedef.ust]; ust.args[fr.hedef.arg] = f; exIslevPencereCiz(); return; }
+    document.getElementById('exDlg').style.display = 'none';
+    exDlgFormuleYaz(fr.hedef, f);
+  };
+  guncelle();
+  const ilk = kap.querySelector(`[data-dlgarg="${Math.min(fr.odak || 0, n - 1)}"]`) || kap.querySelector('[data-dlgarg]');
+  if (ilk){ ilk.focus(); acikla(Number(ilk.dataset.dlgarg)); }
+}
+function exDlgIptal(){ EX.dlg.pop(); if (EX.dlg.length) exIslevPencereCiz(); else document.getElementById('exDlg').style.display = 'none'; }
+function exDlgFormuleYaz(h, f){
+  let j = h.formul;
+  if (!EX.hesaplar[j]){ EX.hesaplar.push({ baslik: '', formul: '', bicim: '' }); j = EX.hesaplar.length - 1; exHesaplarCiz(); }
+  EX.fAktif = j;
+  const inp = document.querySelector(`#exHesaplar [data-exhrow="${j}"] [data-exhf]`);
+  if (h.tumu) inp.value = f;
+  else { const a = h.a ?? inp.value.length, b = h.b ?? inp.value.length; const bos = a > 0 && !/[\s(;]$/.test(inp.value.slice(0, a)) ? ' ' : ''; inp.value = inp.value.slice(0, a) + bos + f + inp.value.slice(b); }
+  inp.focus(); inp.dispatchEvent(new Event('input'));
+}
+// ƒx: formül kutusundaki işlevi kutulara aç; boşsa ya da işlev değilse yeni işlev seç (imlecin yerine eklenir)
+function exFxAc(j){
+  EX.fAktif = j;
+  const inp = document.querySelector(`#exHesaplar [data-exhrow="${j}"] [data-exhf]`), m = inp.value.trim();
+  try {
+    const a = exFormulCoz(m);
+    if (a.n === 'fn'){
+      const tn = EX_ISLEV_TANIM.find(t => t.fn === a.fn);
+      const args = a.args.map(x => x.n === 'metin' ? x.v : exFormulYaz(x, false));
+      if (tn && tn.fn === 'SIRA' && args[1] !== undefined) args[1] = Number(String(args[1]).replace(',', '.')) === 1 ? '1' : '';
+      if (tn){ EX.dlg = []; return exIslevPencereAc({ formul: j, tumu: true }, tn, args); }
+    }
+  } catch(e){}
+  EX.dlg = [];
+  exIslevPencereAc({ formul: j, tumu: !m, a: inp.selectionStart, b: inp.selectionEnd }, null, []);
+}
+// Sonuç metinse biçim kendiliğinden Metin
+function exFormulMetinMi(ast){
+  if (!ast) return false;
+  if (ast.n === 'metin') return true;
+  if (ast.n === 'op' && ast.op === '&') return true;
+  if (ast.n === 'fn' && ast.fn === 'IF') return [ast.args[1], ast.args[2]].some(x => x && exFormulMetinMi(x));
+  return false;
+}
+
 document.getElementById('exBicim').addEventListener('change', exBicimSec);
 ['exYil', 'exAy'].forEach(id => document.getElementById(id).addEventListener('change', exYilAyDegisti));
 ['exTarihA', 'exTarihB'].forEach(id => document.getElementById(id).addEventListener('change', exTarihDegisti));

@@ -11239,6 +11239,8 @@ function exBolKirilim(D, bol){
   return d;
 }
 // Satırları bölme değerine göre ayırır; değer sekme adı olur, tablodan ilgili sütun çıkar (aylar sütunda düzeninde zaman sütunları kalır)
+// Bölünen her sekmede tek dönem kalıyorsa (aya bölüp ay sütunda, yıla bölüp yıl sütunda) "aylar sütunda" düz listeye döner: GENEL sütunu ve 2. başlık satırı yazılmaz
+function exEtkinDuzen(duzen, bol, zaman){ return duzen === 'aylar' && ((bol === 'ay' && zaman === 'ay') || (bol === 'yil' && zaman === 'yil')) ? 'duz' : duzen; }
 function exBol(sonuc, bol, duzen){
   if (!bol) return [{ deger: null, sira: 0, sonuc }];
   const bk = sonuc.boyutKol.map(b => b.k), ix = k => bk.indexOf(k);
@@ -11806,7 +11808,9 @@ function exSayfaUret(veri, ay){
   sonuc = exFiltrele(sonuc, ay.filtre);
   const uyarilar = veri.bosTablo.map(t => `${t}: seçilen dönemde veri yok.`).concat(sonuc.uyarilar);
   if (once !== sonuc.satirlar.length) uyarilar.push(`Filtre: ${once} satırdan ${sonuc.satirlar.length} tanesi kaldı.`);
-  const parcalar = exBol(sonuc, ay.bol, ay.duzen).map(p => ({ deger: p.deger, model: exModel(p.sonuc, ay.duzen, ay.filtre && ay.filtre.sira) })).filter(p => p.model.satir.length || !ay.bol);
+  const duzen = exEtkinDuzen(ay.duzen, ay.bol, D.zaman);
+  const parcalar = exBol(sonuc, ay.bol, duzen).map(p => ({ deger: p.deger, model: exModel(p.sonuc, duzen, ay.filtre && ay.filtre.sira) })).filter(p => p.model.satir.length || !ay.bol);
+  if (duzen !== ay.duzen) uyarilar.push('Her sekmede tek dönem kaldığı için "Aylar sütunda" yerine düz liste yazıldı (GENEL sütunu tekrar olurdu).');
   if (ay.bol) uyarilar.push(`${parcalar.length} sekmeye bölündü: ${parcalar.slice(0, 6).map(p => p.deger).join(', ')}${parcalar.length > 6 ? ' …' : ''}`);
   return { parcalar, model: parcalar.length ? parcalar[0].model : exModel(sonuc, ay.duzen), uyarilar, tlTumu };
 }
